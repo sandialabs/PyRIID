@@ -1,4 +1,6 @@
-![PyRIID](https://repository-images.githubusercontent.com/381080801/22d4fe00-d81c-11eb-92c4-a71fc2e348a3)
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/1079118/124811147-623bd280-df1f-11eb-9f3a-a4a5e6ec5f94.png" alt="PyRIID">
+</p>
 
 This repository contains core functions and classes used by the BALDR project (Base Algorithms for Learned Detection of Radioisotopes) for its research in machine learning-based radioisotope identification (ML-RIID).
 
