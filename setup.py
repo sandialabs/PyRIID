@@ -5,6 +5,7 @@
 import platform
 import sys
 
+from os import path
 from setuptools import find_packages, setup
 
 python_version_min = (3, 7, 0)
@@ -15,10 +16,16 @@ if python_version_min < sys.version_info > python_version_max:
                                                                      required_python_version_str))
     sys.exit(-1)
 
+p = path.abspath(path.dirname(__file__))
+with open(path.join(p, './README.md')) as f:
+    README = f.read()
+
 setup(
     name="riid",
     version="1.0.0",
     description="Machine learning-based models and utilities for radioisotope identification",
+    long_description=README,
+    long_description_content_type='text/markdown',
     author="Tyler Morrow,Nathan Price",
     author_email="tmorro@sandia.gov,njprice@sandia.gov",
     url="https://github.com/sandialabs/PyRIID",
