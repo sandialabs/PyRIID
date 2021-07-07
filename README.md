@@ -46,8 +46,12 @@ Please make sure to update tests as appropriate and adhere to our [code of condu
 
 ## Authors
 
-* Tyler Morrow - tmorro@sandia.gov
-* Nathan Price - njprice@sandia.gov
+- **Tyler Morrow** - tmorro@sandia.gov
+- **Nathan Price** - njprice@sandia.gov
+- [Travis McGuire](https://github.com/traviemcg)
+    - Original creator of the `PoissonBayes` model.
+
+For other contributors, see [here](./CONTRIBUTORS.md).
 
 ## Copyright
 

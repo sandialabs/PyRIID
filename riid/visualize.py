@@ -70,7 +70,7 @@ def confusion_matrix(ss: SampleSet, as_percentage: bool = False, cmap: str = "bi
         value_format: the format string controlling how values are displayed in the matrix cells.
         value_fontsize: the font size of the values displayed in the matrix cells.
         figsize: the figure size passed to the matplotlib subplots call.
-        alpha: the degree of opacity (not applied to ss_overlay scatterplot if used).
+        alpha: the degree of opacity.
 
     Returns:
         A tuple (Figure, Axes) of matplotlib objects.
@@ -127,7 +127,7 @@ def confusion_matrix(ss: SampleSet, as_percentage: bool = False, cmap: str = "bi
 
 
 @save_or_show_plot
-def plot_live_time_vs_snr(ss: SampleSet, ss_overlay: SampleSet = None, alpha: float = 0.5,
+def plot_live_time_vs_snr(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float = 0.5,
                           xscale: str = "linear", yscale: str = "log",
                           xlim: tuple = None, ylim: tuple = None,
                           title: str = "Live Time vs. SNR", sigma_line_value: float = None):
@@ -138,8 +138,8 @@ def plot_live_time_vs_snr(ss: SampleSet, ss_overlay: SampleSet = None, alpha: fl
 
     Args:
         ss: a SampleSet of events to plot.
-        ss_overlay: another SampleSet to color as black.
-        alpha: the degree of opacity (not applied to ss_overlay scatterplot if used).
+        overlay_ss: another SampleSet to color as black.
+        alpha: the degree of opacity (not applied to overlay_ss scatterplot if used).
         xscale: the X-axis scale.
         yscale: the Y-axis scale.
         xlim: a tuple containing the X-axis min and max values.
@@ -154,8 +154,8 @@ def plot_live_time_vs_snr(ss: SampleSet, ss_overlay: SampleSet = None, alpha: fl
     Raises:
         None
     """
-    ss_correct = ss.get_indices(ss.labels == ss.predictions)
-    ss_incorrect = ss.get_indices(ss.labels != ss.predictions)
+    correct_ss = ss.get_indices(ss.labels == ss.predictions)
+    incorrect_ss = ss.get_indices(ss.labels != ss.predictions)
     if not xlim:
         xlim = (ss.live_time.min(), ss.live_time.max())
     if not ylim:
@@ -166,20 +166,20 @@ def plot_live_time_vs_snr(ss: SampleSet, ss_overlay: SampleSet = None, alpha: fl
     fig, ax = plt.subplots()
 
     ax.scatter(
-        ss_correct.live_time,
-        ss_correct.snr_estimate,
+        correct_ss.live_time,
+        correct_ss.snr_estimate,
         c="green", alpha=alpha, marker=MARKER, label="Correct"
     )
     ax.scatter(
-        ss_incorrect.live_time,
-        ss_incorrect.snr_estimate,
+        incorrect_ss.live_time,
+        incorrect_ss.snr_estimate,
         c="red", alpha=alpha, marker=MARKER, label="Incorrect"
     )
-    if ss_overlay:
+    if overlay_ss:
         plt.scatter(
-            ss_overlay.live_time,
-            ss_overlay.snr_estimate,
-            c="black", marker="+", label="Event" + ("" if ss_overlay.n_samples == 1 else "s"),
+            overlay_ss.live_time,
+            overlay_ss.snr_estimate,
+            c="black", marker="+", label="Event" + ("" if overlay_ss.n_samples == 1 else "s"),
             s=75
         )
     if sigma_line_value:
@@ -207,7 +207,7 @@ def plot_live_time_vs_snr(ss: SampleSet, ss_overlay: SampleSet = None, alpha: fl
 
 
 @save_or_show_plot
-def plot_strength_vs_score(ss: SampleSet, ss_overlay: SampleSet = None, alpha: float = 0.5,
+def plot_strength_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float = 0.5,
                            marker_size=75, xscale: str = "log", yscale: str = "linear",
                            xlim: tuple = (None, None), ylim: tuple = (0, 1.05),
                            title: str = "Signal Strength vs. Score", sigma_line_value: float = None):
@@ -218,8 +218,8 @@ def plot_strength_vs_score(ss: SampleSet, ss_overlay: SampleSet = None, alpha: f
 
     Args:
         ss: a SampleSet of events to plot.
-        ss_overlay: another SampleSet to color as blue (correct) and/or black (incorrect).
-        alpha: the degree of opacity (not applied to ss_overlay scatterplot if used).
+        overlay_ss: another SampleSet to color as blue (correct) and/or black (incorrect).
+        alpha: the degree of opacity (not applied to overlay_ss scatterplot if used).
         xscale: the X-axis scale.
         yscale: the Y-axis scale.
         xlim: a tuple containing the X-axis min and max values.
@@ -234,8 +234,8 @@ def plot_strength_vs_score(ss: SampleSet, ss_overlay: SampleSet = None, alpha: f
     Raises:
         None
     """
-    ss_correct = ss.get_indices(ss.labels == ss.predictions)
-    ss_incorrect = ss.get_indices(ss.labels != ss.predictions)
+    correct_ss = ss.get_indices(ss.labels == ss.predictions)
+    incorrect_ss = ss.get_indices(ss.labels != ss.predictions)
     if not xlim:
         if xscale == "log":
             xlim = (ss.sigma.clip(1e-3).min(), ss.sigma.max())
@@ -244,28 +244,28 @@ def plot_strength_vs_score(ss: SampleSet, ss_overlay: SampleSet = None, alpha: f
     fig, ax = plt.subplots()
 
     ax.scatter(
-        ss_correct.sigma,
-        ss_correct.prediction_probas.max(axis=1),
+        correct_ss.sigma,
+        correct_ss.prediction_probas.max(axis=1),
         c="green", alpha=alpha, marker=MARKER, label="Correct", s=marker_size
     )
     ax.scatter(
-        ss_incorrect.sigma,
-        ss_incorrect.prediction_probas.max(axis=1),
+        incorrect_ss.sigma,
+        incorrect_ss.prediction_probas.max(axis=1),
         c="red", alpha=alpha, marker=MARKER, label="Incorrect", s=marker_size
     )
-    if ss_overlay:
-        overlay_ss_correct = ss_overlay.get_indices(ss_overlay.labels == ss_overlay.predictions)
-        overlay_ss_incorrect = ss_overlay.get_indices(ss_overlay.labels != ss_overlay.predictions)
+    if overlay_ss:
+        overlay_correct_ss = overlay_ss.get_indices(overlay_ss.labels == overlay_ss.predictions)
+        overlay_incorrect_ss = overlay_ss.get_indices(overlay_ss.labels != overlay_ss.predictions)
         ax.scatter(
-            overlay_ss_correct.sigma,
-            overlay_ss_correct.prediction_probas.max(axis=1),
-            c="blue", marker="*", label="Correct Event" + ("" if overlay_ss_correct.n_samples == 1 else "s"),
+            overlay_correct_ss.sigma,
+            overlay_correct_ss.prediction_probas.max(axis=1),
+            c="blue", marker="*", label="Correct Event" + ("" if overlay_incorrect_ss.n_samples == 1 else "s"),
             s=marker_size*1.25
         )
         ax.scatter(
-            overlay_ss_incorrect.sigma,
-            overlay_ss_incorrect.prediction_probas.max(axis=1),
-            c="black", marker="+", label="Incorrect Event" + ("" if overlay_ss_incorrect.n_samples == 1 else "s"),
+            overlay_incorrect_ss.sigma,
+            overlay_incorrect_ss.prediction_probas.max(axis=1),
+            c="black", marker="+", label="Incorrect Event" + ("" if overlay_incorrect_ss.n_samples == 1 else "s"),
             s=marker_size*1.25
         )
     if sigma_line_value:
@@ -292,7 +292,7 @@ def plot_strength_vs_score(ss: SampleSet, ss_overlay: SampleSet = None, alpha: f
 
 
 @save_or_show_plot
-def plot_snr_vs_score(ss: SampleSet, ss_overlay: SampleSet = None, alpha: float = 0.5,
+def plot_snr_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float = 0.5,
                       marker_size=75, xscale: str = "log", yscale: str = "linear",
                       xlim: tuple = (None, None), ylim: tuple = (0, 1.05),
                       title: str = "SNR vs. Score"):
@@ -303,8 +303,8 @@ def plot_snr_vs_score(ss: SampleSet, ss_overlay: SampleSet = None, alpha: float 
 
     Args:
         ss: a SampleSet of events to plot.
-        ss_overlay: another SampleSet to color as blue (correct) and/or black (incorrect).
-        alpha: the degree of opacity (not applied to ss_overlay scatterplot if used).
+        overlay_ss: another SampleSet to color as blue (correct) and/or black (incorrect).
+        alpha: the degree of opacity (not applied to overlay_ss scatterplot if used).
         xscale: the X-axis scale.
         yscale: the Y-axis scale.
         xlim: a tuple containing the X-axis min and max values.
@@ -317,8 +317,8 @@ def plot_snr_vs_score(ss: SampleSet, ss_overlay: SampleSet = None, alpha: float 
     Raises:
         None
     """
-    ss_correct = ss.get_indices(ss.labels == ss.predictions)
-    ss_incorrect = ss.get_indices(ss.labels != ss.predictions)
+    correct_ss = ss.get_indices(ss.labels == ss.predictions)
+    incorrect_ss = ss.get_indices(ss.labels != ss.predictions)
     if not xlim:
         if xscale == "log":
             xlim = (ss.snr_estimate.clip(1e-3).min(), ss.snr_estimate.max())
@@ -327,28 +327,28 @@ def plot_snr_vs_score(ss: SampleSet, ss_overlay: SampleSet = None, alpha: float 
     fig, ax = plt.subplots()
 
     ax.scatter(
-        ss_correct.snr_estimate,
-        ss_correct.prediction_probas.max(axis=1),
+        correct_ss.snr_estimate,
+        correct_ss.prediction_probas.max(axis=1),
         c="green", alpha=alpha, marker=MARKER, label="Correct", s=marker_size
     )
     ax.scatter(
-        ss_incorrect.snr_estimate,
-        ss_incorrect.prediction_probas.max(axis=1),
+        incorrect_ss.snr_estimate,
+        incorrect_ss.prediction_probas.max(axis=1),
         c="red", alpha=alpha, marker=MARKER, label="Incorrect", s=marker_size
     )
-    if ss_overlay:
-        overlay_ss_correct = ss_overlay.get_indices(ss_overlay.labels == ss_overlay.predictions)
-        overlay_ss_incorrect = ss_overlay.get_indices(ss_overlay.labels != ss_overlay.predictions)
+    if overlay_ss:
+        overlay_correct_ss = overlay_ss.get_indices(overlay_ss.labels == overlay_ss.predictions)
+        overlay_incorrect_ss = overlay_ss.get_indices(overlay_ss.labels != overlay_ss.predictions)
         ax.scatter(
-            overlay_ss_correct.snr_estimate,
-            overlay_ss_correct.prediction_probas.max(axis=1),
-            c="blue", marker="*", label="Correct Event" + ("" if overlay_ss_correct.n_samples == 1 else "s"),
+            overlay_correct_ss.snr_estimate,
+            overlay_correct_ss.prediction_probas.max(axis=1),
+            c="blue", marker="*", label="Correct Event" + ("" if overlay_correct_ss.n_samples == 1 else "s"),
             s=marker_size*1.25
         )
         ax.scatter(
-            overlay_ss_incorrect.snr_estimate,
-            overlay_ss_incorrect.prediction_probas.max(axis=1),
-            c="black", marker="+", label="Incorrect Event" + ("" if overlay_ss_incorrect.n_samples == 1 else "s"),
+            overlay_incorrect_ss.snr_estimate,
+            overlay_incorrect_ss.prediction_probas.max(axis=1),
+            c="black", marker="+", label="Incorrect Event" + ("" if overlay_incorrect_ss.n_samples == 1 else "s"),
             s=marker_size*1.25
         )
 

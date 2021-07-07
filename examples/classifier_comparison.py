@@ -23,19 +23,19 @@ gss = GammaSpectraSynthesizer(
     snr_function="log10",
     samples_per_seed=100
 )
-ss_test = gss.generate()
+test_ss = gss.generate()
 
 # Create model
 model = PoissonBayes(fg_seeds_ss)
 
 # Predict
 tstart = time()
-model.predict(ss_test, bg_seeds_ss, normalize_scores=True)
+model.predict(test_ss, bg_seeds_ss, normalize_scores=True)
 delay = time() - tstart
 
-score = f1_score(ss_test.labels, ss_test.predictions, average="micro")
+score = f1_score(test_ss.labels, test_ss.predictions, average="micro")
 print("F1 Score: {:.3f}".format(score))
 print("Delay:    {:.2f}s".format(delay))
 
-plot_live_time_vs_snr(ss_test)
-plot_strength_vs_score(ss_test, ylim=(None, None))
+plot_live_time_vs_snr(test_ss)
+plot_strength_vs_score(test_ss, ylim=(None, None))

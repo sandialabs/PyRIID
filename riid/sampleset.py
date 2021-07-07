@@ -335,10 +335,10 @@ class SampleSet():
         val_mask[val_indices] = True
         train_mask[val_indices] = False
 
-        ss_val = self.get_indices(val_mask)
-        ss_train = self.get_indices(train_mask)
+        train_ss = self.get_indices(train_mask)
+        val_ss = self.get_indices(val_mask)
 
-        return ss_train, ss_val
+        return train_ss, val_ss
 
     def get_indices(self, indices, reindex=True):
         """ Returns SampleSet of only the observations defined by "indices".

@@ -83,7 +83,7 @@ class MLPClassifier:
         self._temp_file_path = "temp.mdl"
 
     def fit(self, ss: SampleSet, batch_size: int = 200, epochs: int = 20, validation_split: float = 0.2,
-            callbacks=None, ss_val: SampleSet = None, patience=15, es_monitor="val_loss", es_mode="min", es_verbose=0,
+            callbacks=None, val_ss: SampleSet = None, patience=15, es_monitor="val_loss", es_mode="min", es_verbose=0,
             verbose=0):
         """Fits a model to the given SampleSet.
 
@@ -94,7 +94,7 @@ class MLPClassifier:
             epochs: maximum number of training iterations.
             validation_split: the percentage of the training data to use as validation data.
             callbacks: callbacks list to be passed to TensorFlow Model.fit() method.
-            ss_val: manually provided validation set (instead of taking a portion of `ss`).
+            val_ss: manually provided validation set (instead of taking a portion of `ss`).
             patience: the number of epochs to wait for tf.keras.callbacks.EarlyStopping object.
             es_monitor: quantity to be monitored for tf.keras.callbacks.EarlyStopping object.
             es_mode: mode for tf.keras.callbacks.EarlyStopping object.
@@ -117,10 +117,10 @@ class MLPClassifier:
 
         x_train = ss.get_features().astype(float)
         y_train = ss.label_matrix.values.astype(float)
-        if ss_val:
+        if val_ss:
             val_data = (
-                ss_val.get_features().astype(float),
-                ss_val.label_matrix.values.astype(float),
+                val_ss.get_features().astype(float),
+                val_ss.label_matrix.values.astype(float),
             )
             validation_split = None
         else:

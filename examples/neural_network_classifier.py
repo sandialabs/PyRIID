@@ -19,26 +19,26 @@ gss = GammaSpectraSynthesizer(
     snr_function="log10",
     samples_per_seed=500
 )
-ss_train = gss.generate()
+train_ss = gss.generate()
 
 model = MLPClassifier(
-    ss_train.n_channels,
-    ss_train.label_matrix.shape[1]
+    train_ss.n_channels,
+    train_ss.label_matrix.shape[1]
 )
-model.fit(ss_train, verbose=0, epochs=200, patience=20)
+model.fit(train_ss, verbose=0, epochs=200, patience=20)
 
 # Generate some test data
 gss.samples_per_seed = 100
-ss_test = gss.generate()
+test_ss = gss.generate()
 
 # Predict
 tstart = time()
-model.predict(ss_test)
+model.predict(test_ss)
 delay = time() - tstart
 
-score = f1_score(ss_test.labels, ss_test.predictions, average="micro")
+score = f1_score(test_ss.labels, test_ss.predictions, average="micro")
 print("F1 Score: {:.3f}".format(score))
 print("Delay:    {:.2f}s".format(delay))
 
-plot_live_time_vs_snr(ss_test)
-plot_strength_vs_score(ss_test)
+plot_live_time_vs_snr(test_ss)
+plot_strength_vs_score(test_ss)
