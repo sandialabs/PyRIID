@@ -6,24 +6,17 @@ This repository contains core functions and classes used by the BALDR project (B
 
 ## Prerequisites
 
-- Python 3.7+
+- Python 3.7
 
 ## Installation
 
-This section will assume you have:
-
-- installed Python 3.7 or higher; and
-- cloned this repo
-
-With the above done, perform the following:
-
 ```
-pip install <path to repository>
+pip install riid
 ```
 
 ### Data Directory (optional)
 
-Some functions are usable only if you set the `PYRIID_DATA_DIR` environment variable to a path to some directory on your computer.
+Some *convenience* functions are usable only if you set the `PYRIID_DATA_DIR` environment variable to a path to some directory on your computer.
 
 ## Examples
 
@@ -48,8 +41,13 @@ Please make sure to update tests as appropriate and adhere to our [code of condu
 
 ## Authors
 
+Current:
+
 - **Tyler Morrow** - tmorro@sandia.gov
 - **Nathan Price** - njprice@sandia.gov
+
+Past:
+
 - [Travis McGuire](https://github.com/traviemcg)
     - Original creator of the `PoissonBayes` model.
 
