@@ -2,19 +2,9 @@
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
 """Simple setup script for installing the core package.
 """
-import platform
-import sys
-
 from os import path
 from setuptools import find_packages, setup
 
-python_version_min = (3, 7, 0)
-python_version_max = (3, 7, 11)
-required_python_version_str = '.'.join(map(str, python_version_min[:2]))
-if python_version_min < sys.version_info > python_version_max:
-    print("You are using Python {}. Python =={} is required.".format(platform.python_version(),
-                                                                     required_python_version_str))
-    sys.exit(-1)
 
 p = path.abspath(path.dirname(__file__))
 with open(path.join(p, './README.md')) as f:
@@ -22,7 +12,7 @@ with open(path.join(p, './README.md')) as f:
 
 setup(
     name="riid",
-    version="1.0.0",
+    version="1.0.1",
     description="Machine learning-based models and utilities for radioisotope identification",
     long_description=README,
     long_description_content_type='text/markdown',
@@ -30,6 +20,7 @@ setup(
     author_email="tmorro@sandia.gov,njprice@sandia.gov",
     url="https://github.com/sandialabs/PyRIID",
     packages=find_packages(),
+    python_requires=">=3.7, <3.8",
     install_requires=[
         "tensorflow==2.0.0",
         "tensorflow-model-optimization==0.1.3",
@@ -39,7 +30,8 @@ setup(
         "scikit-learn==0.22",
         "tables==3.6.1",
         "tqdm",
-        "seaborn==0.10.1"
+        "seaborn==0.10.1",
+        "h5py<3.0.0",
     ],
     # PyPI package information.
     classifiers=[

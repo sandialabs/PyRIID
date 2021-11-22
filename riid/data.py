@@ -191,7 +191,10 @@ def save_seeds(ss: SampleSet, file_name: str, detector: str = None,
 def read_hdf(file_name: str) -> SampleSet:
     """ Reads sampleset class from hdf binary format."""
     spectra = pd.read_hdf(file_name, "spectra")
-    collection_information = pd.read_hdf(file_name, "collection_information")
+    try:
+        collection_information = pd.read_hdf(file_name, "collection_information")
+    except:
+        collection_information = pd.read_hdf(file_name, "info")
     sources = pd.read_hdf(file_name, "sources")
     sources.columns = [i.split("___")[0] for i in sources.columns]
     features = pd.read_hdf(file_name, "features")
