@@ -660,7 +660,7 @@ class PassbySynthesizer():
 
     @seeds.setter
     def seeds(self, value: SampleSet):
-        if "background" not in value.source_types:
+        if "background" not in value.labels:
             raise ValueError("A seed with the label 'background' must be provided.")
         self._seeds = value
 
