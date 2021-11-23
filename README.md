@@ -37,7 +37,7 @@ Or you run the `run_tests.sh` script.
 Pull requests are welcome.
 For major changes, please open an issue first to discuss what you would like to change.
 
-Please make sure to update tests as appropriate and adhere to our [code of conduct](./CODE_OF_CONDUCT.md).
+Please make sure to update tests as appropriate and adhere to our [code of conduct](https://github.com/sandialabs/PyRIID/blob/main/CODE_OF_CONDUCT.md).
 
 ## Authors
 
@@ -51,11 +51,11 @@ Past:
 - [Travis McGuire](https://github.com/traviemcg)
     - Original creator of the `PoissonBayes` model.
 
-For other contributors, see [here](./CONTRIBUTORS.md).
+For other contributors, see [here](https://github.com/sandialabs/PyRIID/blob/main/CONTRIBUTORS.md).
 
 ## Copyright
 
 Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
 
-This source code is licensed under the BSD-style license found [here](./LICENSE.md).
+This source code is licensed under the BSD-style license found [here](https://github.com/sandialabs/PyRIID/blob/main/LICENSE.md).
