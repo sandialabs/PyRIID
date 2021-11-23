@@ -12,7 +12,7 @@ with open(path.join(p, './README.md')) as f:
 
 setup(
     name="riid",
-    version="1.0.1",
+    version="1.0.2",
     description="Machine learning-based models and utilities for radioisotope identification",
     long_description=README,
     long_description_content_type='text/markdown',
