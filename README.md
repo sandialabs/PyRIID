@@ -2,7 +2,7 @@
   <img src="https://user-images.githubusercontent.com/1079118/124811147-623bd280-df1f-11eb-9f3a-a4a5e6ec5f94.png" alt="PyRIID">
 </p>
 
-This repository contains core functions and classes used by the BALDR project (Base Algorithms for Learned Detection of Radioisotopes) for its research in machine learning-based radioisotope identification (ML-RIID).
+This repository contains core functions and classes used by the BALDR project (Base Algorithms for Learned Detection of Radioisotopes) for its research in machine learning-based radioisotope identification (ML-based RIID).
 
 ## Prerequisites
 
@@ -13,10 +13,6 @@ This repository contains core functions and classes used by the BALDR project (B
 ```
 pip install riid
 ```
-
-### Data Directory (optional)
-
-Some *convenience* functions are usable only if you set the `PYRIID_DATA_DIR` environment variable to a path to some directory on your computer.
 
 ## Examples
 
@@ -39,17 +35,11 @@ For major changes, please open an issue first to discuss what you would like to 
 
 Please make sure to update tests as appropriate and adhere to our [code of conduct](https://github.com/sandialabs/PyRIID/blob/main/CODE_OF_CONDUCT.md).
 
-## Authors
+## Current Developers
 
-Current:
-
-- **Tyler Morrow** - tmorro@sandia.gov
-- **Nathan Price** - njprice@sandia.gov
-
-Past:
-
-- [Travis McGuire](https://github.com/traviemcg)
-    - Original creator of the `PoissonBayes` model.
+- **Tyler Morrow** (tmorro@sandia.gov)
+- **Aislinn Handley** (ajhandl@sandia.gov)
+- **Alan Van Omen** (ajvanom@sandia.gov)
 
 For other contributors, see [here](https://github.com/sandialabs/PyRIID/blob/main/CONTRIBUTORS.md).
 

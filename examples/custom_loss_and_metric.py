@@ -1,5 +1,6 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
-# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
+# Under the terms of Contract DE-NA0003525 with NTESS,
+# the U.S. Government retains certain rights in this software.
 """This example demonstrates custom loss functions and metrics."""
 import tensorflow as tf
 from riid.models.losses import negative_log_f1

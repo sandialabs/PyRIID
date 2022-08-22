@@ -1,51 +1,68 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
-# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
+# Under the terms of Contract DE-NA0003525 with NTESS,
+# the U.S. Government retains certain rights in this software.
 """This module tests the gadras module."""
-import pathlib
 import unittest
 
-from riid.gadras import pcf_to_smpl, smpl_to_pcf
+from riid.gadras import (_pack_compressed_text_buffer,
+                         _unpack_compressed_text_buffer)
 
 
 class TestGadras(unittest.TestCase):
-    """Test class for Gadras.
-    """
-    def setUp(self):
-        """Test setup.
+    """Test class for Gadras."""
+
+    def test_pcf_header_formatting(self):
+        """Tests the PCF header information is properly packed.
+
+        String formatting note:
+            f"{'hello':60.50}"
+                ^      ^  ^
+                |      |  '> The number of letters to allow from the input value
+                |      '> The length of the string
+                '> The input value to format
+
         """
-        self.GADRAS_DB_PCF_FILE_NAME = "_gadras_db.pcf"
-        self.GADRAS_DB_PCF_FILE_PATH = pathlib.PurePath.joinpath(
-            pathlib.Path(__file__).parent.absolute(),
-            self.GADRAS_DB_PCF_FILE_NAME
-        )
-        with open(self.GADRAS_DB_PCF_FILE_PATH, "rb") as fin:
-            self.original_pcf_contents = fin.read()
-
-        self.recreated_pcf_path = "recreated_pcf.pcf"
-
-    def tearDown(self):
-        """Clears out any created files.
-        """
-        pathlib.Path(self.recreated_pcf_path).unlink()
-
-    def test_bytes_to_smpl_to_pcf_to_bytes(self):
-        """Tests PCF-to-SampleSet then SampleSet-to-PCF.
-        """
-        # Load original pcf contents to SampleSet
-        ss = pcf_to_smpl(self.GADRAS_DB_PCF_FILE_PATH, True)
-        # Save SampleSet out to .pcf file
-        smpl_to_pcf(ss, self.recreated_pcf_path)
-
-        # Load bytes of original and recreated files
-        contents = []
-        for path in [self.GADRAS_DB_PCF_FILE_PATH, self.recreated_pcf_path]:
-            with open(path, "rb") as fin:
-                contents.append(fin.read())
-
-        self.assertTrue(
-            contents[0] == contents[1],
-            "Expect pcf data to be unchanged by reading and writing"
-        )
+        FIELD_LENGTH = 10
+        test_cases = [
+            (
+                "tttttttt  ",  "ddddddddd ",    "ssssssssss",
+                "tttttttt",    "ddddddddd",     "ssssssssss",
+                "tttttttt  ddddddddd ssssssssss",
+            ),
+            (
+                "tttttttttt",   "dddddddddd",   "ssssssssss+",
+                "tttttttttt",   "",             "ssssssssss+",
+                "ÿttttttttttÿÿssssssssss+      "
+            ),
+            (
+                "tttttttt  ",   "dddddddd  ",   "ssssssssss+",
+                "tttttttt",     "dddddddd",     "ssssssssss+",
+                "ÿttttttttÿddddddddÿssssssssss+"
+            ),
+            (
+                "tt        ",   "dddddddddd+", "ssssssssss++",
+                "tt",           "dddddddddd+", "ssssssssss++",
+                "ÿttÿdddddddddd+ÿssssssssss++  "
+            ),
+        ]
+        for case in test_cases:
+            title, desc, source, \
+                expected_title, expected_desc, expected_source, \
+                expected_ctb = case
+            actual_ctb = _pack_compressed_text_buffer(
+                title,
+                desc,
+                source,
+                field_len=FIELD_LENGTH
+            )
+            actual_title, actual_desc, actual_source = _unpack_compressed_text_buffer(
+                actual_ctb,
+                field_len=FIELD_LENGTH
+            )
+            self.assertEqual(expected_title, actual_title)
+            self.assertEqual(expected_desc, actual_desc)
+            self.assertEqual(expected_source, actual_source)
+            self.assertEqual(expected_ctb, actual_ctb)
 
 
 if __name__ == '__main__':

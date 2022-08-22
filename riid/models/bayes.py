@@ -1,20 +1,22 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
-# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
-"""This module contains the Poisson Bayes classifier."""
-import os
+# Under the terms of Contract DE-NA0003525 with NTESS,
+# the U.S. Government retains certain rights in this software.
+"""This module contains a Poisson-Bayes classifier."""
+import logging
 
 import numpy as np
 import pandas as pd
+import tensorflow as tf
+import tensorflow_probability as tfp
+from riid.data import SampleSet
+from riid.models import TFModelBase
 from scipy.stats import poisson
-from tqdm import tqdm
-
-from riid.sampleset import SampleSet
 
 
-class PoissonBayes:
+class PoissonBayes(TFModelBase):
     """This class implements a Bayes classifier for poisson distributed data."""
 
-    def __init__(self, seeds: SampleSet = None):
+    def __init__(self, seeds_ss: SampleSet = None, normalize_scores: bool = False):
         """Initializes the classifier with seeds.
 
         This constructor takes "seed" spectra as input to be used as the shapes against which
@@ -24,234 +26,207 @@ class PoissonBayes:
             seeds: an optional SampleSet of seed spectra for each potential source of interest.
                 A background seed may be included if classification as background is desired.
 
-        Returns:
-            None
-
         Raises:
             NegativeSpectrumError: raised if any seed spectrum has negative counts in any bin.
             ZeroTotalCountsError: raised if any seed spectrum contains zero total counts.
-        """
-        self._temp_file_path = "temp.mdl"
 
-        if not seeds:
+        """
+        super().__init__()
+
+        if seeds_ss is None:
             return
 
-        if seeds.n_samples <= 0:
-            raise ValueError("At least one seed must be provided.")
-        if (seeds.spectra.values < 0).any():
-            msg = "Argument 'seeds' can't contain any spectra with negative values."
+        if seeds_ss.n_samples <= 0:
+            raise ValueError("Argument 'seeds_ss' must contain at least one seed.")
+        if (seeds_ss.spectra.values < 0).any():
+            msg = "Argument 'seeds_ss' can't contain any spectra with negative values."
             raise NegativeSpectrumError(msg)
-        if (seeds.spectra.values.sum(axis=1) <= 0).any():
-            msg = "Argument 'seeds' can't contain any spectra with zero total counts."
+        if (seeds_ss.spectra.values.sum(axis=1) <= 0).any():
+            msg = "Argument 'seeds_ss' can't contain any spectra with zero total counts."
             raise ZeroTotalCountsError(msg)
 
-        seeds.to_pmf()
-        self._seeds = seeds.spectra
-        self._classes = seeds.labels
-        self._n_bins = self._seeds.shape[1]
+        seeds_ss.normalize(p=1)
+        self._seeds = seeds_ss.spectra
+        self._n_channels = seeds_ss.n_channels
+        self.model = None
+        self.normalize_scores = normalize_scores
+        self._proba_columns = seeds_ss.sources.columns
+        self._labels = seeds_ss.get_labels(target_level="Seed")
+        self._make_model()
+        self.initialize_info()
 
-    def _calculate_valid_bins(self, bg_spectrum: np.ndarray) -> np.ndarray:
+    def _make_model(self):
+        """Makes tensorflow model implementation of PoissonBayes."""
+        spectrum_input = tf.keras.layers.Input(
+            shape=(self._n_channels,),
+            name="spectrum"
+        )
+        total_counts = tf.math.reduce_sum(
+            spectrum_input,
+            axis=1,
+            name="total_counts"
+        )
+
+        fg_pmfs = tf.constant(self._seeds.values)
+
+        expected_spectra = tf.math.multiply(
+            tf.cast(fg_pmfs, tf.float32),
+            tf.expand_dims(tf.expand_dims(total_counts, axis=-1), axis=-1)
+        )
+
+        if self.normalize_scores:
+            expected_spectra = tf.concat(
+                [expected_spectra, tf.expand_dims(spectrum_input, axis=1)],
+                axis=1
+            )
+
+        reshaped_spectrum_input = tf.expand_dims(spectrum_input, axis=1)
+
+        P = tfp.distributions.Poisson(
+            expected_spectra,
+            force_probs_to_zero_outside_support=True,
+            allow_nan_stats=False,
+        )
+        all_probas = P.log_prob(reshaped_spectrum_input)
+        prediction_probas = tf.math.reduce_sum(all_probas, axis=2)
+
+        if self.normalize_scores:
+            n_labels = len(self._labels)
+            best_proba = tf.gather(prediction_probas, [n_labels], axis=1)
+            prediction_probas = -prediction_probas / best_proba
+            prediction_probas = tf.gather(prediction_probas, np.arange(n_labels), axis=1)
+            prediction_indices = tf.math.argmax(prediction_probas, axis=1)
+        else:
+            # Determine max index for predictions
+            prediction_indices = tf.math.argmax(prediction_probas, axis=1)
+
+        # Build and compile the model
+        model = tf.keras.Model(
+            [spectrum_input],
+            [prediction_indices, prediction_probas]
+        )
+        model.compile()
+        self.model = model
+
+    def _calculate_valid_channels(self, bg_spectrum: np.ndarray) -> np.ndarray:
         """Calculates which bins are valid for use in classification based on the values present in
         both the seeds and the given background spectrum.
 
         Args:
-            bg_spectrum: a numpy.ndarray representing a single background spectrum.
-                Shape: (n_bins,)
+            bg_spectrum: Defines a numpy.ndarray representing a single background spectrum,
+                with the shape: (n_channels,).
 
         Returns:
             A numpy.ndarray of booleans representing which channels are valid (True) and which
             are not (False).
 
-        Raises:
-            None
         """
         return ((self._seeds.values.T + bg_spectrum[:, None]) > 0).prod(axis=1).astype(bool)
 
-    def _predict_single(self, seed_spectra: np.ndarray, gross_spectrum: np.ndarray,
-                        bg_spectrum: np.ndarray, estimated_bg_counts: float,
-                        normalize_scores: bool = False) -> np.ndarray:
-        """Performs a prediction of the probabilities of each class for single spectrum.
-
-        Performs prediction on the given spectrum and returns the probabilies of observing the
-        spectrum from each of the underlying classes.
-        Each probability represents the chances that you would have measured the the given spectrum
-        with the underlying distribution of a particular seed.
-        Note that these probabilities are almost always extremely low (which actually makes sense
-        since all of this is technically very unlikely).
+    def predict(self, ss: SampleSet):
+        """Attempts to classify the provided spectra using the seeds with which the
+        PoissonBayes object was originally initialized.
 
         Args:
-            seed_spectra: a numpy.ndarray containing the seed spectra on which to match.
-                1D shape: (n-seeds, n_bins).
-            gross_spectrum: a numpy.ndarray containing the spectrum needing to be identified.
-                1D shape: (n_bins,).
-            bg_spectrum: a numpy.ndarray containing the background spectrum associated with the
-                gross spectrum. 1D shape: (n_bins,).
-            estimated_bg_counts: an estimate of the number of counts from background sources.
-            normalize_scores: when True scores will be normalized based upon the highest
-                achievable score (perfect template).
-
-        Returns:
-            Returns a numpy.ndarray contining the probabilities for each class.
-            1D shape: (n_classes,)
+            ss: Defines a SampleSet of `n` spectra where `n` >= 1.
 
         Raises:
-            None
+            ValueError: Raised when no spectra are provided.
+            ValueError: Raised when spectrum channel sizes are inconsisent.
+
         """
-        total_counts = gross_spectrum.sum()
-        estimated_fgs = np.abs((total_counts - estimated_bg_counts) * seed_spectra)
-        estimated_bg = estimated_bg_counts * bg_spectrum
-        expected_signal = estimated_bg[None, :] + estimated_fgs
+        if ss.n_samples <= 0:
+            raise ValueError("No spectr[a|um] provided!")
+        if ss.n_channels != self._n_channels:
+            msg = "The provided spectra must have the same number of channels same as the seeds!  "
+            msg += "Seed spectra contain {} channels.".format(self._n_channels)
+            raise ValueError(msg)
+
+        _, probas = self.model.predict([ss.spectra.values])
+        ss.prediction_probas = pd.DataFrame(
+            probas,
+            columns=self._proba_columns
+        )
+
+    def _predict_single(self, seed_spectra: np.ndarray, bg_spectrum: np.ndarray, bg_cps: float,
+                        event_spectrum: np.ndarray, event_live_time: float,
+                        normalize_scores: bool = False) -> np.ndarray:
+        total_counts = event_spectrum.sum()
+        event_spectrum = event_spectrum.round().astype(int)
+        expected_bg_counts = bg_cps * event_live_time
+        expected_bg_spectrum = (bg_spectrum * expected_bg_counts).astype(int)
+        expected_fg_counts = total_counts - expected_bg_counts
+        expected_fg_spectra = (expected_fg_counts * seed_spectra).clip(1).astype(int)
+        expected_spectra = expected_bg_spectrum + expected_fg_spectra
+
         if normalize_scores:
-            expected_signal = np.vstack(
+            expected_spectra = np.vstack(
                 (
-                    expected_signal,
-                    gross_spectrum,
+                    expected_spectra,
+                    event_spectrum,
                 )
             )
 
-        probas = poisson.logpmf(gross_spectrum, expected_signal).mean(axis=1)
+        probas = poisson\
+            .logpmf(event_spectrum, expected_spectra)\
+            .sum(axis=1)
 
         if normalize_scores:
             probas = probas[:-1] - probas[-1]
 
         return probas
 
-    def predict(self, gross_ss: SampleSet, bg_ss: SampleSet,
-                normalize_scores: bool = False, verbose=0) -> list:
-        """Attempts to classify the provided gross spectra using the seeds with which the
-        PoissonBayes object was originally initialized.
+    def predict_old(self, ss: SampleSet, bg_ss: SampleSet, normalize_scores: bool = False,
+                    verbose: bool = False):
 
-        Args:
-            gross_ss: a SampleSet of `n` gross spectra where `n` >= 1.
-            bg_ss: a SampleSet of one or `n` background spectra.
-                If a SampleSet with one background spectrum is provided, that background will be
-                applied to all gross spectra. Otherwise, the number of background spectra must
-                equal the number of gross spectra. In the latter case, it is assumed that the
-                index positions of corresponding background and gross spectra are the same.
-            normalize_scores: when True scores will be normalized based upon the highest
-                achievable score (perfect template).
+        # pd.DataFrame(fg_seeds_ss.spectra.values + bg_ss.spectra.values)
+        bg_spectrum = bg_ss.spectra.iloc[0].values
+        bg_cps = bg_ss.info.iloc[0].gross_counts / bg_ss.info.iloc[0].live_time
 
-        Returns:
-            None
-
-        Raises:
-            ValueError: Raised when:
-                - no gross spectra are provided.
-                - no background(s) are provided.
-                - an invalid number of backgrounds is provided.
-                - the binning of the provided SampleSets do not match the binning of
-                  the previously provided seed spectra.
-        """
-        if gross_ss.n_samples <= 0:
-            raise ValueError("No gross spectr[a|um] provided!")
-        if bg_ss.n_samples <= 0:
-            raise ValueError("No background spectr[a|um] provided!")
-        if bg_ss.n_samples != 1 and bg_ss.n_samples != gross_ss.n_samples:
-            msg = "The number of background spectra is not 1 (it's {}).  ".format(bg_ss.n_samples)
-            msg += "Therefore you must provide equal numbers of background and gross spectra!"
-            raise ValueError(msg)
-        if gross_ss.n_channels != self._n_bins:
-            msg = "The binning of all gross spectra must be the same as the provided seeds!  "
-            msg += "Seed spectra contain {} bins.".format(self._n_bins)
-            raise ValueError(msg)
-        if bg_ss.n_channels != self._n_bins:
-            msg = "The binning of all background spectra must be the same as the provided seeds!  "
-            msg += "Seed spectra all contain {} bins.".format(self._n_bins)
-            raise ValueError(msg)
-
-        bg_ss.to_pmf()
-        probas = np.zeros([gross_ss.spectra.values.shape[0], self._classes.shape[0]])
-        for i in tqdm(range(gross_ss.n_samples), desc="Samples", disable=not verbose, leave=False):
-            lt_estimate = gross_ss.live_time.values[i]
-            if i == 0 or bg_ss.n_samples > 1:
-                bg_spectrum = bg_ss.spectra.values[i]
-                valid_bins = self._calculate_valid_bins(bg_spectrum)
-                seed_spectra = self._seeds.values[:, valid_bins]
-                bg_cps = bg_ss.total_counts.values[i] / bg_ss.live_time.values[i]
-            estimated_bg_counts = lt_estimate * bg_cps
+        probas = np.zeros([ss.n_samples, len(self._labels)])
+        for i in range(ss.n_samples):
             probas[i, :] = self._predict_single(
-                seed_spectra,
-                gross_ss.spectra.values[i][valid_bins],
-                bg_spectrum[valid_bins],
-                estimated_bg_counts,
+                self._seeds.values,
+                bg_spectrum,
+                bg_cps,
+                ss.spectra.values[i],
+                ss.info.live_time[i],
                 normalize_scores=normalize_scores
             )
-        max_indices = probas.argmax(axis=1)
-        gross_ss.predictions = self._classes[max_indices]
-        gross_ss.prediction_probas = pd.DataFrame(probas, columns=self._classes)
+            if verbose:
+                percent_complete = 100 * i / ss.n_samples
+                logging.info(f"{percent_complete:.0f}% complete")
+        ss.prediction_probas = pd.DataFrame(
+            probas,
+            columns=self._proba_columns
+        )
 
-    def save(self, file_path: str):
-        """Saves the model to a file.
-
-        Args:
-            file_path: a string representing the file path at which to save the model.
-
-        Returns:
-            None
-
-        Raises:
-            ValueError: Raised when the given file path already exists.
-        """
-        if os.path.exists(file_path):
-            raise ValueError("Path already exists.")
-        self._seeds.to_hdf(file_path, "seeds")
-        pd.DataFrame(self._classes).to_hdf(file_path, "classes")
-
-    def load(self, file_path: str):
-        """Loads the model from a file.
+    def to_tflite(self, file_path: str = None, quantize: bool = False):
+        """Exports model to TFLite file.
 
         Args:
-            file_path: a string representing the file path from which to load the model.
+            file_path:
+            quantize:
 
         Returns:
-            None
+            None.
 
         Raises:
-            None
+            NotImplementedError:  Raised when function is called; this function has not yet
+                been implemented.
         """
-        self._seeds = pd.read_hdf(file_path, "seeds")
-        self._classes = pd.read_hdf(file_path, "classes").values.flatten()
-        self._n_bins = self._seeds.shape[1]
-
-    def serialize(self) -> bytes:
-        """Converts the model to a bytes object.
-
-        Args:
-            None
-
-        Returns:
-            Returns a bytes object representing the binary of an HDF file.
-
-        Raises:
-            None
-        """
-        self.save(self._temp_file_path)
-        with open(self._temp_file_path, "rb") as f:
-            data = f.read()
-        os.remove(self._temp_file_path)
-        return data
-
-    def deserialize(self, stream: bytes):
-        """Populates the current model with the give bytes object.
-
-        Args:
-            stream: a bytes object containing the model information.
-
-        Returns:
-            None
-
-        Raises:
-            None
-        """
-        with open(self._temp_file_path, "wb") as f:
-            f.write(stream)
-        self.load(self._temp_file_path)
-        os.remove(self._temp_file_path)
+        raise NotImplementedError(
+            "TFLite conversion is not supported for TFP layers at this time (TensorFlow 2.4.0)"
+        )
 
 
 class ZeroTotalCountsError(ValueError):
+    """An exception that indicates that a total count of zero has
+    been found, which means the model statistics cannot be calculated."""
     pass
 
 
 class NegativeSpectrumError(ValueError):
+    """An exception that indicates that a negative spectrum value has
+    been found, which means that the model statistics cannot be calculated."""
     pass

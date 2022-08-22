@@ -1,20 +1,43 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
-# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
+# Under the terms of Contract DE-NA0003525 with NTESS,
+# the U.S. Government retains certain rights in this software.
 """This module contains utilities for dealing with list mode data."""
 import datetime
+import os
+import pathlib
+from typing import Union
+
 import numpy as np
 import pandas as pd
 
 
-def get_list_file_spectra(list_file_path, sampling_frequency):
-    """Returns the time varying histogram of the contents of a list file and the time edges."""
+def get_list_file_spectra(list_file_path: str, sampling_frequency: float):
+    """Returns the time varying histogram of the contents of a list file and the time edges.
+
+    Args:
+        list_file_path: Defines the string reprsenting the relative path to the list mode file.
+        sampling_frequency: Defines the number of samples per second, or sampling frequency
+            in hertz.
+
+    Returns:
+        The result of the call to make_time_slice_histograms with the data.
+
+    """
     data = read_list_file(list_file_path)["data"]
     return make_time_slice_histograms(data, sampling_frequency)
 
 
-def make_time_slice_histograms(data, spectrum_rate_hz):
-    """Takes dataframe with columns of timestamp and channel and a frequency in Hz.
-       Outputs a tuple of the form: (2D array which is n_time_slices X n_channels, time_edges)
+def make_time_slice_histograms(data: pd.DataFrame, spectrum_rate_hz: float):
+    """Produces histograms from timeslices of the list mode data, where the
+    histograms are given as an array of timeslices by channels.
+
+    Args:
+        data: Defines a DataFrame of the list mode data, e.g. sample records.
+        spectrum_rate_hz: Defines the sampling frequency of the records in hertz.
+
+    Returns:
+        A tuple of the form: (2D array which is n_time_slices X n_channels, time_edges).
+
     """
     max_channel = _next_highest_power_of_two(data.channel.max())
     time_edges = np.arange(0, data.timestamp.max(), 1/spectrum_rate_hz)
@@ -28,8 +51,19 @@ def make_time_slice_histograms(data, spectrum_rate_hz):
     return hists, time_edges
 
 
-def _next_highest_power_of_two(value):
-    """Returns the next highest power of two for a given value (eg. given 938 will return 1024)."""
+def _next_highest_power_of_two(value: int):
+    """Returns the next highest power of two for a given value, e.g.,
+    given 938 will return 1024.
+
+    Args:
+        value: Defines a value for which the next-highest power of two
+            should be calculated.
+
+    Returns:
+        An integer representing the first power of two that is greater
+            than the provided value.
+
+    """
     p = 1
     lower = True
     while lower:
@@ -40,8 +74,16 @@ def _next_highest_power_of_two(value):
     return nth_power
 
 
-def read_list_file(list_file_path):
-    """Reads a list file and returns a dict with the keys "header", "times", and "amplitudes"."""
+def read_list_file(list_file_path: Union[str, os.Path, pathlib.Path]):
+    """Reads a list file from the given path.
+
+    Args:
+        list_file_path: Defines the string or Path to the file to be read.
+
+    Returns:
+        A dict with the keys "header", "times", and "amplitudes".
+
+    """
     data = np.fromfile(list_file_path, dtype="uint8")
     header_length = 256
     header_data = data[:header_length]
@@ -63,8 +105,17 @@ def read_list_file(list_file_path):
     return {"header": header_data, "data": data}
 
 
-def _interpret_list_mode_header(header_bytes):
-    """Reads in list mode header."""
+def _interpret_list_mode_header(header_bytes: np.array):
+    """Reads in list mode header.
+
+    Args:
+        header_bytes: Defines the array of bytes containing the header
+            information to be read.
+
+    Returns:
+        A dictionary with the parsed header data.
+
+    """
     assert (len(header_bytes) == 256), "'header_bytes' must contain exactly 256 bytes"
 
     hdef = _get_header_definition()
@@ -87,13 +138,30 @@ def _interpret_list_mode_header(header_bytes):
     return header_data
 
 
-def _determine_if_event(four_byte_int):
-    """Checks if event bit is set."""
+def _determine_if_event(four_byte_int: int):
+    """Checks if event bit is set.
+
+    Args:
+        four_byte_int: Defines a four byte integer mask containing
+            the bit to be checked.
+
+    Returns:
+        The state of the event bit.
+
+    """
     return four_byte_int >> 31 == 0
 
 
-def _interpret_list_mode_data(data_bytes):
-    """Parses out bytes into different entries."""
+def _interpret_list_mode_data(data_bytes: np.array):
+    """Parses out bytes into different entries.
+
+    Args:
+        data_bytes: Defines the array of bytes to be parsed.
+
+    Returns:
+        The amplitudes and times of the list mode data.
+
+    """
     times, amplitudes = _interpret_event_word(data_bytes)
     event_entries = _determine_if_event(data_bytes)
     times = times[event_entries]
@@ -102,7 +170,18 @@ def _interpret_list_mode_data(data_bytes):
     return times, amplitudes
 
 
-def _ole_days_to_datetime(float_days):
+def _ole_days_to_datetime(float_days: float):
+    """Converts timestamps from the Windows/MS base date
+    to a python datetime.
+
+    Args:
+        float_days: Defines the number of days since
+            12/30/1899 12:00 am, the base date.
+
+    Returns:
+        A datetime object representing the timestamp.
+
+    """
     t0 = datetime.datetime(1899, 12, 30, 0, 0, 0)
     days = int(np.floor(float_days))
     d_rem = float_days-days
@@ -123,12 +202,20 @@ def _ole_days_to_datetime(float_days):
     return dt
 
 
-def _interpret_event_word(four_byte_int):
-    """Interprets AN event word.
+def _interpret_event_word(four_byte_int: int):
+    """Interprets an event word time, amplitude.
         BIT   | DESCRIPTION
         31    | 0 for event
         30-21 | Amplitude of Pulse
         20-0  | Time in microseconds that the event occured
+
+    Args:
+        four_byte_int: Defines the integer mask containing the
+            word data.
+
+    Returns:
+        A tuple of the time, amplitude data for the word.
+
     """
     amplitude_mask = 4292870144
     time_mask = 2097151
@@ -139,18 +226,31 @@ def _interpret_event_word(four_byte_int):
     return(time, amplitude)
 
 
-def _interpret_time_stamp_word(four_byte_int):
-    """Interprets an event word.
+def _interpret_time_stamp_word(four_byte_int: int):
+    """Interprets an event word timestamp.
         BIT  | DESCRIPTION
         31   | 1 for time_only
         30-0 | Current Time in Microseconds
+
+    Args:
+        four_byte_int: Defines the integer mask containing the
+            word data.
+
+    Returns:
+        A tuple of the time, amplitude data for the word.
+
     """
     time_mask = 2147483647
     return np.bitwise_and(time_mask, four_byte_int)
 
 
 def _get_header_definition():
-    """Returns dictionary of header definition for list mode data."""
+    """Returns dictionary of header definition for list mode data.
+
+    Returns:
+        A dictionary of list mode data header values.
+
+    """
     definition = {
         "header_format": {
             "offset": 0,

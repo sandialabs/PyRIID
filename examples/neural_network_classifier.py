@@ -1,44 +1,44 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
-# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
+# Under the terms of Contract DE-NA0003525 with NTESS,
+# the U.S. Government retains certain rights in this software.
 """This example demonstrates how to use the MLP classifier."""
 from time import time
 
-from riid.data import load_seeds
 from riid.models.neural_nets import MLPClassifier
-from riid.synthetic import GammaSpectraSynthesizer
-from riid.visualize import plot_live_time_vs_snr, plot_strength_vs_score
+from riid.data.labeling import BACKGROUND_LABEL
+from riid.data.synthetic.static import StaticSynthesizer, get_dummy_sampleset
 from sklearn.metrics import f1_score
 
 # Generate some training data
-seeds = load_seeds("gm_561", "measured", "seven_isotopes.smpl")
-gss = GammaSpectraSynthesizer(
-    seeds,
-    subtract_background=False,
+seeds_ss = get_dummy_sampleset(as_seeds=True)
+seeds_labels = seeds_ss.get_labels()
+
+fg_seeds_ss = seeds_ss[seeds_labels != BACKGROUND_LABEL]
+fg_seeds_ss.sources.drop(BACKGROUND_LABEL, axis=1, level="Category", inplace=True)
+bg_seeds_ss = seeds_ss[seeds_labels == BACKGROUND_LABEL]
+
+gss = StaticSynthesizer(
+    samples_per_seed=500,
     # log10 sampling samples lower SNR values more frequently.
     # This makes the SampleSet overall "harder" to classify.
-    snr_function="log10",
-    samples_per_seed=500
+    snr_function="log10"
 )
-train_ss = gss.generate()
-
-model = MLPClassifier(
-    train_ss.n_channels,
-    train_ss.label_matrix.shape[1]
-)
-model.fit(train_ss, verbose=0, epochs=200, patience=20)
+_, _, train_ss = gss.generate(fg_seeds_ss=fg_seeds_ss, bg_seeds_ss=bg_seeds_ss)
+train_ss.normalize_sources()
+train_ss.normalize()
+model = MLPClassifier()
+model.fit(train_ss, verbose=1, epochs=200, patience=20)
 
 # Generate some test data
 gss.samples_per_seed = 100
-test_ss = gss.generate()
-
+_, _, test_ss = gss.generate(fg_seeds_ss=fg_seeds_ss, bg_seeds_ss=bg_seeds_ss)
+test_ss.normalize_sources()
+test_ss.normalize()
 # Predict
 tstart = time()
 model.predict(test_ss)
 delay = time() - tstart
 
-score = f1_score(test_ss.labels, test_ss.predictions, average="micro")
+score = f1_score(test_ss.get_labels(), test_ss.get_predictions(), average="micro")
 print("F1 Score: {:.3f}".format(score))
 print("Delay:    {:.2f}s".format(delay))
-
-plot_live_time_vs_snr(test_ss)
-plot_strength_vs_score(test_ss)

@@ -1,196 +1,758 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
-# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
+# Under the terms of Contract DE-NA0003525 with NTESS,
+# the U.S. Government retains certain rights in this software.
 """This module tests the sampleset module."""
-import copy
 import unittest
 
 import numpy as np
 import pandas as pd
-from riid.sampleset import MissingKeyForRelabeling, SampleSet
+from riid.data.sampleset import SampleSet, get_row_labels
+from riid.data.synthetic.static import get_dummy_sampleset
 
 
 class TestSampleSet(unittest.TestCase):
     """Test class for SampleSet.
     """
 
-    def setUp(self):
-        """Test setup.
-        """
-        kwargs = {
-            "measured_or_synthetic": "measured",
-            "subtract_background": True,
-            "purpose": "test",
-            "comments": "TEST COMMENT STRING",
-            "spectra": pd.DataFrame(
-                data=[[1, 2, 3, 4], [5, 6, 7, 8], [9, 0, 1, 2]],
-            ),
-            "sources": pd.DataFrame(
-                data=[
-                    [0, 1, 0, 0, "frogs"],
-                    [1, 0, 0, 0, "cakes"],
-                    [.1, 0, 0.9, 0, "turtles"],
-                    [.1, 0, 0.0, 0.9, "dogs"]
-                ],
-                columns=["cakes", "cakes", "frogs in water", "dogs", "label"]
+    def test_as_ecal(self):
+        """Tests conversion of spectra to energy bins."""
+        import sys
+        np.set_printoptions(threshold=sys.maxsize)
+        ss = get_dummy_sampleset(n_channels=1024)
+        spectra = ss.spectra.values
+
+        new_ss = ss.as_ecal(0, 3000, 100, 0, 0)
+
+        self.assertTrue(
+            np.allclose(spectra, new_ss.spectra.values),
+            "Transform to original energy bins should not distort the spectrum."
+        )
+
+        new_ss = ss.as_ecal(4000, 6000, 0, 0, 0)
+        for new in zip(new_ss.spectra.values):
+            self.assertTrue(
+                all(new[0] == np.zeros(len(new))),
+                "Transform to bins outside measured range should result in 0 for all channels."
             )
+
+    def test_as_squashed(self):
+        """Tests that sampleset squashing sums data as expected."""
+        ss = get_dummy_sampleset()
+        ss.info["snr_target"] = 0
+        flat_ss = ss.as_squashed()
+
+        self.assertEqual(flat_ss.n_samples, 1)
+        self.assertEqual(ss.n_channels, flat_ss.n_channels)
+        self.assertEqual(flat_ss.spectra.shape[0], 1)
+        self.assertEqual(flat_ss.sources.shape[0], 1)
+        self.assertEqual(flat_ss.prediction_probas.shape[0], 1)
+        self.assertEqual(flat_ss.info.shape[0], 1)
+
+        spectra_are_summed = np.array_equal(ss.spectra.sum(), flat_ss.spectra.sum())
+        self.assertTrue(spectra_are_summed)
+
+        sources_are_summed = np.array_equal(ss.sources.sum(), flat_ss.sources.sum())
+        self.assertTrue(sources_are_summed)
+        source_columns_are_the_same = np.array_equal(ss.sources.columns, flat_ss.sources.columns)
+        self.assertTrue(source_columns_are_the_same)
+
+        prediction_probas_are_summed = np.array_equal(
+            ss.prediction_probas.sum(),
+            flat_ss.prediction_probas.sum()
+        )
+        self.assertTrue(prediction_probas_are_summed)
+        prediction_probas_columns_are_the_same = np.array_equal(
+            ss.prediction_probas.columns,
+            flat_ss.prediction_probas.columns
+        )
+        self.assertTrue(prediction_probas_columns_are_the_same)
+
+        self.assertTrue(np.array_equal(flat_ss.ecal[0], ss.ecal[0]))
+        self.assertEqual(flat_ss.info["description"][0], "squashed")
+        self.assertEqual(flat_ss.info["timestamp"][0], ss.info["timestamp"][0])
+        self.assertEqual(flat_ss.info["live_time"][0], ss.info["live_time"].sum())
+        self.assertEqual(flat_ss.info["real_time"][0], ss.info["real_time"].sum())
+        self.assertEqual(flat_ss.info["snr_target"][0], ss.info["snr_target"].sum())
+        self.assertEqual(flat_ss.info["snr"][0], ss.info["snr"].sum())
+        self.assertEqual(flat_ss.info["sigma"][0], ss.info["sigma"].sum())
+        self.assertEqual(flat_ss.info["bg_counts"][0], ss.info["bg_counts"].sum())
+        self.assertEqual(flat_ss.info["fg_counts"][0], ss.info["fg_counts"].sum())
+        self.assertEqual(flat_ss.info["bg_counts_expected"][0], ss.info["bg_counts_expected"].sum())
+        self.assertEqual(flat_ss.info["fg_counts_expected"][0], ss.info["fg_counts_expected"].sum())
+        self.assertEqual(flat_ss.info["gross_counts"][0], ss.info["gross_counts"].sum())
+        self.assertEqual(flat_ss.info["gross_counts_expected"][0],
+                         ss.info["gross_counts_expected"].sum())
+        info_columns_are_the_same = np.array_equal(
+            ss.info.columns,
+            flat_ss.info.columns
+        )
+        self.assertTrue(info_columns_are_the_same)
+
+    def test_get_row_labels_max_only_no_value_no_aggregation(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": True,
+            "include_value": False,
+            "level_aggregation": None,
         }
-        self._ss = SampleSet(**kwargs)
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
 
-    def test_constructor(self):
-        """Testing the SampleSet constructor.
+        expected_categories = [
+            "X", "X", "X", "Y", "Y", "Z", "Z", "X",
+            "X", "X", "X", "Y",
+            "Z"
+        ]
+        expected_isotopes = [
+            "A", "A", "A", "B", "B", "C", "C", "D",
+            "A", "A", "A", "B",
+            "C"
+        ]
+        expected_seeds = [
+            "A1", "A2", "A3", "B1", "B2", "C1", "C2", "D1",
+            "A1", "A2", "A3", "B1",
+            "C2"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_max_only_no_value_with_sum(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": True,
+            "include_value": False,
+            "level_aggregation": "sum",
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X", "X", "X", "Y", "Y", "Z", "Z", "X",
+            "X", "X", "X", "Y",
+            "X"
+        ]
+        expected_isotopes = [
+            "A", "A", "A", "B", "B", "C", "C", "D",
+            "A", "A", "A", "B",
+            "B"
+        ]
+        expected_seeds = [
+            "A1", "A2", "A3", "B1", "B2", "C1", "C2", "D1",
+            "A1", "A2", "A3", "B1",
+            "C2"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_max_only_no_value_with_mean(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": True,
+            "include_value": False,
+            "level_aggregation": "mean",
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X", "X", "X", "Y", "Y", "Z", "Z", "X",
+            "X", "Z", "Z", "Y",
+            "Y"
+        ]
+        expected_isotopes = [
+            "A", "A", "A", "B", "B", "C", "C", "D",
+            "D", "C", "C", "B",
+            "B"
+        ]
+        expected_seeds = [
+            "A1", "A2", "A3", "B1", "B2", "C1", "C2", "D1",
+            "A1", "A2", "A3", "B1",
+            "C2"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_max_only_with_value_no_aggregation(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": True,
+            "include_value": True,
+            "level_aggregation": None,
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X (1.00)", "X (1.00)", "X (1.00)", "Y (1.00)",
+            "Y (1.00)", "Z (1.00)", "Z (1.00)", "X (1.00)",
+            "X (0.50)", "X (0.50)", "X (0.50)", "Y (0.50)",
+            "Z (0.25)"
+        ]
+        expected_isotopes = [
+            "A (1.00)", "A (1.00)", "A (1.00)", "B (1.00)",
+            "B (1.00)", "C (1.00)", "C (1.00)", "D (1.00)",
+            "A (0.50)", "A (0.50)", "A (0.50)", "B (0.50)",
+            "C (0.25)"
+        ]
+        expected_seeds = [
+            "A1 (1.00)", "A2 (1.00)", "A3 (1.00)", "B1 (1.00)",
+            "B2 (1.00)", "C1 (1.00)", "C2 (1.00)", "D1 (1.00)",
+            "A1 (0.50)", "A2 (0.50)", "A3 (0.50)", "B1 (0.50)",
+            "C2 (0.25)"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_max_only_with_value_with_sum(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": True,
+            "include_value": True,
+            "level_aggregation": "sum",
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X (1.00)", "X (1.00)", "X (1.00)", "Y (1.00)",
+            "Y (1.00)", "Z (1.00)", "Z (1.00)", "X (1.00)",
+            "X (1.00)", "X (0.50)", "X (0.50)", "Y (1.00)",
+            "X (0.40)"
+        ]
+        expected_isotopes = [
+            "A (1.00)", "A (1.00)", "A (1.00)", "B (1.00)",
+            "B (1.00)", "C (1.00)", "C (1.00)", "D (1.00)",
+            "A (0.50)", "A (0.50)", "A (0.50)", "B (1.00)",
+            "B (0.35)"
+        ]
+        expected_seeds = [
+            "A1 (1.00)", "A2 (1.00)", "A3 (1.00)", "B1 (1.00)",
+            "B2 (1.00)", "C1 (1.00)", "C2 (1.00)", "D1 (1.00)",
+            "A1 (0.50)", "A2 (0.50)", "A3 (0.50)", "B1 (0.50)",
+            "C2 (0.25)"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_max_only_with_value_with_mean(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": True,
+            "include_value": True,
+            "level_aggregation": "mean",
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X (0.25)", "X (0.25)", "X (0.25)", "Y (0.50)",
+            "Y (0.50)", "Z (0.50)", "Z (0.50)", "X (0.25)",
+            "X (0.25)", "Z (0.25)", "Z (0.25)", "Y (0.50)",
+            "Y (0.17)"
+        ]
+        expected_isotopes = [
+            "A (0.33)", "A (0.33)", "A (0.33)", "B (0.50)",
+            "B (0.50)", "C (0.50)", "C (0.50)", "D (1.00)",
+            "D (0.50)", "C (0.25)", "C (0.25)", "B (0.50)",
+            "B (0.17)"
+        ]
+        expected_seeds = [
+            "A1 (1.00)", "A2 (1.00)", "A3 (1.00)", "B1 (1.00)",
+            "B2 (1.00)", "C1 (1.00)", "C2 (1.00)", "D1 (1.00)",
+            "A1 (0.50)", "A2 (0.50)", "A3 (0.50)", "B1 (0.50)",
+            "C2 (0.25)"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_multiple_no_value_no_aggregation(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": False,
+            "include_value": False,
+            "level_aggregation": None,
+            "min_value": 0.01,
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X", "X", "X", "Y", "Y", "Z", "Z", "X",
+            "X + X", "X + Z", "X + Z", "Y + Y",
+            "X + X + X + Y + Y + Z + X"
+        ]
+        expected_isotopes = [
+            "A", "A", "A", "B", "B", "C", "C", "D",
+            "A + D", "A + C", "A + C", "B + B",
+            "A + A + A + B + B + C + D"
+        ]
+        expected_seeds = [
+            "A1", "A2", "A3", "B1", "B2", "C1", "C2", "D1",
+            "A1 + D1", "A2 + C2", "A3 + C1", "B1 + B2",
+            "A1 + A2 + A3 + B1 + B2 + C2 + D1"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_multiple_no_value_with_sum(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": False,
+            "include_value": False,
+            "level_aggregation": "sum",
+            "min_value": 0.01,
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X", "X", "X", "Y", "Y", "Z", "Z", "X",
+            "X", "X + Z", "X + Z", "Y",
+            "X + Y + Z"
+        ]
+        expected_isotopes = [
+            "A", "A", "A", "B", "B", "C", "C", "D",
+            "A + D", "A + C", "A + C", "B",
+            "A + B + C + D"
+        ]
+        expected_seeds = [
+            "A1", "A2", "A3", "B1", "B2", "C1", "C2", "D1",
+            "A1 + D1", "A2 + C2", "A3 + C1", "B1 + B2",
+            "A1 + A2 + A3 + B1 + B2 + C2 + D1"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_multiple_no_value_with_mean(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": False,
+            "include_value": False,
+            "level_aggregation": "mean",
+            "min_value": 0.01,
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X", "X", "X", "Y", "Y", "Z", "Z", "X",
+            "X", "X + Z", "X + Z", "Y",
+            "X + Y + Z"
+        ]
+        expected_isotopes = [
+            "A", "A", "A", "B", "B", "C", "C", "D",
+            "A + D", "A + C", "A + C", "B",
+            "A + B + C + D"
+        ]
+        expected_seeds = [
+            "A1", "A2", "A3", "B1", "B2", "C1", "C2", "D1",
+            "A1 + D1", "A2 + C2", "A3 + C1", "B1 + B2",
+            "A1 + A2 + A3 + B1 + B2 + C2 + D1"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_multiple_with_value_no_aggregation(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": False,
+            "include_value": True,
+            "level_aggregation": None,
+            "min_value": 0.01,
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X (1.00)", "X (1.00)", "X (1.00)", "Y (1.00)",
+            "Y (1.00)", "Z (1.00)", "Z (1.00)", "X (1.00)",
+            "X (0.50) + X (0.50)", "X (0.50) + Z (0.50)",
+            "X (0.50) + Z (0.50)", "Y (0.50) + Y (0.50)",
+            "X (0.10) + X (0.10) + X (0.10) + Y (0.15) + Y (0.20) + Z (0.25) + X (0.10)"
+        ]
+        expected_isotopes = [
+            "A (1.00)", "A (1.00)", "A (1.00)", "B (1.00)",
+            "B (1.00)", "C (1.00)", "C (1.00)", "D (1.00)",
+            "A (0.50) + D (0.50)", "A (0.50) + C (0.50)",
+            "A (0.50) + C (0.50)", "B (0.50) + B (0.50)",
+            "A (0.10) + A (0.10) + A (0.10) + B (0.15) + B (0.20) + C (0.25) + D (0.10)"
+        ]
+        expected_seeds = [
+            "A1 (1.00)", "A2 (1.00)", "A3 (1.00)", "B1 (1.00)",
+            "B2 (1.00)", "C1 (1.00)", "C2 (1.00)", "D1 (1.00)",
+            "A1 (0.50) + D1 (0.50)", "A2 (0.50) + C2 (0.50)",
+            "A3 (0.50) + C1 (0.50)", "B1 (0.50) + B2 (0.50)",
+            "A1 (0.10) + A2 (0.10) + A3 (0.10) + B1 (0.15) + B2 (0.20) + C2 (0.25) + D1 (0.10)"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_multiple_with_value_with_sum(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": False,
+            "include_value": True,
+            "level_aggregation": "sum",
+            "min_value": 0.01,
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X (1.00)", "X (1.00)", "X (1.00)", "Y (1.00)",
+            "Y (1.00)", "Z (1.00)", "Z (1.00)", "X (1.00)",
+            "X (1.00)", "X (0.50) + Z (0.50)", "X (0.50) + Z (0.50)", "Y (1.00)",
+            "X (0.40) + Y (0.35) + Z (0.25)"
+        ]
+        expected_isotopes = [
+            "A (1.00)", "A (1.00)", "A (1.00)", "B (1.00)",
+            "B (1.00)", "C (1.00)", "C (1.00)", "D (1.00)",
+            "A (0.50) + D (0.50)", "A (0.50) + C (0.50)", "A (0.50) + C (0.50)", "B (1.00)",
+            "A (0.30) + B (0.35) + C (0.25) + D (0.10)"
+        ]
+        expected_seeds = [
+            "A1 (1.00)", "A2 (1.00)", "A3 (1.00)", "B1 (1.00)",
+            "B2 (1.00)", "C1 (1.00)", "C2 (1.00)", "D1 (1.00)",
+            "A1 (0.50) + D1 (0.50)", "A2 (0.50) + C2 (0.50)",
+            "A3 (0.50) + C1 (0.50)", "B1 (0.50) + B2 (0.50)",
+            "A1 (0.10) + A2 (0.10) + A3 (0.10) + B1 (0.15) + B2 (0.20) + C2 (0.25) + D1 (0.10)"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_multiple_with_value_with_mean(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": False,
+            "include_value": True,
+            "level_aggregation": "mean",
+            "min_value": 0.01,
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X (0.25)", "X (0.25)", "X (0.25)", "Y (0.50)",
+            "Y (0.50)", "Z (0.50)", "Z (0.50)", "X (0.25)",
+            "X (0.25)", "X (0.12) + Z (0.25)", "X (0.12) + Z (0.25)", "Y (0.50)",
+            "X (0.10) + Y (0.17) + Z (0.12)"
+        ]
+        expected_isotopes = [
+            "A (0.33)", "A (0.33)", "A (0.33)", "B (0.50)",
+            "B (0.50)", "C (0.50)", "C (0.50)", "D (1.00)",
+            "A (0.17) + D (0.50)", "A (0.17) + C (0.25)",
+            "A (0.17) + C (0.25)", "B (0.50)",
+            "A (0.10) + B (0.17) + C (0.12) + D (0.10)"
+        ]
+        expected_seeds = [
+            "A1 (1.00)", "A2 (1.00)", "A3 (1.00)", "B1 (1.00)",
+            "B2 (1.00)", "C1 (1.00)", "C2 (1.00)", "D1 (1.00)",
+            "A1 (0.50) + D1 (0.50)", "A2 (0.50) + C2 (0.50)",
+            "A3 (0.50) + C1 (0.50)", "B1 (0.50) + B2 (0.50)",
+            "A1 (0.10) + A2 (0.10) + A3 (0.10) + B1 (0.15) + B2 (0.20) + C2 (0.25) + D1 (0.10)"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_multiple_no_value_no_aggregation_with_min_value(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": False,
+            "include_value": False,
+            "level_aggregation": None,
+            "min_value": 0.25,
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X", "X", "X", "Y", "Y", "Z", "Z", "X",
+            "X + X", "X + Z", "X + Z", "Y + Y",
+            "Z"
+        ]
+        expected_isotopes = [
+            "A", "A", "A", "B", "B", "C", "C", "D",
+            "A + D", "A + C", "A + C", "B + B",
+            "C"
+        ]
+        expected_seeds = [
+            "A1", "A2", "A3", "B1", "B2", "C1", "C2", "D1",
+            "A1 + D1", "A2 + C2", "A3 + C1", "B1 + B2",
+            "C2"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_multiple_no_value_with_sum_with_min_value(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": False,
+            "include_value": False,
+            "level_aggregation": "sum",
+            "min_value": 0.01,
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X", "X", "X", "Y", "Y", "Z", "Z", "X",
+            "X", "X + Z", "X + Z", "Y",
+            "X + Y + Z"
+        ]
+        expected_isotopes = [
+            "A", "A", "A", "B", "B", "C", "C", "D",
+            "A + D", "A + C", "A + C", "B",
+            "A + B + C + D"
+        ]
+        expected_seeds = [
+            "A1", "A2", "A3", "B1", "B2", "C1", "C2", "D1",
+            "A1 + D1", "A2 + C2", "A3 + C1", "B1 + B2",
+            "A1 + A2 + A3 + B1 + B2 + C2 + D1"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_multiple_no_value_with_mean_with_min_value(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": False,
+            "include_value": False,
+            "level_aggregation": "mean",
+            "min_value": 0.25,
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X", "X", "X", "Y", "Y", "Z", "Z", "X",
+            "X", "Z", "Z", "Y",
+            ""
+        ]
+        expected_isotopes = [
+            "A", "A", "A", "B", "B", "C", "C", "D",
+            "D", "C", "C", "B",
+            ""
+        ]
+        expected_seeds = [
+            "A1", "A2", "A3", "B1", "B2", "C1", "C2", "D1",
+            "A1 + D1", "A2 + C2", "A3 + C1", "B1 + B2",
+            "C2"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_multiple_with_value_no_aggregation_with_min_value(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": False,
+            "include_value": True,
+            "level_aggregation": None,
+            "min_value": 0.25,
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X (1.00)", "X (1.00)", "X (1.00)", "Y (1.00)",
+            "Y (1.00)", "Z (1.00)", "Z (1.00)", "X (1.00)",
+            "X (0.50) + X (0.50)", "X (0.50) + Z (0.50)",
+            "X (0.50) + Z (0.50)", "Y (0.50) + Y (0.50)",
+            "Z (0.25)"
+        ]
+        expected_isotopes = [
+            "A (1.00)", "A (1.00)", "A (1.00)", "B (1.00)",
+            "B (1.00)", "C (1.00)", "C (1.00)", "D (1.00)",
+            "A (0.50) + D (0.50)", "A (0.50) + C (0.50)",
+            "A (0.50) + C (0.50)", "B (0.50) + B (0.50)",
+            "C (0.25)"
+        ]
+        expected_seeds = [
+            "A1 (1.00)", "A2 (1.00)", "A3 (1.00)", "B1 (1.00)",
+            "B2 (1.00)", "C1 (1.00)", "C2 (1.00)", "D1 (1.00)",
+            "A1 (0.50) + D1 (0.50)", "A2 (0.50) + C2 (0.50)",
+            "A3 (0.50) + C1 (0.50)", "B1 (0.50) + B2 (0.50)",
+            "C2 (0.25)"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_multiple_with_value_with_sum_with_min_value(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": False,
+            "include_value": True,
+            "level_aggregation": "sum",
+            "min_value": 0.25,
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X (1.00)", "X (1.00)", "X (1.00)", "Y (1.00)",
+            "Y (1.00)", "Z (1.00)", "Z (1.00)", "X (1.00)",
+            "X (1.00)", "X (0.50) + Z (0.50)", "X (0.50) + Z (0.50)", "Y (1.00)",
+            "X (0.40) + Y (0.35) + Z (0.25)"
+        ]
+        expected_isotopes = [
+            "A (1.00)", "A (1.00)", "A (1.00)", "B (1.00)",
+            "B (1.00)", "C (1.00)", "C (1.00)", "D (1.00)",
+            "A (0.50) + D (0.50)", "A (0.50) + C (0.50)", "A (0.50) + C (0.50)", "B (1.00)",
+            "A (0.30) + B (0.35) + C (0.25)"
+        ]
+        expected_seeds = [
+            "A1 (1.00)", "A2 (1.00)", "A3 (1.00)", "B1 (1.00)",
+            "B2 (1.00)", "C1 (1.00)", "C2 (1.00)", "D1 (1.00)",
+            "A1 (0.50) + D1 (0.50)", "A2 (0.50) + C2 (0.50)",
+            "A3 (0.50) + C1 (0.50)", "B1 (0.50) + B2 (0.50)",
+            "C2 (0.25)"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_get_row_labels_multiple_with_value_with_mean_with_min_value(self):
+        df = _get_test_df()
+        test_kwargs = {
+            "max_only": False,
+            "include_value": True,
+            "level_aggregation": "mean",
+            "min_value": 0.25,
+        }
+        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+
+        expected_categories = [
+            "X (0.25)", "X (0.25)", "X (0.25)", "Y (0.50)",
+            "Y (0.50)", "Z (0.50)", "Z (0.50)", "X (0.25)",
+            "X (0.25)", "Z (0.25)", "Z (0.25)", "Y (0.50)",
+            ""
+        ]
+        expected_isotopes = [
+            "A (0.33)", "A (0.33)", "A (0.33)", "B (0.50)",
+            "B (0.50)", "C (0.50)", "C (0.50)", "D (1.00)",
+            "D (0.50)", "C (0.25)",
+            "C (0.25)", "B (0.50)",
+            ""
+        ]
+        expected_seeds = [
+            "A1 (1.00)", "A2 (1.00)", "A3 (1.00)", "B1 (1.00)",
+            "B2 (1.00)", "C1 (1.00)", "C2 (1.00)", "D1 (1.00)",
+            "A1 (0.50) + D1 (0.50)", "A2 (0.50) + C2 (0.50)",
+            "A3 (0.50) + C1 (0.50)", "B1 (0.50) + B2 (0.50)",
+            "C2 (0.25)"
+        ]
+
+        self._assert_row_labels("Category", actual_categories, expected_categories)
+        self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
+        self._assert_row_labels("Seed", actual_seeds, expected_seeds)
+
+    def test_normalize_source(self):
+        """Tests normalizing source matrix to valid probability distribution.
         """
-        self.assertTrue(self._ss.measured_or_synthetic == "measured")
-        self.assertTrue(self._ss.subtract_background)
-        self.assertTrue(self._ss.purpose == "test")
-        self.assertTrue(self._ss.comments == "TEST COMMENT STRING")
+        import sys
+        np.set_printoptions(threshold=sys.maxsize)
+        ss = get_dummy_sampleset(n_channels=1024)
+        ss.normalize_sources()
 
-    def test_legacy_constructor_migration(self):
-        """Testing the SampleSet constructor as it migrates an old SampleSet to the latest one.
-        """
-        pass
+        sources = ss.sources.values
+        self.assertTrue(np.allclose(sources.sum(axis=1), np.ones(sources.shape[0])))
+        self.assertGreaterEqual(sources.min(), 0)
 
-    def test_energy_conversion(self):
-        """Tests conversion of spectra to energy bins.
-        """
-        spectra = self._ss.spectra.values
-        self._ss.total_counts = spectra.sum(axis=1)
-        self._ss.ecal_low_e = np.zeros(spectra.shape[0])
-        self._ss.ecal_order_0 = 0
-        self._ss.ecal_order_1 = 3000
-        self._ss.ecal_order_2 = 100
-        self._ss.ecal_order_3 = 0
-
-        bins = np.linspace(0, 1, spectra.shape[1])
-        energy_centers = bins * 3000 + bins**2 * 100
-        self._ss.to_energy(energy_centers)
-        for old, new in zip(spectra, self._ss.spectra.values):
-            self.assertTrue(all(old == new), "Transform to original energy bins should not " +
-                            "distort the spectrum.")
-
-        energy_centers = np.array([3200, 6400, 8888, 9999])
-        self._ss.to_energy(energy_centers)
-        for new in zip(self._ss.spectra.values):
-            self.assertTrue(all(new[0] == np.zeros(len(new))), "Transform to bins outside " +
-                            "measured range should result in 0 counts for all channels.")
-
-    def test_label_matrix_collapsing(self):
-        """Tests that label matrix collapses redundant columns.
-        """
-        self.setUp()
-        self.assertTrue(
-            all(self._ss.sources.columns == ["cakes", "frogs in water", "dogs", "label"]),
-            "Redundant columns were not collapsed on initialization."
-        )
-        value_check = np.all(
-            self._ss.sources.values == np.array(
-                [
-                    [1.0, 0.0, 0.0, 'frogs'],
-                    [1.0, 0.0, 0.0, 'cakes'],
-                    [0.1, 0.9, 0.0, 'turtles'],
-                    [0.1, 0.0, 0.9, 'dogs']
-                ],
-                dtype=object
+    def _assert_row_labels(self, level, actual, expected):
+        for i, (a, e) in enumerate(zip(actual, expected)):
+            self.assertEqual(
+                a, e,
+                f"Level '{level}', row '{i}' failure.  Actual '{a}' != Expected '{e}'"
             )
-        )
-        self.assertTrue(value_check, "Sources values were not combined correctly.")
-        self._ss.label_matrix_labels = ["cakes", "frogs", "frogs"]
-        self.assertTrue(
-            all(self._ss.sources.columns == ["cakes", "frogs", "label"]),
-            "Redundant columns were not collapsed on settings label_matrix_labels."
-        )
-        self.assertTrue(
-            all(self._ss.label_matrix_labels == ["cakes", "frogs"]),
-            "'label_matrix_labels' was incorrect."
-        )
 
-    def test_relabeling_single_isotope(self):
-        """Tests that single isotope labels are updated.
-        """
-        self.setUp()
-        orig_labels = copy.deepcopy(self._ss.labels)
-        new_labels = orig_labels[::-1]
-        self._ss.sources["label"] = new_labels
-        self.assertTrue(all(new_labels == self._ss.labels), "Labels were not updated.")
-        self._ss.labels = orig_labels
-        self.assertTrue(all(orig_labels == self._ss.labels), "Labels were not updated.")
 
-    def test_relabeling_from_dict(self):
-        """Tests that relabeling from dictionary works for single, multi, and both
-        """
-        self.setUp()
-        intial_single_labels = copy.deepcopy(self._ss.labels)
-        intial_multi_labels = copy.deepcopy(self._ss.label_matrix_labels)
-        single_dict = {}
-
-        for i, label in enumerate(sorted(i for i in set(intial_single_labels))):
-            single_dict.update({label: str(i)})
-
-        combined_dict = copy.deepcopy(single_dict)
-        multi_dict = {}
-        for i, label in enumerate(set(intial_multi_labels)):
-            multi_dict.update({label: str(i)})
-            combined_dict.update({label: str(i)})
-
-        single_expected = [single_dict[key] for key in intial_single_labels]
-        multi_expected = [multi_dict[key] for key in intial_multi_labels]
-
-        # Check for relabeling single labels
-        self._ss.relabel_from_dict(single_dict, mode="single")
-        self.assertTrue(
-            all(self._ss.labels == single_expected),
-            "Single relabel did not function as expected"
+def _get_test_df():
+    df = pd.DataFrame(
+        [
+            # Single-isotope
+            (1, 0, 0, 0, 0, 0, 0, 0),
+            (0, 1, 0, 0, 0, 0, 0, 0),
+            (0, 0, 1, 0, 0, 0, 0, 0),
+            (0, 0, 0, 1, 0, 0, 0, 0),
+            (0, 0, 0, 0, 1, 0, 0, 0),
+            (0, 0, 0, 0, 0, 1, 0, 0),
+            (0, 0, 0, 0, 0, 0, 1, 0),
+            (0, 0, 0, 0, 0, 0, 0, 1),
+            # Multi-isotope
+            # Multiple answers of the same value - first is correct
+            (0.5,   0,   0,   0,   0,   0,   0, 0.5),
+            (0,   0.5,   0,   0,   0,   0, 0.5,   0),
+            (0,     0, 0.5,   0,   0, 0.5,   0,   0),
+            (0,     0,   0, 0.5, 0.5,   0,   0,   0),
+            # Answer changes depending on target level and aggregation
+            (0.1, 0.1, 0.1, 0.15, 0.2, 0, 0.25, 0.1),
+        ],
+        columns=pd.MultiIndex.from_tuples(
+            [
+                ("X", "A", "A1"),
+                ("X", "A", "A2"),
+                ("X", "A", "A3"),
+                ("Y", "B", "B1"),
+                ("Y", "B", "B2"),
+                ("Z", "C", "C1"),
+                ("Z", "C", "C2"),
+                ("X", "D", "D1"),
+            ],
+            names=SampleSet.SOURCES_MULTI_INDEX_NAMES
         )
-        self.assertTrue(
-            all(self._ss.label_matrix_labels == intial_multi_labels),
-            "Single relabel modified multi labels."
-        )
-
-        # Check for relabeling label_matrix_labels
-        self._ss.labels = intial_single_labels
-        self._ss.relabel_from_dict(multi_dict, mode="multi")
-        self.assertTrue(
-            all(self._ss.labels == intial_single_labels),
-            "Multi relabel modified single labels."
-        )
-        self.assertTrue(
-            all(self._ss.label_matrix_labels == multi_expected),
-            "Multi relable did not function as expected."
-        )
-
-        # Check that both can be relabeled simultaneously
-        single_expected = [combined_dict[key] for key in intial_single_labels]
-        multi_expected = [combined_dict[key] for key in intial_multi_labels]
-        self._ss.labels = intial_single_labels
-        self._ss.label_matrix_labels = intial_multi_labels
-        self._ss.relabel_from_dict(combined_dict, mode="both")
-        self.assertTrue(
-            all(self._ss.labels.astype(int).astype(str) == single_expected),
-            "All relabel did not result in expected single labels."
-        )
-        self.assertTrue(
-            all(self._ss.label_matrix_labels == multi_expected),
-            "All relabel did not result in expected multi labels."
-        )
-
-        # Check that missing keys raises correct exceptions
-        self.setUp()
-        with self.assertRaises(MissingKeyForRelabeling):
-            self._ss.relabel_from_dict({}, mode="single")
-        with self.assertRaises(MissingKeyForRelabeling):
-            self._ss.relabel_from_dict({}, mode="multi")
-        with self.assertRaises(MissingKeyForRelabeling):
-            self._ss.relabel_from_dict({}, mode="both")
-
-    def test_relabel_to_max_source(self):
-        """Tests that single labels can be relabed to the maximum contributing source.
-        """
-        self.setUp()
-        self._ss.relabel_to_max_source()
-        expected_labels = ["cakes", "cakes", "frogs in water", "dogs"]
-        self.assertTrue(
-            all(self._ss.labels == expected_labels),
-            "Labels were not relabed to maximum contribution label."
-        )
+    )
+    return df
 
 
 if __name__ == '__main__':
