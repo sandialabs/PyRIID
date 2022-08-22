@@ -212,13 +212,6 @@ class StaticSynthesizer():
         ss = SampleSet()
         ss.spectra_state = SpectraState.Counts
         ss.spectra = pd.DataFrame(spectra)
-        ss.sources = pd.DataFrame(
-            np.tile(sources.values, (n_samples, 1)),
-            columns=sources.index
-        )
-        # Multiplying normalized seed source values by spectrum counts.
-        # This is REQUIRED for properly merging sources DataFrames later and multi-isotope.
-        ss.sources = ss.sources.multiply(spectra.sum(axis=1), axis="index")
         ss.info.description = np.full(n_samples, "")
         ss.info.timestamp = self._synthesis_start_dt
         ss.info.live_time = lt_targets
@@ -256,6 +249,17 @@ class StaticSynthesizer():
 
         ss.info.gross_counts = ss.info.bg_counts + ss.info.fg_counts
 
+        if ss_spectra_type == "gross":
+            ss.sources = sources
+        else:
+            ss.sources = pd.DataFrame(
+                np.tile(sources.values, (n_samples, 1)),
+                columns=sources.index
+            )
+            # Multiplying normalized seed source values by spectrum counts.
+            # This is REQUIRED for properly merging sources DataFrames later and multi-isotope.
+            ss.sources = ss.sources.multiply(spectra.sum(axis=1), axis="index")
+
         return ss
 
     def _get_fg_and_or_bg_batch(self, fg_seed, fg_sources, bg_seed, bg_sources, ecal,
@@ -279,7 +283,7 @@ class StaticSynthesizer():
         bg_ss = self._get_sampleset(bg_spectra, bg_sources, ecal,
                                     lt_targets, snr_targets, "bg",
                                     None, None, fg_counts_expected, bg_counts_expected)
-        gross_sources = get_merged_sources_samplewise(fg_sources, bg_sources)
+        gross_sources = get_merged_sources_samplewise(fg_ss.sources, bg_ss.sources)
         gross_ss = self._get_sampleset(gross_spectra, gross_sources, ecal,
                                        lt_targets, snr_targets, "gross",
                                        fg_spectra.sum(axis=1), bg_spectra.sum(axis=1),
@@ -389,7 +393,7 @@ class StaticSynthesizer():
 
 
 def get_merged_sources_samplewise(sources1: pd.DataFrame, sources2: pd.DataFrame) -> pd.DataFrame:
-    merged_sources_df = sources1.add(sources2, axis=0, fill_value=0)
+    merged_sources_df = sources1.add(sources2, axis=1, fill_value=0)
     return merged_sources_df
 
 

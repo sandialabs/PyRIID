@@ -264,7 +264,7 @@ class SampleSet():
             f"- Detector:             {self.detector_info if self.detector_info else 'Unknown'}\n"
             f"- Extra data present?   {'Yes' if self.n_extra_data_features else 'No'}\n"
             f"- Predictions present?  {'No' if self.prediction_probas.empty else 'Yes'}\n"
-            f"- Classified by:        {self.classified_by if self.classified_by else 'Not classified.'}\n"  # noqa
+            f"- Classified by:        {self.classified_by if self.classified_by else 'Not classified'}\n"  # noqa
             f"- Isotopes present:     {isotopes_present}"
         )
 
