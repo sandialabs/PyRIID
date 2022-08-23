@@ -19,5 +19,4 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       - name: Test with pytest
         run: |
-          ls -al
-          run_tests.sh
+          sh run_tests.sh
