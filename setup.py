@@ -12,18 +12,20 @@ with open(path.join(p, './README.md')) as f:
     README = f.read()
 
 REQUIREMENTS = [
-    "tensorflow==2.5.0",
-    "tensorflow-probability==0.12.1",
-    "tensorflow-model-optimization==0.6.0",
-    "numpy~=1.19.2",
-    "pandas==1.0.5",
-    "matplotlib==3.5.2",
-    "scikit-learn==0.24",
-    "tables==3.6.1",
-    "seaborn==0.11.1",
+    "tensorflow==2.10.0",
+    "tensorflow-probability~=0.18.0",
+    "tensorflow-model-optimization~=0.7.0",
+    "numpy~=1.23.0",
+    "pandas~=1.4.0",
+    "matplotlib==3.5.3",
+    "scikit-learn~=1.1.0",
+    "tables==3.7.0",
+    "seaborn==0.12.0",
 ]
 if platform == "win32":
-    REQUIREMENTS.append("pythonnet==2.5.2")
+    # Requirement specifier modified per documentation here:
+    # https://pip.pypa.io/en/stable/cli/pip_install/#pre-release-versions
+    REQUIREMENTS.append("pythonnet~=3.0.0rc4")
     REQUIREMENTS.append("PyYAML==6.0")
 
 setup(
@@ -35,7 +37,7 @@ setup(
     author_email="tmorro@sandia.gov,ajhandl@sandia.gov,ajvanom@sandia.gov",
     url="https://github.com/sandialabs/PyRIID",
     packages=find_packages(),
-    python_requires=">=3.7, <3.8",
+    python_requires=">=3.9",
     install_requires=REQUIREMENTS,
     # PyPI package information.
     classifiers=[
