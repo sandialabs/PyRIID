@@ -4,7 +4,9 @@
 """This module tests the gadras module."""
 import unittest
 
-from riid.gadras import (_pack_compressed_text_buffer,
+import pandas as pd
+from riid.data.synthetic.static import get_dummy_sampleset
+from riid.gadras import (_pack_compressed_text_buffer, smpl_to_pcf,
                          _unpack_compressed_text_buffer)
 
 
@@ -63,6 +65,29 @@ class TestGadras(unittest.TestCase):
             self.assertEqual(expected_desc, actual_desc)
             self.assertEqual(expected_source, actual_source)
             self.assertEqual(expected_ctb, actual_ctb)
+
+    def test_smpl_to_pcf_with_various_sources_dataframes(self):
+        TEMP_PCF_PATH = "temp.pcf"
+
+        # With all levels
+        ss = get_dummy_sampleset()
+        smpl_to_pcf(ss, TEMP_PCF_PATH)
+
+        # Without seed level (only category and isotope)
+        ss = get_dummy_sampleset()
+        ss.sources.columns.droplevel("Seed")
+        smpl_to_pcf(ss, TEMP_PCF_PATH)
+
+        # Without seed and isotope levels (only category)
+        ss = get_dummy_sampleset()
+        ss.sources.columns.droplevel("Seed")
+        ss.sources.columns.droplevel("Isotope")
+        smpl_to_pcf(ss, TEMP_PCF_PATH)
+
+        # With no sources
+        ss = get_dummy_sampleset()
+        ss.sources = pd.DataFrame()
+        smpl_to_pcf(ss, TEMP_PCF_PATH)
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ import logging
 import re
 
 BACKGROUND_LABEL = "Background"
+NO_SEED = "Unknown"
 NO_ISOTOPE = "Unknown"
 NO_CATEGORY = "Uncategorized"
 CATEGORY_ISOTOPES = {
