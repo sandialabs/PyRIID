@@ -118,7 +118,7 @@ class TFModelBase:
         warnings.filterwarnings("ignore")
 
         self.model.save(file_path, save_format="h5")
-        pd.DataFrame([[v] for v in self.info.values()], self.info.keys).to_hdf(file_path, "_info")
+        pd.DataFrame([[v] for v in self.info.values()], self.info.keys()).to_hdf(file_path, "_info")
 
         warnings.resetwarnings()
 
