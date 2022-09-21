@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 
 from riid.data import SampleSet
-from riid.data.labeling import (NO_CATEGORY, NO_ISOTOPE, _find_category,
-                                _find_isotope)
+from riid.data.labeling import (NO_CATEGORY, NO_ISOTOPE, NO_SEED,
+                                _find_category, _find_isotope)
 
 # Define PCF definition per PCF ICD
 HEADER_DEFINITIONS = defaultdict(lambda: {
@@ -140,7 +140,8 @@ def _get_srsi(file_bytes: list):
             return_value = value
             srsi = 83
             break
-    return(return_value, srsi)
+
+    return return_value, srsi
 
 
 def _get_spectrum_header_offset(spectrum_number: int, srsi: int, nrps: int):
@@ -582,7 +583,6 @@ def _smpl_to_dict(ss: SampleSet):
     Raises:
         None.
     """
-    n_samples = ss.n_samples
     n_channels = ss.n_channels
     n_records_per_spectrum = int((n_channels / 64) + 1)
 
@@ -613,12 +613,19 @@ def _smpl_to_dict(ss: SampleSet):
 
     spectra = []
 
-    isotopes = ss.get_labels(target_level="Isotope")
-    seeds = ss.get_labels(target_level="Seed")
-    for i in range(n_samples):
-        title = isotopes[i]
+    isotopes, seeds = pd.Series(), pd.Series()
+    if not ss.sources.empty:
+        isotope_level_name = SampleSet.SOURCES_MULTI_INDEX_NAMES[1]
+        seed_level_names = SampleSet.SOURCES_MULTI_INDEX_NAMES[2]
+        if isotope_level_name in ss.sources.columns.names:
+            isotopes = ss.get_labels(target_level=isotope_level_name)
+        if seed_level_names in ss.sources.columns.names:
+            seeds = ss.get_labels(target_level=seed_level_names)
+
+    for i in range(ss.n_samples):
+        title = isotopes[i] if not isotopes.empty else NO_ISOTOPE
         description = ss.info.description.fillna("").iloc[i]
-        source = seeds[i]
+        source = seeds[i] if not seeds.empty else NO_SEED
         compressed_text_buffer = _pack_compressed_text_buffer(title, description, source)
 
         header = {
