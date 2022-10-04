@@ -1,4 +1,66 @@
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
-version = "2.0.0-rc1"
+requires = ["setuptools", "wheel", "hatchling"]
+build-backend = "hatchling.build"
+
+[tools.setuptools]
+# as described here: https://setuptools.pypa.io/en/latest/userguide/package_discovery.html#
+package-dir = {"" = "riid"}
+
+[project]
+name = "riid"
+version = "2.0.0rc1"
+requires-python=">=3.7"
+description = "Machine learning-based models and utilities for radioisotope identification"
+readme = "README.md"
+license = {text = "BSD 3-Clause License"}
+authors = [
+    {name="Tyler Morrow", email="tmorro@sandia.gov"},
+    {name="Aislinn Handley", email="ajhandl@sandia.gov"},
+    {name="Alan Van Omen", email="ajvanom@sandia.gov"},
+]
+# Dependencies includes python3.7-specific versions of packages until additional
+# testing can be done to determine package limitations on older versions.
+dependencies =[
+    "setuptools",
+    "flake8",
+    "coverage",
+    "tensorflow==2.5.0; python_version<'3.8'",
+    "tensorflow-probability==0.12.1 ; python_version<'3.8'",
+    "tensorflow-model-optimization==0.6.0; python_version<'3.8'",
+    "numpy~=1.19.2; python_version <'3.8'",
+    "pandas==1.0.5; python_version<'3.8'",
+    "matplotlib==3.5.2; python_version<'3.8'",
+    "scikit-learn==0.24; python_version<'3.8'",
+    "tables==3.6.1; python_version<'3.8'",
+    "seaborn==0.11.1; python_version<'3.8'",
+    "tensorflow==2.10.0; python_version>'3.7'",
+    "tensorflow-probability~=0.18.0; python_version>'3.7'",
+    "tensorflow-model-optimization~=0.7.0; python_version>'3.7'",
+    "numpy~=1.23.0; python_version>'3.7'",
+    "pandas~=1.4.0; python_version>'3.7'",
+    "matplotlib==3.5.3; python_version>'3.7'",
+    "scikit-learn~=1.1.0; python_version>'3.7'",
+    "tables==3.7.0; python_version>'3.7'",
+    "seaborn==0.12.0; python_version>'3.7'",
+    "pythonnet~=3.0.0rc4; platform_system=='Windows;'",
+    "PyYAML==6.0; platform_system=='Windows;'",
+]
+classifiers=[
+    'Development Status :: 5 - Production/Stable',
+    'Intended Audience :: Developers',
+    'Intended Audience :: Education',
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: BSD License',
+    'Topic :: Scientific/Engineering',
+    'Topic :: Scientific/Engineering :: Mathematics',
+    'Topic :: Scientific/Engineering :: Artificial Intelligence',
+    'Topic :: Software Development',
+    'Topic :: Software Development :: Libraries',
+    'Topic :: Software Development :: Libraries :: Python Modules',
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.7'
+]
+keywords=["pyriid", "riid", "machine learning"]
+
+[project.urls]
+repository="https://github.com/sandialabs/PyRIID"
