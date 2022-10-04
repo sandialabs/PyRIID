@@ -2,10 +2,6 @@
 requires = ["setuptools", "wheel", "hatchling"]
 build-backend = "hatchling.build"
 
-[tools.setuptools]
-# as described here: https://setuptools.pypa.io/en/latest/userguide/package_discovery.html#
-package-dir = {"" = "riid"}
-
 [project]
 name = "riid"
 version = "2.0.0rc1"
@@ -25,7 +21,7 @@ dependencies =[
     "flake8",
     "coverage",
     "tensorflow==2.5.0; python_version<'3.8'",
-    "tensorflow-probability==0.12.1 ; python_version<'3.8'",
+    "tensorflow-probability==0.12.1; python_version<'3.8'",
     "tensorflow-model-optimization==0.6.0; python_version<'3.8'",
     "numpy~=1.19.2; python_version <'3.8'",
     "pandas==1.0.5; python_version<'3.8'",
@@ -61,6 +57,9 @@ classifiers=[
     'Programming Language :: Python :: 3.7'
 ]
 keywords=["pyriid", "riid", "machine learning"]
+
+[tool.setuptools.packages]
+find = {}
 
 [project.urls]
 repository="https://github.com/sandialabs/PyRIID"
