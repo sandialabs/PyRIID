@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel", "hatchling"]
+requires = ["hatchling", "wheel"]
 build-backend = "hatchling.build"
 
 [project]
@@ -58,8 +58,10 @@ classifiers=[
 ]
 keywords=["pyriid", "riid", "machine learning"]
 
-[tool.setuptools.packages]
-find = {}
-
 [project.urls]
 repository="https://github.com/sandialabs/PyRIID"
+
+[tool.hatch.build]
+include = [
+  "riid"
+]
