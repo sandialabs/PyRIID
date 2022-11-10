@@ -10,7 +10,6 @@ g_imgs/
 *.pdf
 *.smpl
 *.pcf
-!tests/_gadras_db.pcf
 */__pycache__
 _scripts/
 debug/
