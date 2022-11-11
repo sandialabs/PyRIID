@@ -1,4 +1,67 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools >= 64", "wheel"]
 build-backend = "setuptools.build_meta"
-version = "2.0.0-rc1"
+
+[tool.setuptools]
+packages = ["riid"]
+
+[project]
+name = "riid"
+description = "Machine learning-based models and utilities for radioisotope identification"
+version = "2.0.0"
+maintainers = [
+    {name="Tyler Morrow", email="tmorro@sandia.gov"},
+]
+authors = [
+    {name="Tyler Morrow"},
+    {name="Nathan Price"},
+    {name="Travis McGuire"},
+    {name="Tyler Ganter"},
+    {name="Aislinn Handley"},
+    {name="Paul Thelen"},
+    {name="Alan Van Omen"},
+]
+readme = "README.md"
+license = {file = "LICENSE.md"}
+classifiers = [
+    'Development Status :: 5 - Production/Stable',
+    'Intended Audience :: Developers',
+    'Intended Audience :: Education',
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: BSD License',
+    'Topic :: Scientific/Engineering',
+    'Topic :: Scientific/Engineering :: Mathematics',
+    'Topic :: Scientific/Engineering :: Artificial Intelligence',
+    'Topic :: Software Development',
+    'Topic :: Software Development :: Libraries',
+    'Topic :: Software Development :: Libraries :: Python Modules',
+    'Programming Language :: Python :: 3',
+]
+keywords = ["pyriid", "riid", "machine learning", "radioisotope identification", "gamma spectrum"]
+
+requires-python = ">=3.7"
+dependencies = [
+    "seaborn                        ~=0.12",
+    "matplotlib                     >=3.6;      python_version >= '3.8'",
+    "matplotlib                     ~=3.5;      python_version < '3.8'",
+    "pandas                         >=1.4;      python_version >= '3.9'",
+    "pandas                         ~=1.3;      python_version < '3.9'",
+    "pythonnet                      ==3.*;      platform_system == 'Windows'",
+    "pyyaml                         ==6.*",
+    "tables                         ~=3.7",
+    "tensorflow                     ==2.*",
+    "tensorflow-io                  ~=0.27",
+    "tensorflow-model-optimization  ~=0.7",
+    "tensorflow-probability         ~=0.18",  # this package is currently limiting the Python version to 3.9
+    "scikit-learn                   >=1.1;      python_version >= '3.10'",
+    "scikit-learn                   ~=1.0;      python_version < '3.10'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "flake8",
+    "coverage",
+]
+
+[project.urls]
+repository = "https://github.com/sandialabs/PyRIID"

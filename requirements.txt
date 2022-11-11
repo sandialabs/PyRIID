@@ -1,3 +1,0 @@
-setuptools
-flake8
-coverage

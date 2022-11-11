@@ -81,7 +81,7 @@ class TestBayes(unittest.TestCase):
         seeds_ss = SampleSet()
         seeds_ss.spectra = pd.DataFrame(seed_spectra)
         seeds_ss.info.live_time = [1.0, 1.0, 1.0, 1.0]
-        seeds_ss.info.snr_estimate = [0.0, 0.0, 0.0, 0.0]
+        seeds_ss.info.snr = [0.0, 0.0, 0.0, 0.0]
         seeds_ss.info.gross_counts = [300.0, 300.0, 300.0, 300.0]
         seeds_ss.sources = sources
 
