@@ -2,6 +2,9 @@
   <img src="https://user-images.githubusercontent.com/1079118/124811147-623bd280-df1f-11eb-9f3a-a4a5e6ec5f94.png" alt="PyRIID">
 </p>
 
+[![Python](https://img.shields.io/pypi/pyversions/riid)](https://badge.fury.io/py/riid)
+[![PyPI](https://badge.fury.io/py/riid.svg)](https://badge.fury.io/py/riid)
+
 This repository contains the PyRIID package (as well as tests and examples) which is intended to provide utilities that support machine learning-based research and solutions to radioisotope identification.
 
 ## Installation
@@ -55,7 +58,7 @@ This source code is licensed under the BSD-style license found [here](https://gi
 **Thank you** to the U.S. Department of Energy, National Nuclear Security Administration,
 Office of Defense Nuclear Nonproliferation Research and Development (DNN R&D) for funding that has led to version `2.x`.
 
-Additionally, **thank you** the following individuals who have provided invaluable subject-matter expertise:
+Additionally, **thank you** to the following individuals who have provided invaluable subject-matter expertise:
 
 - Ben Maestas
 - Greg Thoreson
