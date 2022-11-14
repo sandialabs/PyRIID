@@ -1,11 +1,14 @@
 name: Build package and run tests
 on: [push]
 jobs:
-  install-deps-and-run-tests:
+  build:
     strategy:
       matrix:
         python-version: ["3.7", "3.8", "3.9", "3.10"]
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-12]
+        exclude:
+        - os: macos-12 # taking way too long due to grpcio
+          python-version: "3.10"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
