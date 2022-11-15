@@ -2,54 +2,54 @@
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
 """This module contains utilities for working with the GADRAS API."""
+import json
+import logging
+import os
 import sys
+
+from jsonschema import validate
+
+from riid.data import SampleSet
+from riid.data.labeling import BACKGROUND_LABEL
+from riid.gadras.pcf import pcf_to_smpl
 
 GADRAS_API_SEEMINGLY_AVAILABLE = False
 
-if sys.platform == "win32":
-    import json
-    import logging
-    import os
+GADRAS_INSTALL_PATH = "C:\\GADRAS"
+GADRAS_ASSEMBLY_PATH = os.path.join(
+    GADRAS_INSTALL_PATH,
+    "Program"
+)
+GADRAS_API_CONFIG_FILE_PATH = os.path.join(
+    GADRAS_ASSEMBLY_PATH,
+    "gadras_api.ini"
+)
+GADRAS_DETECTOR_DIR_NAME = "Detector"
+GADRAS_DETECTOR_DIR_PATH = os.path.join(
+    GADRAS_INSTALL_PATH,
+    GADRAS_DETECTOR_DIR_NAME
+)
 
+GADRAS_API_SCHEMA_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "api_schema.json"
+)
+with open(GADRAS_API_SCHEMA_PATH, "r") as fin:
+    GADRAS_API_SCHEMA = json.load(fin)
+
+GADRAS_API_SEEMINGLY_AVAILABLE = os.path.exists(GADRAS_API_CONFIG_FILE_PATH)
+
+if sys.platform == "win32" and GADRAS_API_SEEMINGLY_AVAILABLE:
     import clr
-    from jsonschema import validate
-    from riid.data import SampleSet
-    from riid.data.labeling import BACKGROUND_LABEL
-    from riid.gadras.pcf import pcf_to_smpl
+    sys.path.append(GADRAS_ASSEMBLY_PATH)
+    clr.AddReference("Sandia.Gadras.API")
+    clr.AddReference("Sandia.Gadras.Utilities")
+    clr.AddReference("System.Collections")
 
-    GADRAS_INSTALL_PATH = "C:\\GADRAS"
-    GADRAS_ASSEMBLY_PATH = os.path.join(
-        GADRAS_INSTALL_PATH,
-        "Program"
-    )
-    GADRAS_API_CONFIG_FILE_PATH = os.path.join(
-        GADRAS_ASSEMBLY_PATH,
-        "gadras_api.ini"
-    )
-    GADRAS_DETECTOR_DIR_NAME = "Detector"
-    GADRAS_DETECTOR_DIR_PATH = os.path.join(
-        GADRAS_INSTALL_PATH,
-        GADRAS_DETECTOR_DIR_NAME
-    )
-
-    GADRAS_API_SCHEMA_PATH = os.path.join(
-        os.path.dirname(__file__),
-        "api_schema.json"
-    )
-    with open(GADRAS_API_SCHEMA_PATH, "r") as fin:
-        GADRAS_API_SCHEMA = json.load(fin)
-
-    GADRAS_API_SEEMINGLY_AVAILABLE = os.path.exists(GADRAS_API_CONFIG_FILE_PATH)
-    if GADRAS_API_SEEMINGLY_AVAILABLE:
-        sys.path.append(GADRAS_ASSEMBLY_PATH)
-        clr.AddReference("Sandia.Gadras.API")
-        clr.AddReference("Sandia.Gadras.Utilities")
-        clr.AddReference("System.Collections")
-
-        from Sandia.Gadras.API import GadrasAPIWrapper, LocationInfo  # noqa
-        from Sandia.Gadras.API.Inject import InjectSetup  # noqa
-        from Sandia.Gadras.Utilities import Configs  # noqa
-        from System.Collections.Generic import List  # noqa
+    from Sandia.Gadras.API import GadrasAPIWrapper, LocationInfo  # noqa
+    from Sandia.Gadras.API.Inject import InjectSetup  # noqa
+    from Sandia.Gadras.Utilities import Configs  # noqa
+    from System.Collections.Generic import List  # noqa
 
 
 INJECT_PARAMS = {
@@ -313,7 +313,7 @@ class BackgroundInjector(BaseInjector):
         the purpose of which is to seed other synthesizers.
     """
 
-    def __init__(self, gadras_api: GadrasAPIWrapper = None) -> None:
+    def __init__(self, gadras_api = None) -> None:
         super().__init__(gadras_api)
 
     def _get_inject_setups_for_backgrounds(self, gadras_api, detector, backgrounds, output_path):

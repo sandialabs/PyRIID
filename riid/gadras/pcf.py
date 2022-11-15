@@ -626,7 +626,7 @@ def _smpl_to_dict(ss: SampleSet):
             "Date-time_VAX": ss.info.timestamp.fillna("").iloc[i],
             "Occupancy_Flag": ss.info.occupancy_flag.fillna(0).iloc[i],
             "Tag": ss.info.tag.fillna("").iloc[i],
-            "Total_Neutron_Counts": ss.info.total_neutron_counts.fillna(0).iloc[i],
+            "Total_Neutron_Counts": ss.info.neutron_counts.fillna(0).iloc[i],
         }
 
         spectrum = ss.spectra.values[i, :]
