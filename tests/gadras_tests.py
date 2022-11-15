@@ -6,8 +6,8 @@ import unittest
 
 import pandas as pd
 from riid.data.synthetic.static import get_dummy_sampleset
-from riid.gadras import (_pack_compressed_text_buffer, smpl_to_pcf,
-                         _unpack_compressed_text_buffer)
+from riid.gadras.pcf import (_pack_compressed_text_buffer, smpl_to_pcf,
+                             _unpack_compressed_text_buffer)
 
 
 class TestGadras(unittest.TestCase):
