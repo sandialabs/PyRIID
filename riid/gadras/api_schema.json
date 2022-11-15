@@ -1,0 +1,183 @@
+{
+    "$id": "GADRAS_API_19.2.3_Seed_Synthesis_Schema",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "",
+    "type": "object",
+    "required": [
+        "gamma_detector",
+        "foregrounds",
+        "backgrounds"
+    ],
+    "properties": {
+        "gamma_detector": {
+            "title": "Gamma Detector",
+            "description": "The information about your detector.",
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "The directory containing your detector's DRF (.dat file) relative to the GADRAS Detector directory.",
+                    "type": "string"
+                },
+                "parameters": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "properties": {
+                        "distance_cm": {
+                            "description": "Distance between detector and sources, in centimeters",
+                            "type": "number"
+                        },
+                        "height_cm": {
+                            "description": "Detector height off ground, in centimeters",
+                            "type": "number"
+                        },
+                        "dead_time_per_pulse_us": {
+                            "description": "Detector dead time, in microseconds",
+                            "type": "number"
+                        },
+                        "latitude_deg": {
+                            "description": "Latitude, in degrees",
+                            "type": "number"
+                        },
+                        "longitude_deg": {
+                            "description": "Longitude, in degrees",
+                            "type": "number"
+                        },
+                        "elevation_m": {
+                            "description": "Elevation, in meters",
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "distance_cm",
+                        "height_cm",
+                        "dead_time_per_pulse",
+                        "latitude_deg",
+                        "longitude_deg",
+                        "elevation_m"
+                    ]
+                }
+            },
+            "required": [
+                "name"
+            ]
+        },
+        "sources": {
+            "title": "Foreground Sources",
+            "description": "The list of non-background sources to obtain via inject(s).",
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "activity_uci": {
+                        "type": "integer"
+                    },
+                    "configurations": {
+                        "type:": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "an": {
+                                    "type": "integer"
+                                },
+                                "ad": {
+                                    "type": "number"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "backgrounds": {
+            "title": "Foreground Sources",
+            "description": "The list of background sources to obtain via inject(s).",
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "include_cosmic": {
+                        "type": "boolean"
+                    },
+                    "include_terrestrial": {
+                        "type": "boolean"
+                    },
+                    "K40_percent": {
+                        "type": "number"
+                    },
+                    "U_ppm": {
+                        "type": "number"
+                    },
+                    "Th232_ppm": {
+                        "type": "number"
+                    },
+                    "attenuation": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 16
+                    },
+                    "low_energy_continuum": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 16
+                    },
+                    "high_energy_continuum": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 16
+                    },
+                    "suppression_scalar": {
+                        "type": "number"
+                    }
+                },
+                "required": [
+                    "cosmic",
+                    "terrestrial",
+                    "K40_percent",
+                    "U_ppm",
+                    "Th232_ppm"
+                ]
+            }
+        }
+    },
+    "$defs": {
+        "sample_range": {
+            "type": "object",
+            "required": [ "min", "max", "dist" ],
+            "properties": {
+                "min": {
+                    "type": "number",
+                    "description": "Minimum value of the range (inclusive)."
+                },
+                "max": {
+                    "type": "number",
+                    "description": "Maximum value of the range (inclusive)."
+                },
+                "dist": {
+                    "type": "string",
+                    "description": "The distribution from which to draw samples.",
+                    "enum": [
+                        "uniform",
+                        "log10"
+                    ]
+                }
+            }
+        },
+        "sample_norm": {
+            "type": "object",
+            "required": [ "mean", "std" ],
+            "properties": {
+                "mean": {
+                    "type": "number",
+                    "description": "Mean of the normal distribution from which to draw samples."
+                },
+                "std": {
+                    "type": "number",
+                    "description": "Standard deviation of the normal distribution from which to draw samples."
+                }
+            }
+        }
+    }
+}
