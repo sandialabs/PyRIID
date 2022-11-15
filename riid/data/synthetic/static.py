@@ -6,11 +6,10 @@ import random
 from collections import Counter
 from datetime import datetime
 from time import time
-from typing import Any
+from typing import Any, Tuple
 
 import numpy as np
 import pandas as pd
-import riid
 from riid.data import SampleSet
 from riid.data.labeling import BACKGROUND_LABEL
 from riid.data.sampleset import SpectraState
@@ -40,10 +39,6 @@ class StaticSynthesizer():
             snr_function_args: Defines the range of values which are sampled in the fashion
                 specified by the `snr_function` argument.
             apply_poisson_noise: Defines whether to apply poisson noise to the expected spectra.
-            balance_level: determines the index level of the sources DataFrame by
-                which to ensure balance. Options: Seed, Isotope, Category.
-                If a level other than "Seed" is given, `samples_per_seed` is then
-                treated as a minimum value.
             random_state: Defines the random seed value used to reproduce specific data sets.
 
         """
@@ -54,7 +49,6 @@ class StaticSynthesizer():
         self.snr_function = snr_function
         self.snr_function_args = snr_function_args
         self.apply_poisson_noise = apply_poisson_noise
-        self.balance_level = balance_level
         self.random_state = random_state
         self._synthesis_start_dt = None
         self._n_samples_synthesized = 0
@@ -341,7 +335,8 @@ class StaticSynthesizer():
 
         return fg_ss, bg_ss, gross_ss
 
-    def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet, normalize_sources=True):
+    def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet,
+                 normalize_sources=True) -> Tuple[SampleSet, SampleSet, SampleSet]:
         """Generate a sample set of gamma spectra from the given config.
 
         Args:
@@ -557,7 +552,6 @@ def get_dummy_sampleset(n_channels: int = 512, as_seeds: bool = False,
     ss.info.ecal_order_3 = 0
     ss.info.ecal_low_e = 0
     ss.info.description = ""
-    ss.info.pyriid_version = riid.__version__
     ss.update_timestamp()
 
     if as_seeds:

@@ -1,8 +1,7 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
-"""This module contains utilities for working with GADRAS and related files."""
-import logging
+"""This module contains utilities for working with GADRAS PCF files."""
 import re
 import struct
 from collections import defaultdict
@@ -14,7 +13,7 @@ from riid.data import SampleSet
 from riid.data.labeling import (NO_CATEGORY, NO_ISOTOPE, NO_SEED,
                                 _find_category, _find_isotope)
 
-# Define PCF definition per PCF ICD
+
 HEADER_DEFINITIONS = defaultdict(lambda: {
     "fields": (
         "NRPS",
@@ -102,14 +101,10 @@ def smpl_to_pcf(ss: SampleSet, save_path: str, verbose: bool = True):
         save_path: Defines the path at which to save the converted Sampleset.
         verbose: Determines whether or not to show verbose function output in terminal.
 
-    Returns:
-        The results of the call to _dict_to_pcf, or a file_bytes object containing
-        information of sampleset in pcf format.
-
     Raises:
         None.
     """
-    return _dict_to_pcf(_smpl_to_dict(ss), save_path, verbose=verbose)
+    _dict_to_pcf(_smpl_to_dict(ss), save_path, verbose=verbose)
 
 
 def _get_srsi(file_bytes: list):
@@ -251,7 +246,7 @@ def _pcf_to_dict(pcf_file_path: str, verbose: bool = False):
     header_def = HEADER_DEFINITIONS[version]
     deviation_values = struct.unpack("5120f", pcf_data[512:512+20480])
     if not set(deviation_values) == {0} and verbose:
-        logging.warning("Deviation values exist in file")
+        print("Deviation values exist in file")
     # Header provides metadata about the collection. Spectra is a list
     #  of "header" and "spectrum" pairs for each spectrum in file.
     header = _read_header(pcf_data[:256], header_def)
@@ -320,6 +315,17 @@ def _pcf_dict_to_sampleset(pcf_dict: dict):
         else:
             ad = None
 
+        # PCF file contains energy calibration terms which are defined as:
+        # E_i = a0 + a1*x + a2*x^2 + a3*x^3 + a4 / (1 + 60*x)
+        # where:
+        #   a0 = order_0
+        #   a1 = order_1
+        #   a2 = order_2
+        #   a3 = order_3
+        #   a4 = low_E
+        #   x = channel number
+        #   E_i = Energy value of i"th channel
+
         order_0 = float(spectrum["header"]["Energy_Calibration_Offset"])
         order_1 = float(spectrum["header"]["Energy_Calibration_Gain"])
         order_2 = float(spectrum["header"]["Energy_Calibration_Quadratic"])
@@ -327,21 +333,28 @@ def _pcf_dict_to_sampleset(pcf_dict: dict):
         low_E = float(spectrum["header"]["Energy_Calibration_Low_Energy"])
 
         info = {
-            # Note: any columns list in SampleSet.DEFAULT_INFO_COLUMNS and
-            #   not set here are lost in translation.
             "description": description,
             "timestamp": spectrum["header"]["Date-time_VAX"],
             "live_time": spectrum["header"]["Live_Time"],
             "real_time": spectrum["header"]["Total_time_per_real_time"],
-            "gross_counts": sum(spectrum["spectrum"]),
-            "neutron_counts": spectrum["header"]["Total_Neutron_Counts"],
+            # The following commented out fields are PyRIID-only, which can't be stored in PCF.
+            # They are shown here to explicitly communicate what would be lost in translation.
+            #   - snr_target
+            #   - snr_estimate
+            #   - sigma
+            #   - bg_counts
+            #   - fg_counts
+            #   - bg_counts_expected
+            #   - fg_counts
+            "total_counts": sum(spectrum["spectrum"]),
+            "total_neutron_counts": spectrum["header"]["Total_Neutron_Counts"],
             "distance_cm": distance,
+            "area_density": ad,
             "ecal_order_0": order_0,
             "ecal_order_1": order_1,
             "ecal_order_2": order_2,
             "ecal_order_3": order_3,
             "ecal_low_e": low_E,
-            "areal_density": ad,
             "atomic_number": an,
             "occupancy_flag": spectrum["header"]["Occupancy_Flag"],
             "tag": spectrum["header"]["Tag"],
@@ -366,33 +379,6 @@ def _pcf_dict_to_sampleset(pcf_dict: dict):
     ss.detector_info["pcf_metadata"] = pcf_dict["header"]
 
     return ss
-
-
-def _format_isotope_name(name: str):
-    """Places isotope in format of alpha followed by numeric (eg. Pu239 instead of 239Pu).
-
-    Args:
-        name: Defines the unformatted string isotope name.
-
-    Returns:
-        The formatted isotope name as a string.
-
-    Raises:
-        None.
-    """
-
-    alpha_part = re.search("[a-z]+", name.lower())
-    numeric_part = re.search("[0-9]+", name)
-
-    if alpha_part and numeric_part:
-        name = alpha_part.group(0).capitalize() + numeric_part.group(0)
-    elif alpha_part:
-        name = alpha_part.group(0).capitalize()
-    elif numeric_part:
-        name = numeric_part.group(0)
-    else:
-        name = "Unknown"
-    return name
 
 
 def _convert_header(header_dict: dict, header_def: dict):
@@ -496,7 +482,6 @@ def _dict_to_pcf(pcf_dict: dict, save_path: str, verbose: bool = True):
     # save binary file
     with open(save_path, "wb") as fout:
         fout.write(file_bytes)
-    return file_bytes
 
 
 def _unpack_compressed_text_buffer(ctb, field_len=60):
@@ -641,7 +626,7 @@ def _smpl_to_dict(ss: SampleSet):
             "Date-time_VAX": ss.info.timestamp.fillna("").iloc[i],
             "Occupancy_Flag": ss.info.occupancy_flag.fillna(0).iloc[i],
             "Tag": ss.info.tag.fillna("").iloc[i],
-            "Total_Neutron_Counts": ss.info.neutron_counts.fillna(0).iloc[i],
+            "Total_Neutron_Counts": ss.info.total_neutron_counts.fillna(0).iloc[i],
         }
 
         spectrum = ss.spectra.values[i, :]

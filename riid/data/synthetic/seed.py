@@ -2,60 +2,24 @@
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
 """This modules contains utilities for generating synthetic gamma spectrum templates from GADRAS."""
-import logging
 import os
-import sys
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Union
+from typing import Tuple, Union
 
 import numpy as np
 import pandas as pd
+import yaml
 from riid.data import SampleSet
-from riid.data.labeling import BACKGROUND_LABEL
-from riid.gadras import pcf_to_smpl
-
-if sys.platform == "win32":
-    import clr
-    import yaml
-
-    GADRAS_INSTALL_PATH = "C:\\GADRAS"
-    GADRAS_ASSEMBLY_PATH = os.path.join(
-        GADRAS_INSTALL_PATH,
-        "Program"
-    )
-    GADRAS_API_CONFIG_FILE_PATH = os.path.join(
-        GADRAS_ASSEMBLY_PATH,
-        "gadras_api.ini"
-    )
-    GADRAS_DETECTOR_DIR_NAME = "Detector"
-    GADRAS_DETECTOR_DIR_PATH = os.path.join(
-        GADRAS_INSTALL_PATH,
-        GADRAS_DETECTOR_DIR_NAME
-    )
-    GADRAS_API_SEEMINGLY_AVAILABLE = os.path.exists(GADRAS_INSTALL_PATH) and \
-        os.path.exists(GADRAS_API_CONFIG_FILE_PATH)
-
-    if GADRAS_API_SEEMINGLY_AVAILABLE:
-        sys.path.append(GADRAS_ASSEMBLY_PATH)
-        clr.AddReference("Sandia.Gadras.API")
-        clr.AddReference("Sandia.Gadras.Utilities")
-        clr.AddReference("System.Collections")
-
-        from Sandia.Gadras.API import GadrasAPIWrapper, LocationInfo  # noqa
-        from Sandia.Gadras.API.Inject import InjectSetup  # noqa
-        from Sandia.Gadras.Utilities import Configs  # noqa
-        from System.Collections.Generic import List  # noqa
+from riid.data.labeling import BACKGROUND_LABEL, label_to_index_element
+from riid.gadras.api import (DETECTOR_PARAMS, GADRAS_ASSEMBLY_PATH,
+                             INJECT_PARAMS, BackgroundInjector, SourceInjector,
+                             get_counts_per_bg_source_unit, get_gadras_api,
+                             validate_inject_config)
+from riid.gadras.pcf import pcf_to_smpl
 
 
 class SeedSynthesizer():
-    """ Synthesizes total counts-normalized gamma spectra using the GADRAS API, the purpose of
-        which is to seed other synthesizers.
-    """
-
-    def __init__(self):
-        self.fg_records = 1
-        self.bg_records = 1
 
     @contextmanager
     def _cwd(self, path):
@@ -71,154 +35,66 @@ class SeedSynthesizer():
         finally:
             os.chdir(oldpwd)
 
-    def _get_gadras_api(self, instance_num=1, initialize_transport=True):
-        """ Sets up and initializes the GADRAS API object.
-
-            Please refer to GADRAS API documentation to learn more.
-            Default GADRAS installations currently put these docs here:
-            C:\\GADRAS\\Program\\Documentation\\api-docs
+    def _get_kut_and_cosmic_sources(self, k_pct, u_ppm, t_ppm, cosmic, counts,
+                                    k_counts_per_pct, u_counts_per_ppm, t_counts_per_ppm,
+                                    cosmic_counts):
+        """Assumes a live time of 1 second.
         """
-        if not os.path.exists(GADRAS_API_CONFIG_FILE_PATH):
-            Configs.createApiSettingsFile(
-                GADRAS_API_CONFIG_FILE_PATH,
-                GADRAS_INSTALL_PATH
-            )
-        api_Settings_loaded = Configs.loadApiSettings(
-            GADRAS_API_CONFIG_FILE_PATH,
-            createNonExistantDirectories=True
-        )
-        if not api_Settings_loaded:
-            raise RuntimeError("Failed to load API settings.")
+        terrestrial_counts = counts - cosmic_counts if cosmic else counts
 
-        return GadrasAPIWrapper(
-            ".",
-            instance_num,
-            initialize_transport
-        )
+        expected_k_counts = k_counts_per_pct * k_pct
+        expected_u_counts = u_counts_per_ppm * u_ppm
+        expected_t_counts = t_counts_per_ppm * t_ppm
+        expected_counts = expected_k_counts + expected_u_counts + expected_t_counts
+        expected_k_ratio = expected_k_counts / expected_counts
+        expected_u_ratio = expected_u_counts / expected_counts
+        expected_t_ratio = expected_t_counts / expected_counts
 
-    def _get_inject_setup(self, gadras_api, output_path, title, record_number, source,
-                          detector_distance_to_source_cm, detector_height_cm,
-                          detector_dead_time_usecs, detector_elevation_m, detector_latitude_deg,
-                          detector_longitude_deg, detector_overburden=0, detector_dwell_time_secs=1,
-                          detector_dwell_time_is_live_time=True,
-                          detector_contains_internal_source=False, include_poisson_variations=False,
-                          background_include_cosmic=False, background_include_terrestrial=False,
-                          background_K40_percent=0.0, background_U_ppm=0.0,
-                          background_Th232_ppm=0.0, background_attenuation=0.0,
-                          background_low_energy_continuum=0.0, background_high_energy_continuum=0.0,
-                          background_suppression_scalar=0.0):
-        """ Builds a GADRAS InjectSetup.
+        # rescaling
+        actual_k_counts = round(expected_k_ratio * terrestrial_counts)
+        actual_u_counts = round(expected_u_ratio * terrestrial_counts)
+        actual_t_counts = round(expected_t_ratio * terrestrial_counts)
 
-            Please refer to GADRAS API documentation to learn more.
-            Default GADRAS installations currently put these docs here:
-            C:\\GADRAS\\Program\\Documentation\\api-docs
-        """
-        setup = InjectSetup()
-        setup.SetDefaults(gadras_api)
-        setup.FileName = output_path
-        setup.Title = title
-        setup.Record = record_number
-        setup.Source = source
+        sources = {
+            "K40": actual_k_counts,
+            "Ra226": actual_u_counts,
+            "Th232": actual_t_counts,
+            "Cosmic": cosmic_counts if cosmic else 0,
+        }
 
-        setup.DistanceToSourceCm = detector_distance_to_source_cm
-        setup.DetectorHeightCm = detector_height_cm
-        setup.DetectorDeadTimeUs = detector_dead_time_usecs
-        loc_info = LocationInfo()
-        loc_info.Elevation = detector_elevation_m
-        loc_info.Latitude = detector_latitude_deg
-        loc_info.Longitude = detector_longitude_deg
-        loc_info.Overburden = detector_overburden
-        setup.UpdateBackgroundLocation(loc_info)
-        setup.DwellTimeSec = detector_dwell_time_secs
-        setup.DwellTimeIsLiveTime = detector_dwell_time_is_live_time
-        setup.ContainsInternalSource = detector_contains_internal_source
+        return sources
 
-        setup.IncludePoissonVariations = include_poisson_variations
+    def _get_detector_parameters(self, gadras_api) -> dict:
+        params = {}
+        for k in gadras_api.detectorGetParameters().Keys:
+            if k not in DETECTOR_PARAMS:
+                continue
+            params[k] = gadras_api.detectorGetParameter(k)
+        return params
 
-        setup.IncludeCosmicBackground = background_include_cosmic
-        setup.IncludeTerrestrialBackground = background_include_terrestrial
-        if background_include_terrestrial:
-            setup.TerrestrialBackground.K40 = background_K40_percent
-            setup.TerrestrialBackground.Uranium = background_U_ppm
-            setup.TerrestrialBackground.Th232 = background_Th232_ppm
-            setup.BackgroundAdjustments.LowEnergyContinuum = background_low_energy_continuum
-            setup.BackgroundAdjustments.HighEnergyContinuum = \
-                background_high_energy_continuum
-            setup.BackgroundAdjustments.Attenuation = background_attenuation
-            setup.BackgroundAdjustments.BackgroundSuppressionScalar = \
-                background_suppression_scalar
+    def _set_detector_parameters(self, gadras_api, new_parameters: dict, verbose=False,
+                                 dry_run=False) -> None:
+        for k, v in new_parameters.items():
+            k_upper = k.upper()
+            if k_upper in INJECT_PARAMS:
+                continue
+            v_type = DETECTOR_PARAMS[k_upper]["type"]
 
-        return setup
-
-    def _get_foreground_inject_setups(self, gadras_api, detector, sources, isotope, output_path):
-        """ Obtains foreground InjectSetups.
-
-            Please refer to GADRAS API documentation to learn more.
-            Default GADRAS installations currently put these docs here:
-            C:\\GADRAS\\Program\\Documentation\\api-docs
-        """
-        setups = List[InjectSetup]()
-        if not sources:
-            return setups
-        for source in sources:
-            setup = self._get_inject_setup(
-                gadras_api=gadras_api,
-                output_path=output_path,
-                title=isotope,
-                record_number=self.fg_records,
-                source=source,
-                detector_distance_to_source_cm=detector["distance_cm"],
-                detector_height_cm=detector["height_cm"],
-                detector_dead_time_usecs=detector["dead_time_us"],
-                detector_elevation_m=detector["elevation_m"],
-                detector_latitude_deg=detector["latitude_deg"],
-                detector_longitude_deg=detector["longitude_deg"],
-                detector_contains_internal_source=False,  # TODO
-            )
-            setups.Add(setup)
-            self.fg_records += 1
-        return setups
-
-    def _get_background_inject_setups(self, gadras_api, detector, sources, output_path):
-        """ Obtains background InjectSetups.
-
-            Please refer to GADRAS API documentation to learn more.
-            Default GADRAS installations currently put these docs here:
-            C:\\GADRAS\\Program\\Documentation\\api-docs
-        """
-        setups = List[InjectSetup]()
-        if not sources:
-            return setups
-        for source in sources:
-            setup = self._get_inject_setup(
-                gadras_api=gadras_api,
-                output_path=output_path,
-                title=BACKGROUND_LABEL,
-                record_number=self.bg_records,
-                source=None,  # None because we're making background only
-                detector_distance_to_source_cm=detector["distance_cm"],
-                detector_height_cm=detector["height_cm"],
-                detector_dead_time_usecs=detector["dead_time_us"],
-                detector_elevation_m=detector["elevation_m"],
-                detector_latitude_deg=detector["latitude_deg"],
-                detector_longitude_deg=detector["longitude_deg"],
-                detector_contains_internal_source=False,  # TODO
-                background_include_cosmic=source["cosmic"],
-                background_include_terrestrial=source["terrestrial"],
-                background_K40_percent=source["K40_percent"],
-                background_U_ppm=source["U_ppm"],
-                background_Th232_ppm=source["Th232_ppm"],
-                background_low_energy_continuum=source["low_energy_continuum"],
-                background_high_energy_continuum=source["high_energy_continuum"],
-                background_attenuation=source["attenuation"],
-                background_suppression_scalar=source["suppression_scalar"]
-            )
-            setups.Add(setup)
-            self.bg_records += 1
-        return setups
+            if v_type == "float":
+                gadras_api.detectorSetParameter(k_upper, float(v))
+                if verbose:
+                    print(f"i: Setting parameter '{k_upper}' to {v}")
+            elif v_type == "int":
+                gadras_api.detectorSetParameter(k_upper.upper(), int(v))
+                if verbose:
+                    print(f"i: Setting parameter '{k_upper}' to {v}")
+            else:
+                print(f"Warning: parameter '{k}'s type of {v_type} is not supported - not set.")
+        if not dry_run:
+            gadras_api.detectorSaveParameters()
 
     def generate(self, config: Union[str, dict], normalize_sources=True,
-                 verbose: bool = False) -> SampleSet:
+                 dry_run=False, verbose: bool = False) -> Tuple[SampleSet, SampleSet]:
         """Produces a SampleSet containing foreground and/or background seeds using GADRAS based
         on the given inject configuration.
 
@@ -226,17 +102,15 @@ class SeedSynthesizer():
             config: a dictionary is treated as the actual config containing the needed information
                 to perform injects via the GADRAS API, while a string is treated as a path to a YAML
                 file which deserialized as a dictionary.
-            normalize_sources: Whether to divide each row of the SampleSet's sources
+            normalize_sources: whether to divide each row of the SampleSet's sources
                 DataFrame by its sum. Defaults to True.
+            dry_run: when False, actually performs inject(s), otherwise simply reports info about
+                what would happen.  Defaults to False.
             verbose: when True, displays extra output.
 
         Returns:
             A SampleSet containing foreground and/or background seeds generated by GADRAS.
         """
-        if not GADRAS_API_SEEMINGLY_AVAILABLE:
-            msg = "GADRAS API not found; no injects can be performed."
-            raise GadrasNotInstalledError(msg)
-
         if isinstance(config, str):
             with open(config, "r") as stream:
                 config = yaml.safe_load(stream)
@@ -248,90 +122,114 @@ class SeedSynthesizer():
             )
             raise ValueError(msg)
 
-        seeds_ss = SampleSet()
+        validate_inject_config(config)
+
         with self._cwd(GADRAS_ASSEMBLY_PATH):
-            gadras_api = self._get_gadras_api()
-            detector_name = config["detector"]["name"]
+            gadras_api = get_gadras_api()
+            detector_name = config["gamma_detector"]["name"]
+            new_detector_parameters = config["gamma_detector"]["parameters"]
             gadras_api.detectorSetCurrent(detector_name)
+            original_detector_parameters = self._get_detector_parameters(gadras_api)
             now = datetime.utcnow().isoformat().replace(":", "_")
-            worker = gadras_api.GetBatchInjectWorker()
 
-            # Generate foreground seeds
             rel_fg_output_path = f"{now}_fg.pcf"
-            abs_fg_output_path = os.path.join(
-                GADRAS_DETECTOR_DIR_PATH,
-                detector_name,
-                rel_fg_output_path
-            )
-            fg_injects_exist = False
-            for fg in config["foregrounds"]:
-                fg_inject_setups = self._get_foreground_inject_setups(
-                    gadras_api,
-                    config["detector"],
-                    fg["sources"],
-                    fg["isotope"],
-                    rel_fg_output_path
-                )
-                if fg_inject_setups:
-                    worker.Run(fg_inject_setups)
-                    fg_injects_exist = True
-            if fg_injects_exist:
-                # Add source name to foreground seeds file
-                fg_records = 1
-                for fg in config["foregrounds"]:
-                    for source in fg["sources"]:
-                        gadras_api.spectraFileWriteSingleField(
-                            rel_fg_output_path,
-                            fg_records,
-                            "Source",
-                            source
-                        )
-                        fg_records += 1
-                if verbose:
-                    logging.info(f"Foreground seeds saved to: {abs_fg_output_path}")
-                fg_ss = pcf_to_smpl(abs_fg_output_path)
-                seeds_ss.concat(fg_ss)
-
-            # Generate background seeds
             rel_bg_output_path = f"{now}_bg.pcf"
-            abs_bg_output_path = os.path.join(
-                GADRAS_DETECTOR_DIR_PATH,
-                detector_name,
-                rel_bg_output_path
-            )
-            bg_inject_setups = self._get_background_inject_setups(
-                gadras_api,
-                config["detector"],
-                config["backgrounds"],
-                rel_bg_output_path
-            )
-            if bg_inject_setups:
-                worker.Run(bg_inject_setups)
-                # Add custom-built source name to background seeds file
-                bg_records = 1
-                for bg in config["backgrounds"]:
-                    k_percent, u_ppm, th_ppm = \
-                        bg["K40_percent"], bg["U_ppm"], bg["Th232_ppm"]
-                    cosmic = "+cosmic" if bg["cosmic"] else ""
-                    source = f"K={k_percent}%,U={u_ppm}ppm,Th={th_ppm}ppm{cosmic}"
-                    gadras_api.spectraFileWriteSingleField(
-                        rel_bg_output_path,
-                        bg_records,
-                        "Source",
-                        source
+            fg_list = []
+            bg_list = []
+            detector_setups = [new_detector_parameters]  # TODO: generate all detector_setups
+            source_injector = SourceInjector(gadras_api)
+            background_injector = BackgroundInjector(gadras_api)
+            try:
+                for d in detector_setups:
+                    self._set_detector_parameters(gadras_api, d, verbose, dry_run)
+
+                    if dry_run:
+                        continue
+
+                    # TODO: propagate dry_run to injectors
+
+                    # Source injects
+                    if verbose:
+                        print('Obtaining sources...')
+                    fg_pcf_abs_path = source_injector.generate(
+                        config,
+                        rel_fg_output_path,
+                        verbose=verbose
                     )
-                    bg_records += 1
-                if verbose:
-                    logging.info(f"Background seeds saved to: {abs_bg_output_path}")
-                bg_ss = pcf_to_smpl(abs_bg_output_path)
-                seeds_ss.concat(bg_ss)
+                    fg_seeds_ss = pcf_to_smpl(fg_pcf_abs_path)
+                    fg_seeds_ss.normalize(p=1)
+                    if normalize_sources:
+                        fg_seeds_ss.normalize_sources()
+                    fg_list.append(fg_seeds_ss)
 
-        seeds_ss.normalize(p=1)
-        if normalize_sources:
-            seeds_ss.normalize_sources()
-        seeds_ss.detector_info = config["detector"]
+                    # Background injects
+                    if verbose:
+                        print('Obtaining backgrounds...')
+                    bg_pcf_abs_path = background_injector.generate(
+                        config,
+                        rel_bg_output_path,
+                        verbose=verbose
+                    )
+                    bg_seeds_ss = pcf_to_smpl(bg_pcf_abs_path)
 
-        return seeds_ss
+                    # Calculate ground truth for backgrounds
+                    worker = gadras_api.GetBatchInjectWorker()
+                    bg_counts_params = (gadras_api, new_detector_parameters, worker)
+                    k_counts_per_pct = get_counts_per_bg_source_unit(*bg_counts_params, "K")
+                    u_counts_per_ppm = get_counts_per_bg_source_unit(*bg_counts_params, "U")
+                    t_counts_per_ppm = get_counts_per_bg_source_unit(*bg_counts_params, "T")
+                    cosmic_counts = get_counts_per_bg_source_unit(*bg_counts_params, "Cosmic")
+                    sources = []
+                    for i in range(bg_seeds_ss.n_samples):
+                        i_counts = round(bg_seeds_ss.spectra.iloc[i].sum())
+                        i_bg_config = config["backgrounds"][i]
+                        i_sources = self._get_kut_and_cosmic_sources(
+                            i_bg_config["K40_percent"],
+                            i_bg_config["U_ppm"],
+                            i_bg_config["Th232_ppm"],
+                            i_bg_config["cosmic"],
+                            i_counts,
+                            k_counts_per_pct,
+                            u_counts_per_ppm,
+                            t_counts_per_ppm,
+                            cosmic_counts
+                        )
+                        sources.append(i_sources)
+                    bg_sources_df = pd.DataFrame(sources)
+                    bg_sources_df.columns = pd.MultiIndex.from_tuples(
+                        [label_to_index_element(x, label_level="Seed")
+                         for x in bg_sources_df.columns],
+                        names=SampleSet.SOURCES_MULTI_INDEX_NAMES
+                    )
+                    bg_seeds_ss.sources = bg_sources_df
+
+                    bg_seeds_ss.normalize(p=1)
+                    if normalize_sources:
+                        bg_seeds_ss.normalize_sources()
+
+                    bg_list.append(bg_seeds_ss)
+
+                if dry_run:
+                    return None
+
+            except Exception as e:
+                # Try to restore .dat file to original state even when an error occurs
+                if not dry_run:
+                    self._set_detector_parameters(gadras_api, original_detector_parameters)
+                raise e
+
+            # Restore .dat file to original state
+            if not dry_run:
+                self._set_detector_parameters(gadras_api, original_detector_parameters)
+
+        all_fg_seeds_ss = SampleSet()
+        all_fg_seeds_ss.concat(fg_list)
+        all_fg_seeds_ss.detector_info = config["gamma_detector"]
+        all_bg_seeds_ss = SampleSet()
+        all_bg_seeds_ss.concat(bg_list)
+        all_fg_seeds_ss.detector_info = config["gamma_detector"]
+
+        return all_fg_seeds_ss, all_bg_seeds_ss
 
 
 class SeedMixer():
@@ -481,7 +379,6 @@ class SeedMixer():
 
         for ecal_column in seeds_ss.ECAL_INFO_COLUMNS:
             mixture_ss.info.loc[:, ecal_column] = seeds_ss.info[ecal_column][0]
-        mixture_ss.info.loc[:, 'pyriid_version'] = seeds_ss.info['pyriid_version'][0]
         mixture_ss.info.loc[:, 'tag'] = seeds_ss.info['tag'][0]
 
         # TODO: fill in rest of columns
@@ -490,7 +387,3 @@ class SeedMixer():
         # distance_cm, area_density, atomic_number
 
         return mixture_ss
-
-
-class GadrasNotInstalledError(Exception):
-    pass

@@ -172,7 +172,7 @@ def plot_live_time_vs_snr(ss: SampleSet, overlay_ss: SampleSet = None, alpha: fl
     ax.scatter(
         correct_ss.info.live_time,
         correct_ss.info.snr_expected,
-        c="green", alpha=alpha, marker=MARKER, label="Correct"
+        c="blue", alpha=alpha, marker=MARKER, label="Correct"
     )
     ax.scatter(
         incorrect_ss.info.live_time,
@@ -193,7 +193,7 @@ def plot_live_time_vs_snr(ss: SampleSet, overlay_ss: SampleSet = None, alpha: fl
         plt.plot(
             live_times,
             snrs,
-            c="blue",
+            c="black",
             alpha=alpha,
             label="{}-sigma".format(sigma_line_value),
             ls="dashed"
@@ -253,7 +253,7 @@ def plot_strength_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: f
     ax.scatter(
         correct_ss.info.sigma,
         correct_ss.prediction_probas.max(axis=1),
-        c="green", alpha=alpha, marker=MARKER, label="Correct", s=marker_size
+        c="blue", alpha=alpha, marker=MARKER, label="Correct", s=marker_size
     )
     ax.scatter(
         incorrect_ss.info.sigma,
@@ -385,7 +385,7 @@ def plot_snr_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float 
 
 
 @save_or_show_plot
-def plot_spectra(ss: SampleSet, in_energy: bool = False, limit: int = None,
+def plot_spectra(ss: SampleSet, in_energy: bool = False,
                  figsize: tuple = (12.8, 7.2), xscale: str = "linear", yscale: str = "log",
                  xlim: tuple = (None, None), ylim: tuple = (None, None),
                  ylabel: str = None, title: str = None, legend_loc: str = None,
@@ -396,7 +396,6 @@ def plot_spectra(ss: SampleSet, in_energy: bool = False, limit: int = None,
         ss: Defines spectra to plot.
         in_energy: Determines whether or not to try and use each spectrum's
             energy calibration to interpet bins in terms of energy.
-        limit: Defines the number of spectra to plot; None will plot all.
         figsize: Width, height of figure in inches.
         xscale: Defines the X-axis scale.
         yscale: Defines the Y-axis scale.
@@ -415,11 +414,6 @@ def plot_spectra(ss: SampleSet, in_energy: bool = False, limit: int = None,
         ValueError: Raised if limit is not None and less than 1.
 
     """
-    if limit and limit < 1:
-        raise ValueError("'limit' argument can not be less than 1.")
-
-    if limit:
-        ss = ss[range(limit)]
     fig, ax = plt.subplots(figsize=figsize)
     if ss.sources.empty:
         labels = list(range(ss.n_samples))

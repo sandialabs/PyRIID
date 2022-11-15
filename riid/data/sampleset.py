@@ -67,7 +67,6 @@ class SampleSet():
         "atomic_number",
         "occupancy_flag",
         "tag",
-        "pyriid_version",
     )
 
     def __init__(self):
@@ -264,8 +263,9 @@ class SampleSet():
             f"- Detector:             {self.detector_info if self.detector_info else 'Unknown'}\n"
             f"- Extra data present?   {'Yes' if self.n_extra_data_features else 'No'}\n"
             f"- Predictions present?  {'No' if self.prediction_probas.empty else 'Yes'}\n"
-            f"- Classified by:        {self.classified_by if self.classified_by else 'Not classified'}\n"  # noqa
-            f"- Isotopes present:     {isotopes_present}"
+            f"- Classified by:        {self.classified_by if self.classified_by else 'N/A'}\n"  # noqa
+            f"- Isotopes present:     {isotopes_present}\n"
+            f"- PyRIID version:       {self.pyriid_version if self.pyriid_version else 'Unknown'}"
         )
 
     def __repr__(self):
@@ -399,15 +399,21 @@ class SampleSet():
             ignore_index=True,
             sort=False
         )
+        self._sources = self._sources.where(pd.notnull(self._sources), 0)
         self._info = pd.concat(
             [self._info] + [ss.info for ss in ss_list],
             ignore_index=True,
             sort=False
         )
+        self._info = self._info.where(pd.notnull(self._info), None)
         self._prediction_probas = pd.concat(
             [self._prediction_probas] + [ss.prediction_probas for ss in ss_list],
             ignore_index=True,
             sort=False
+        )
+        self._prediction_probas = self._prediction_probas.where(
+            pd.notnull(self._prediction_probas),
+            0
         )
 
     def extend(self, spectra: Union[dict, list, np.array, pd.DataFrame],
