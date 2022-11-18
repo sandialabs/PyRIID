@@ -9,13 +9,22 @@ This repository contains the PyRIID package (as well as tests and examples) whic
 
 ## Installation
 
-To use the latest version in your own project, run:
+These instructions assume you have an up-to-date and stable Python installation; a virtual environment is recommended.
+
+To use the latest version on PyPI (note: changes are slower to appear here), run:
 
 ```
 pip install riid
 ```
 
-For development, clone this repository and run:
+For the latest features, run:
+
+```
+pip install git+https://github.com/sandialabs/pyriid.git@main
+```
+
+
+If you are developing PyRIID, clone this repository and run:
 
 ```
 pip install -e ".[dev]"
