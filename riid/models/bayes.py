@@ -8,9 +8,10 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import tensorflow_probability as tfp
+from scipy.stats import poisson
+
 from riid.data import SampleSet
 from riid.models import TFModelBase
-from scipy.stats import poisson
 
 
 class PoissonBayes(TFModelBase):
@@ -45,7 +46,7 @@ class PoissonBayes(TFModelBase):
             msg = "Argument 'seeds_ss' can't contain any spectra with zero total counts."
             raise ZeroTotalCountsError(msg)
 
-        seeds_ss.normalize(p=1)
+        seeds_ss.normalize()
         self._seeds = seeds_ss.spectra
         self._n_channels = seeds_ss.n_channels
         self.model = None

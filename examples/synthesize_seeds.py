@@ -3,12 +3,13 @@
 # the U.S. Government retains certain rights in this software.
 """This example demonstrates how to generate synthetic seeds from GADRAS."""
 import yaml
+
 from riid.data.synthetic.seed import SeedSynthesizer
 
 seed_synth_config = """
 ---
 detector:
-  name: 3x3\\NaI MidScat
+  name: Generic\\NaI\\2x4x16
   distance_cm: 100
   height_cm: 50
   dead_time_us: 5
@@ -55,5 +56,5 @@ seeds_ss = seed_synth.generate(
 print(seeds_ss)
 
 # At this point, you could save out the seeds via:
-#   seeds_ss.to_smpl("seeds.smpl")
+#   seeds_ss.to_hdf("seeds.h5")
 # or use them with the StaticSynthesizer

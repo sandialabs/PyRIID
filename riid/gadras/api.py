@@ -9,9 +9,8 @@ import sys
 
 from jsonschema import validate
 
-from riid.data import SampleSet
 from riid.data.labeling import BACKGROUND_LABEL
-from riid.gadras.pcf import pcf_to_smpl
+from riid.data.sampleset import SampleSet, read_pcf
 
 GADRAS_API_SEEMINGLY_AVAILABLE = False
 
@@ -313,7 +312,7 @@ class BackgroundInjector(BaseInjector):
         the purpose of which is to seed other synthesizers.
     """
 
-    def __init__(self, gadras_api = None) -> None:
+    def __init__(self, gadras_api=None) -> None:
         super().__init__(gadras_api)
 
     def _get_inject_setups_for_backgrounds(self, gadras_api, detector, backgrounds, output_path):
@@ -505,7 +504,7 @@ def get_counts_per_bg_source_unit(gadras_api, detector, worker, bg_source):
     setups = List[InjectSetup]()
     setups.Add(inject_setup)
     worker.Run(setups)
-    ss = pcf_to_smpl(rel_output_path)
+    ss = read_pcf(rel_output_path)
     os.remove(rel_output_path)
     counts_per_unit = ss.spectra.iloc[0].sum()
     return counts_per_unit

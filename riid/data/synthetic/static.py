@@ -10,6 +10,7 @@ from typing import Any, Tuple
 
 import numpy as np
 import pandas as pd
+
 from riid.data import SampleSet
 from riid.data.labeling import BACKGROUND_LABEL
 from riid.data.sampleset import SpectraState
@@ -52,6 +53,12 @@ class StaticSynthesizer():
         self.random_state = random_state
         self._synthesis_start_dt = None
         self._n_samples_synthesized = 0
+
+    def __str__(self):
+        output = "SyntheticGenerationConfig()\n"
+        for k, v in sorted(vars(self).items()):
+            output += "  {}: {}\n".format(k, str(v))
+        return output
 
     # region Properties
 
@@ -174,29 +181,34 @@ class StaticSynthesizer():
 
     # endregion
 
-    def __str__(self):
-        output = "SyntheticGenerationConfig()\n"
-        for k, v in sorted(vars(self).items()):
-            output += "  {}: {}\n".format(k, str(v))
-        return output
+    def _get_fg_and_or_bg_batch(self, fg_seed, fg_sources, bg_seed, bg_sources, ecal,
+                                lt_targets, snr_targets):
+        bg_counts_expected = lt_targets * self.background_cps
+        fg_counts_expected = snr_targets * bg_counts_expected
 
-    def _reset_progress(self):
-        self._n_samples_synthesized = 0
+        fg_spectra_expected = get_expected_spectra(fg_seed.values, fg_counts_expected)
+        bg_spectra_expected = get_expected_spectra(bg_seed.values, bg_counts_expected)
+        if self.apply_poisson_noise:
+            gross_spectra = np.random.poisson(fg_spectra_expected + bg_spectra_expected)
+            bg_spectra = np.random.poisson(bg_spectra_expected)
+            fg_spectra = gross_spectra - bg_spectra
+        else:
+            fg_spectra = fg_spectra_expected
+            bg_spectra = bg_spectra_expected
+            gross_spectra = fg_spectra_expected + bg_spectra_expected
+        fg_ss = self._get_sampleset(fg_spectra, fg_sources, ecal,
+                                    lt_targets, snr_targets, "fg",
+                                    None, None, fg_counts_expected, bg_counts_expected)
+        bg_ss = self._get_sampleset(bg_spectra, bg_sources, ecal,
+                                    lt_targets, snr_targets, "bg",
+                                    None, None, fg_counts_expected, bg_counts_expected)
+        gross_sources = get_merged_sources_samplewise(fg_ss.sources, bg_ss.sources)
+        gross_ss = self._get_sampleset(gross_spectra, gross_sources, ecal,
+                                       lt_targets, snr_targets, "gross",
+                                       fg_spectra.sum(axis=1), bg_spectra.sum(axis=1),
+                                       fg_counts_expected, bg_counts_expected)
 
-    def _update_and_report_progress(self, n_samples_new, n_samples_expected, batch_name):
-        self._n_samples_synthesized += n_samples_new
-        percent_complete = 100 * self._n_samples_synthesized / n_samples_expected
-        msg = (
-            f"Synthesizing ... {percent_complete:.0f}% "
-            f"(currently on {batch_name})"
-        )
-        print("\033[K" + msg, end="\r")
-
-    def _verify_n_samples_synthesized_equal_expected(self, actual: int, expected: int):
-        assert expected == actual, (
-            f"{actual} generated, but {expected} were expected. "
-            "Be sure to remove any columns from your seeds' sources DataFrame that "
-            "contain all zeroes.")
+        return fg_ss, bg_ss, gross_ss
 
     def _get_sampleset(self, spectra, sources, ecal, lt_targets, snr_targets,
                        ss_spectra_type: str,
@@ -256,35 +268,6 @@ class StaticSynthesizer():
 
         return ss
 
-    def _get_fg_and_or_bg_batch(self, fg_seed, fg_sources, bg_seed, bg_sources, ecal,
-                                lt_targets, snr_targets):
-        bg_counts_expected = lt_targets * self.background_cps
-        fg_counts_expected = snr_targets * bg_counts_expected
-
-        fg_spectra_expected = get_expected_spectra(fg_seed.values, fg_counts_expected)
-        bg_spectra_expected = get_expected_spectra(bg_seed.values, bg_counts_expected)
-        if self.apply_poisson_noise:
-            gross_spectra = np.random.poisson(fg_spectra_expected + bg_spectra_expected)
-            bg_spectra = np.random.poisson(bg_spectra_expected)
-            fg_spectra = gross_spectra - bg_spectra
-        else:
-            fg_spectra = fg_spectra_expected
-            bg_spectra = bg_spectra_expected
-            gross_spectra = fg_spectra_expected + bg_spectra_expected
-        fg_ss = self._get_sampleset(fg_spectra, fg_sources, ecal,
-                                    lt_targets, snr_targets, "fg",
-                                    None, None, fg_counts_expected, bg_counts_expected)
-        bg_ss = self._get_sampleset(bg_spectra, bg_sources, ecal,
-                                    lt_targets, snr_targets, "bg",
-                                    None, None, fg_counts_expected, bg_counts_expected)
-        gross_sources = get_merged_sources_samplewise(fg_ss.sources, bg_ss.sources)
-        gross_ss = self._get_sampleset(gross_spectra, gross_sources, ecal,
-                                       lt_targets, snr_targets, "gross",
-                                       fg_spectra.sum(axis=1), bg_spectra.sum(axis=1),
-                                       fg_counts_expected, bg_counts_expected)
-
-        return fg_ss, bg_ss, gross_ss
-
     def _get_synthetic_samples(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet):
         n_samples_expected = self.samples_per_seed * fg_seeds_ss.n_samples * bg_seeds_ss.n_samples
         # Iterate over each background then each unique level value, generating a batch for each
@@ -334,6 +317,24 @@ class StaticSynthesizer():
         self._verify_n_samples_synthesized_equal_expected(gross_ss.n_samples, n_samples_expected)
 
         return fg_ss, bg_ss, gross_ss
+
+    def _reset_progress(self):
+        self._n_samples_synthesized = 0
+
+    def _update_and_report_progress(self, n_samples_new, n_samples_expected, batch_name):
+        self._n_samples_synthesized += n_samples_new
+        percent_complete = 100 * self._n_samples_synthesized / n_samples_expected
+        msg = (
+            f"Synthesizing ... {percent_complete:.0f}% "
+            f"(currently on {batch_name})"
+        )
+        print("\033[K" + msg, end="\r")
+
+    def _verify_n_samples_synthesized_equal_expected(self, actual: int, expected: int):
+        assert expected == actual, (
+            f"{actual} generated, but {expected} were expected. "
+            "Be sure to remove any columns from your seeds' sources DataFrame that "
+            "contain all zeroes.")
 
     def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet,
                  normalize_sources=True) -> Tuple[SampleSet, SampleSet, SampleSet]:
@@ -387,24 +388,6 @@ class StaticSynthesizer():
         return fg_ss, bg_ss, gross_ss
 
 
-def get_merged_sources_samplewise(sources1: pd.DataFrame, sources2: pd.DataFrame) -> pd.DataFrame:
-    merged_sources_df = sources1.add(sources2, axis=1, fill_value=0)
-    return merged_sources_df
-
-
-def get_samples_per_seed(columns: pd.MultiIndex, min_samples_per_seed: int, balance_level: int):
-    level_values = columns.get_level_values(level=balance_level)
-    level_value_to_n_seeds = Counter(level_values)
-    unique_level_values = list(level_value_to_n_seeds.keys())
-    occurences = np.array(list(level_value_to_n_seeds.values()))
-    max_samples_per_level_value = occurences.max() * min_samples_per_seed
-    samples_per_level_value = np.ceil(max_samples_per_level_value / occurences).astype(int)
-    lv_to_samples_per_seed = {k: v for (k, v) in zip(unique_level_values, samples_per_level_value)}
-    total_samples_expected = sum([x * y for x, y in zip(occurences, samples_per_level_value)])
-
-    return lv_to_samples_per_seed, total_samples_expected
-
-
 def get_distribution_values(function: str, function_args: Any, n_values: int):
     """Gets the values for the synthetic data distribution based
     on the sampling type used.
@@ -433,38 +416,6 @@ def get_distribution_values(function: str, function_args: Any, n_values: int):
         value = function_args
 
     return value
-
-
-def get_expected_spectra(seeds: np.ndarray, expected_counts: np.ndarray) -> np.ndarray:
-    """ Multiples a 1-D array of expected counts by either a 1-D array or 2-D
-        matrix of seed spectra.
-
-        The dimension(s) of the seed array(s), `seeds`, is expanded to be (m, n, 1) where:
-            m = # of seeds
-            n = # of channels
-            and the final dimension is added in order to facilitate proper broadcasting
-        The dimension of the `expected_counts` must be 1, but the length `p` can be
-        any positive number.
-
-        The resulting expected spectra will be of shape (m x p, n).
-        This representings the same number of channels `n`, but each expected count
-        value, of which there were `p`, will be me multiplied through each seed spectrum,
-        of which there were `m`.
-        All expected spectra matrices for each seed are then concatenated together
-        (stacked), eliminating the 3rd dimension.
-    """
-    if expected_counts.ndim != 1:
-        raise ValueError("Expected counts array must be 1-D.")
-    if expected_counts.shape[0] == 0:
-        raise ValueError("Expected counts array cannot be empty.")
-    if seeds.ndim > 2:
-        raise InvalidSeedError("Seeds array must be 1-D or 2-D.")
-
-    expected_spectra = np.concatenate(
-        seeds * expected_counts[:, np.newaxis, np.newaxis]
-    )
-
-    return expected_spectra
 
 
 def get_dummy_sampleset(n_channels: int = 512, as_seeds: bool = False,
@@ -555,9 +506,59 @@ def get_dummy_sampleset(n_channels: int = 512, as_seeds: bool = False,
     ss.update_timestamp()
 
     if as_seeds:
-        ss.to_pmf()
+        ss.normalize()
 
     return ss
+
+
+def get_expected_spectra(seeds: np.ndarray, expected_counts: np.ndarray) -> np.ndarray:
+    """ Multiples a 1-D array of expected counts by either a 1-D array or 2-D
+        matrix of seed spectra.
+
+        The dimension(s) of the seed array(s), `seeds`, is expanded to be (m, n, 1) where:
+            m = # of seeds
+            n = # of channels
+            and the final dimension is added in order to facilitate proper broadcasting
+        The dimension of the `expected_counts` must be 1, but the length `p` can be
+        any positive number.
+
+        The resulting expected spectra will be of shape (m x p, n).
+        This representings the same number of channels `n`, but each expected count
+        value, of which there were `p`, will be me multiplied through each seed spectrum,
+        of which there were `m`.
+        All expected spectra matrices for each seed are then concatenated together
+        (stacked), eliminating the 3rd dimension.
+    """
+    if expected_counts.ndim != 1:
+        raise ValueError("Expected counts array must be 1-D.")
+    if expected_counts.shape[0] == 0:
+        raise ValueError("Expected counts array cannot be empty.")
+    if seeds.ndim > 2:
+        raise InvalidSeedError("Seeds array must be 1-D or 2-D.")
+
+    expected_spectra = np.concatenate(
+        seeds * expected_counts[:, np.newaxis, np.newaxis]
+    )
+
+    return expected_spectra
+
+
+def get_merged_sources_samplewise(sources1: pd.DataFrame, sources2: pd.DataFrame) -> pd.DataFrame:
+    merged_sources_df = sources1.add(sources2, axis=1, fill_value=0)
+    return merged_sources_df
+
+
+def get_samples_per_seed(columns: pd.MultiIndex, min_samples_per_seed: int, balance_level: int):
+    level_values = columns.get_level_values(level=balance_level)
+    level_value_to_n_seeds = Counter(level_values)
+    unique_level_values = list(level_value_to_n_seeds.keys())
+    occurences = np.array(list(level_value_to_n_seeds.values()))
+    max_samples_per_level_value = occurences.max() * min_samples_per_seed
+    samples_per_level_value = np.ceil(max_samples_per_level_value / occurences).astype(int)
+    lv_to_samples_per_seed = {k: v for (k, v) in zip(unique_level_values, samples_per_level_value)}
+    total_samples_expected = sum([x * y for x, y in zip(occurences, samples_per_level_value)])
+
+    return lv_to_samples_per_seed, total_samples_expected
 
 
 class NoSeedError(Exception):

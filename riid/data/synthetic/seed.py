@@ -10,13 +10,14 @@ from typing import Tuple, Union
 import numpy as np
 import pandas as pd
 import yaml
+
 from riid.data import SampleSet
 from riid.data.labeling import BACKGROUND_LABEL, label_to_index_element
+from riid.data.sampleset import read_pcf
 from riid.gadras.api import (DETECTOR_PARAMS, GADRAS_ASSEMBLY_PATH,
                              INJECT_PARAMS, BackgroundInjector, SourceInjector,
                              get_counts_per_bg_source_unit, get_gadras_api,
                              validate_inject_config)
-from riid.gadras.pcf import pcf_to_smpl
 
 
 class SeedSynthesizer():
@@ -156,8 +157,8 @@ class SeedSynthesizer():
                         rel_fg_output_path,
                         verbose=verbose
                     )
-                    fg_seeds_ss = pcf_to_smpl(fg_pcf_abs_path)
-                    fg_seeds_ss.normalize(p=1)
+                    fg_seeds_ss = read_pcf(fg_pcf_abs_path)
+                    fg_seeds_ss.normalize()
                     if normalize_sources:
                         fg_seeds_ss.normalize_sources()
                     fg_list.append(fg_seeds_ss)
@@ -170,7 +171,7 @@ class SeedSynthesizer():
                         rel_bg_output_path,
                         verbose=verbose
                     )
-                    bg_seeds_ss = pcf_to_smpl(bg_pcf_abs_path)
+                    bg_seeds_ss = read_pcf(bg_pcf_abs_path)
 
                     # Calculate ground truth for backgrounds
                     worker = gadras_api.GetBatchInjectWorker()
@@ -203,7 +204,7 @@ class SeedSynthesizer():
                     )
                     bg_seeds_ss.sources = bg_sources_df
 
-                    bg_seeds_ss.normalize(p=1)
+                    bg_seeds_ss.normalize()
                     if normalize_sources:
                         bg_seeds_ss.normalize_sources()
 
