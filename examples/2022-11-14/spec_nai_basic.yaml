@@ -1,0 +1,28 @@
+---
+gamma_detector:
+  name: Generic\\NaI\\2x4x16
+  parameters:
+    distance_cm: 1000
+    height_cm: 45
+    dead_time_per_pulse: 5
+    latitude_deg: 35.0
+    longitude_deg: 253.4
+    elevation_m: 1620
+foregrounds:
+  - isotope: U235
+    sources:
+      - U235,100uC
+  - isotope: Am241
+    sources:
+      - Am241,100uC
+backgrounds:
+  - cosmic: true
+    terrestrial: true
+    K40_percent: 1.56
+    U_ppm: 2.11
+    Th232_ppm: 5.59
+    attenuation: 0
+    low_energy_continuum: 0
+    high_energy_continuum: 0
+    suppression_scalar: 1
+...
