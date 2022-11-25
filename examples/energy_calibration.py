@@ -8,7 +8,7 @@ from riid.data.labeling import BACKGROUND_LABEL
 from riid.data.synthetic.static import StaticSynthesizer, get_dummy_sampleset
 
 seeds_ss = get_dummy_sampleset(as_seeds=True)
-gss = StaticSynthesizer()
+static_syn = StaticSynthesizer()
 # Separate foreground seeds from background seeds
 seeds_labels = seeds_ss.get_labels()
 fg_seeds_ss = seeds_ss[seeds_labels != BACKGROUND_LABEL]

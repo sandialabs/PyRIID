@@ -10,7 +10,7 @@ from riid.models.neural_nets import MLPClassifier, MultiEventClassifier
 from sklearn.metrics import f1_score
 
 seeds_ss = get_dummy_sampleset(as_seeds=True)
-gss = StaticSynthesizer(
+static_syn = StaticSynthesizer(
     # log10 sampling samples lower SNR values more frequently.
     # This makes the SampleSet overall "harder" to classify.
     snr_function="log10",

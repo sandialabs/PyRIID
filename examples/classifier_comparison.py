@@ -24,7 +24,7 @@ fg_seeds_ss = seeds_ss[seeds_labels != BACKGROUND_LABEL]
 fg_seeds_ss.sources.drop(BACKGROUND_LABEL, axis=1, level="Category", inplace=True)
 bg_seeds_ss = seeds_ss[seeds_labels == BACKGROUND_LABEL]
 # Create a data synthesizer and generate some test data
-gss = StaticSynthesizer(
+static_syn = StaticSynthesizer(
     samples_per_seed=500,
     # log10 sampling samples lower SNR values more frequently.
     # This makes the SampleSet overall "harder" to classify.

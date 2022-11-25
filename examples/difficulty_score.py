@@ -13,7 +13,7 @@ seeds_labels = seeds_ss.get_labels()
 fg_seeds_ss = seeds_ss[seeds_labels != BACKGROUND_LABEL]
 bg_seeds_ss = seeds_ss[seeds_labels == BACKGROUND_LABEL]
 
-gss = StaticSynthesizer(
+static_syn = StaticSynthesizer(
     snr_function="uniform",
     samples_per_seed=500
 )

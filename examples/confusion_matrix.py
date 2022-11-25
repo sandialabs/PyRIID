@@ -15,7 +15,7 @@ fg_seeds_ss = seeds_ss[seeds_labels != BACKGROUND_LABEL]
 bg_seeds_ss = seeds_ss[seeds_labels == BACKGROUND_LABEL]
 
 # Generate some training data
-gss = StaticSynthesizer(
+static_syn = StaticSynthesizer(
     snr_function="log10",
     snr_function_args=(.01, 10)
 )
