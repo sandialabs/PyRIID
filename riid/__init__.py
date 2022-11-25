@@ -3,6 +3,7 @@
 # the U.S. Government retains certain rights in this software.
 """This module sets up shared logging functionality and global variables."""
 import logging
+import os
 import sys
 
 from pkg_resources import get_distribution
@@ -12,6 +13,7 @@ logging.root.addHandler(HANDLER)
 logging.root.setLevel(logging.DEBUG)
 MPL_LOGGER = logging.getLogger('matplotlib')
 MPL_LOGGER.setLevel(logging.WARNING)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 
 SAMPLESET_FILE_EXTENSION = ".h5"
 PCF_FILE_EXTENSION = ".pcf"

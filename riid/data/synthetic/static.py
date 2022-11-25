@@ -268,7 +268,7 @@ class StaticSynthesizer():
 
         return ss
 
-    def _get_synthetic_samples(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet):
+    def _get_synthetic_samples(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet, verbose=True):
         n_samples_expected = self.samples_per_seed * fg_seeds_ss.n_samples * bg_seeds_ss.n_samples
         # Iterate over each background then each unique level value, generating a batch for each
         # seed within that level
@@ -301,8 +301,13 @@ class StaticSynthesizer():
                     bg_ss_batches.append(bg_batch_ss)
                 if gross_batch_ss:
                     gross_ss_batches.append(gross_batch_ss)
-                self._update_and_report_progress(fg_batch_ss.n_samples, n_samples_expected,
-                                                 fg_labels[f])
+
+                if verbose:
+                    self._update_and_report_progress(
+                        fg_batch_ss.n_samples,
+                        n_samples_expected,
+                        fg_labels[f]
+                    )
 
         fg_ss = SampleSet()
         fg_ss.measured_or_synthetic = "synthetic"
@@ -337,7 +342,7 @@ class StaticSynthesizer():
             "contain all zeroes.")
 
     def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet,
-                 normalize_sources=True) -> Tuple[SampleSet, SampleSet, SampleSet]:
+                 normalize_sources=True, verbose=True) -> Tuple[SampleSet, SampleSet, SampleSet]:
         """Generate a sample set of gamma spectra from the given config.
 
         Args:
@@ -347,6 +352,7 @@ class StaticSynthesizer():
                 as the background component of gross spectra.
             normalize_sources: Whether to divide each row of the SampleSet's sources
                 DataFrame by its sum. Defaults to True.
+            verbose: Whether to display output from synthesis.
 
         Returns:
             A tuple of synthetic foreground, background, and gross spectra.
@@ -368,22 +374,28 @@ class StaticSynthesizer():
 
         self._reset_progress()
         self._synthesis_start_dt = datetime.utcnow().isoformat(sep=' ', timespec="seconds")
-        tstart = time()
+        if verbose:
+            tstart = time()
 
-        fg_ss, bg_ss, gross_ss = self._get_synthetic_samples(fg_seeds_ss, bg_seeds_ss)
+        fg_ss, bg_ss, gross_ss = self._get_synthetic_samples(
+            fg_seeds_ss,
+            bg_seeds_ss,
+            verbose=verbose
+        )
 
         if normalize_sources:
             fg_ss.normalize_sources()
             bg_ss.normalize_sources()
             gross_ss.normalize_sources()
 
-        delay = time() - tstart
-        summary = (
-            f"Synthesis complete!\n"
-            f"Generated {gross_ss.n_samples} samples in {delay:.2f}s "
-            f"(~{(gross_ss.n_samples / delay):.2f} samples/sec)."
-        )
-        print("\033[K" + summary)
+        if verbose:
+            delay = time() - tstart
+            summary = (
+                f"Synthesis complete!\n"
+                f"Generated {gross_ss.n_samples} samples in {delay:.2f}s "
+                f"(~{(gross_ss.n_samples / delay):.2f} samples/sec)."
+            )
+            print("\033[K" + summary)
 
         return fg_ss, bg_ss, gross_ss
 
