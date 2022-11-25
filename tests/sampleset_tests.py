@@ -6,7 +6,8 @@ import unittest
 
 import numpy as np
 import pandas as pd
-from riid.data.sampleset import SampleSet, get_row_labels
+
+from riid.data.sampleset import SampleSet, _get_row_labels
 from riid.data.synthetic.static import get_dummy_sampleset
 
 
@@ -95,9 +96,9 @@ class TestSampleSet(unittest.TestCase):
             "include_value": False,
             "level_aggregation": None,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X", "X", "X", "Y", "Y", "Z", "Z", "X",
@@ -126,9 +127,9 @@ class TestSampleSet(unittest.TestCase):
             "include_value": False,
             "level_aggregation": "sum",
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X", "X", "X", "Y", "Y", "Z", "Z", "X",
@@ -157,9 +158,9 @@ class TestSampleSet(unittest.TestCase):
             "include_value": False,
             "level_aggregation": "mean",
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X", "X", "X", "Y", "Y", "Z", "Z", "X",
@@ -188,9 +189,9 @@ class TestSampleSet(unittest.TestCase):
             "include_value": True,
             "level_aggregation": None,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X (1.00)", "X (1.00)", "X (1.00)", "Y (1.00)",
@@ -222,9 +223,9 @@ class TestSampleSet(unittest.TestCase):
             "include_value": True,
             "level_aggregation": "sum",
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X (1.00)", "X (1.00)", "X (1.00)", "Y (1.00)",
@@ -256,9 +257,9 @@ class TestSampleSet(unittest.TestCase):
             "include_value": True,
             "level_aggregation": "mean",
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X (0.25)", "X (0.25)", "X (0.25)", "Y (0.50)",
@@ -291,9 +292,9 @@ class TestSampleSet(unittest.TestCase):
             "level_aggregation": None,
             "min_value": 0.01,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X", "X", "X", "Y", "Y", "Z", "Z", "X",
@@ -323,9 +324,9 @@ class TestSampleSet(unittest.TestCase):
             "level_aggregation": "sum",
             "min_value": 0.01,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X", "X", "X", "Y", "Y", "Z", "Z", "X",
@@ -355,9 +356,9 @@ class TestSampleSet(unittest.TestCase):
             "level_aggregation": "mean",
             "min_value": 0.01,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X", "X", "X", "Y", "Y", "Z", "Z", "X",
@@ -387,9 +388,9 @@ class TestSampleSet(unittest.TestCase):
             "level_aggregation": None,
             "min_value": 0.01,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X (1.00)", "X (1.00)", "X (1.00)", "Y (1.00)",
@@ -425,9 +426,9 @@ class TestSampleSet(unittest.TestCase):
             "level_aggregation": "sum",
             "min_value": 0.01,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X (1.00)", "X (1.00)", "X (1.00)", "Y (1.00)",
@@ -461,9 +462,9 @@ class TestSampleSet(unittest.TestCase):
             "level_aggregation": "mean",
             "min_value": 0.01,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X (0.25)", "X (0.25)", "X (0.25)", "Y (0.50)",
@@ -498,9 +499,9 @@ class TestSampleSet(unittest.TestCase):
             "level_aggregation": None,
             "min_value": 0.25,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X", "X", "X", "Y", "Y", "Z", "Z", "X",
@@ -530,9 +531,9 @@ class TestSampleSet(unittest.TestCase):
             "level_aggregation": "sum",
             "min_value": 0.01,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X", "X", "X", "Y", "Y", "Z", "Z", "X",
@@ -562,9 +563,9 @@ class TestSampleSet(unittest.TestCase):
             "level_aggregation": "mean",
             "min_value": 0.25,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X", "X", "X", "Y", "Y", "Z", "Z", "X",
@@ -594,9 +595,9 @@ class TestSampleSet(unittest.TestCase):
             "level_aggregation": None,
             "min_value": 0.25,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X (1.00)", "X (1.00)", "X (1.00)", "Y (1.00)",
@@ -632,9 +633,9 @@ class TestSampleSet(unittest.TestCase):
             "level_aggregation": "sum",
             "min_value": 0.25,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X (1.00)", "X (1.00)", "X (1.00)", "Y (1.00)",
@@ -668,9 +669,9 @@ class TestSampleSet(unittest.TestCase):
             "level_aggregation": "mean",
             "min_value": 0.25,
         }
-        actual_categories = get_row_labels(df, target_level="Category", **test_kwargs)
-        actual_isotopes = get_row_labels(df, target_level="Isotope", **test_kwargs)
-        actual_seeds = get_row_labels(df, target_level="Seed", **test_kwargs)
+        actual_categories = _get_row_labels(df, target_level="Category", **test_kwargs)
+        actual_isotopes = _get_row_labels(df, target_level="Isotope", **test_kwargs)
+        actual_seeds = _get_row_labels(df, target_level="Seed", **test_kwargs)
 
         expected_categories = [
             "X (0.25)", "X (0.25)", "X (0.25)", "Y (0.50)",

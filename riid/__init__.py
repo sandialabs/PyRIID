@@ -13,7 +13,8 @@ logging.root.setLevel(logging.DEBUG)
 MPL_LOGGER = logging.getLogger('matplotlib')
 MPL_LOGGER.setLevel(logging.WARNING)
 
-SMPL_FILE_EXTENSION = ".smpl"
+SAMPLESET_FILE_EXTENSION = ".h5"
+PCF_FILE_EXTENSION = ".pcf"
 RIID = "riid"
 
 __version__ = get_distribution(RIID).version

@@ -5,6 +5,7 @@
 import unittest
 
 import numpy as np
+
 from riid.data.labeling import BACKGROUND_LABEL
 from riid.data.synthetic.seed import SeedMixer
 from riid.data.synthetic.static import get_dummy_sampleset
@@ -15,7 +16,7 @@ class TestSeedMixer(unittest.TestCase):
     """
     def setUp(self):
         self.ss = get_dummy_sampleset(as_seeds=True)
-        self.ss.normalize(p=1)
+        self.ss.normalize()
         self.sources = self.ss.get_labels().values
 
         self.mixer2 = SeedMixer(

@@ -9,6 +9,7 @@ import copy
 import logging
 import os
 import random
+import re
 import warnings
 from datetime import datetime
 from enum import Enum
@@ -16,9 +17,14 @@ from typing import Union
 
 import numpy as np
 import pandas as pd
-import riid
 from scipy import stats
 from scipy.interpolate import interp1d
+
+import riid
+from riid.data.labeling import (NO_CATEGORY, NO_ISOTOPE, NO_SEED,
+                                _find_category, _find_isotope)
+from riid.gadras.pcf import (_dict_to_pcf, _pack_compressed_text_buffer,
+                             _pcf_to_dict, _unpack_compressed_text_buffer)
 
 
 class SpectraState(Enum):
@@ -75,38 +81,81 @@ class SampleSet():
 
         Expected sizes for DataFrames:
             self._spectra:  [n_samples, n_channels]
-            self._extra_data: [n_samples, (arbitrary)]
             self._sources:  [n_samples, n_sources]
 
         """
         self._spectra = pd.DataFrame()
-        self._extra_data = pd.DataFrame()
         self._sources = pd.DataFrame()
         self._info = pd.DataFrame(columns=SampleSet.DEFAULT_INFO_COLUMNS)
         self._detector_info = {}
         self._synthesis_info = {}
         self._prediction_probas = pd.DataFrame()
         self._measured_or_synthetic = None
-        self.detector_hash = ""
-        self.neutron_detector_hash = ""
         self.pyriid_version = riid.__version__
         self.spectra_state = SpectraState.Unknown
         self._classified_by = ""
 
-    # region SampleSet-specific properties
+    def __bool__(self):
+        return bool(len(self))
+
+    def __getitem__(self, key: Union[slice, int]):
+        selection = key
+        if isinstance(key, int):
+            selection = slice(key, key+1)
+
+        sub_ss = copy.copy(self)
+        sub_ss.spectra = sub_ss.spectra[selection].reset_index(drop=True)
+        sub_ss.sources = sub_ss.sources[selection].reset_index(drop=True)
+        sub_ss.info = sub_ss.info[selection].reset_index(drop=True)
+        if not sub_ss.prediction_probas.empty:
+            sub_ss.prediction_probas = sub_ss.prediction_probas[selection].reset_index(drop=True)
+
+        return sub_ss
+
+    def __len__(self):
+        return self.n_samples
+
+    def __str__(self):
+        isotopes_present = \
+            ', '.join(np.unique(self.get_labels())) if not self.sources.empty else "Unknown"
+        return (
+            "SampleSet Summary:\n"
+            f"- # of samples:         {self.n_samples}\n"
+            f"- Spectrum channels:    {self.n_channels}\n"
+            f"- Detector:             {self.detector_info if self.detector_info else 'Unknown'}\n"
+            f"- Predictions present?  {'No' if self.prediction_probas.empty else 'Yes'}\n"
+            f"- Isotopes present:     {isotopes_present}\n"
+            f"- PyRIID version:       {self.pyriid_version if self.pyriid_version else 'Unknown'}"
+        )
+
+    def __repr__(self):
+        return self.__str__()
+
+    # region Properties
 
     @property
-    def measured_or_synthetic(self):
-        """Get or set the value for measured_or_synthetic for the SampleSet object."""
-        return self._measured_or_synthetic
+    def category_names(self):
+        """Gets the names of the categories involved in this SampleSet."""
+        return self.sources.columns.get_level_values("Category")
 
-    @measured_or_synthetic.setter
-    def measured_or_synthetic(self, value):
-        self._measured_or_synthetic = value
+    @property
+    def classified_by(self):
+        """Get or set the UUID of the model that classified the SampleSet.
+
+        TODO: Implement as third dimension to `prediction_probas` DataFrame
+        """
+        return self._classified_by
+
+    @classified_by.setter
+    def classified_by(self, value):
+        self._classified_by = value
 
     @property
     def detector_info(self):
-        """Get or set the detector info on which this SampleSet is based."""
+        """Get or set the detector info on which this SampleSet is based.
+
+        TODO: implement as DataFrame
+        """
         return self._detector_info
 
     @detector_info.setter
@@ -114,109 +163,48 @@ class SampleSet():
         self._detector_info = value
 
     @property
-    def synthesis_info(self):
-        """Get or set the information that was used to by a synthesizer."""
-        return self._synthesis_info
+    def difficulty_score(self, mean=10.0, std=3.0) -> float:
+        """Computes a metric representing the "difficulty" of the given SampleSet on a
+        scale of 0 to 1, where 0 is easiest and 1 is hardest.
 
-    @synthesis_info.setter
-    def synthesis_info(self, value):
-        self._synthesis_info = value
+        The difficulty of a SampleSet is the mean of the individual sample difficulties.
+        Each sample's difficulty is determined by where its signal strength (sigma)
+        falls on the survival function (AKA reliability function, or 1 - CDF) for a
+        logistic distribution.
+        The decision to use this distribution is based on empirical data showing that
+        classifier performance increases in a logistic fashion as signal strength increases.
 
-    @property
-    def classified_by(self):
-        """Get or set the UUID of the model that classified the SampleSet."""
-        return self._classified_by
+        The primary use of this function is for situations where ground truth is unknown
+        and you want to get an idea of how "difficult" it will be for a model
+        to make predictions.  Consider the following example:
+            Given a SampleSet for which ground truth is unknown and the signal strength for
+            each spectrum is low.
+            A model considering, say, 100+ isotopes will see this SampleSet as quite
+            difficult, whereas a model considering 5 isotopes will, being more specialized,
+            see the SampleSet as easier.
+            Of course, this makes the assumption that both models were trained to the
+            isotope(s) contained in the test SampleSet.
 
-    @classified_by.setter
-    def classified_by(self, value):
-        self._classified_by = value
+        Based on the previous example, the unfortunate state of this function is that you
+        must know how to pick means and standard deviations which properly reflect the:
+            - number of target isotopes
+            - amount of variation within each isotope (i.e., shielding, scattering, etc.)
+            - detector resolution
+        A future goal of ours is to provide updates to this function and docstring which make
+        choosing the mean and standard deviation easier/automated based on more of our findings.
 
-    # endregion
+        Arguments:
+            mean: the sigma value representing the mean of the logistic distribution
+            std: the standard deviation of the logistic distribution
 
-    # region DataFrame properties
+        Returns:
+            The mean of all sigma values passed through a logistic survival function.
 
-    @property
-    def spectra(self):
-        """Get or set the spectra DataFrame for the SampleSet object."""
-        return self._spectra
-
-    @spectra.setter
-    def spectra(self, value):
-        self._spectra = value
-
-    @property
-    def extra_data(self):
-        """Get or set the extra data DataFrame for the SampleSet object.
         """
-        return self._extra_data
+        sigmas: np.ndarray = self.info.sigma.clip(1e-6)
+        score = float(stats.logistic.sf(sigmas, loc=mean, scale=std).mean())
 
-    @extra_data.setter
-    def extra_data(self, value):
-        self._extra_data = value
-
-    @property
-    def sources(self):
-        """Get or set the sources DataFrame for the SampleSet object.
-        """
-        return self._sources
-
-    @sources.setter
-    def sources(self, value):
-        self._sources = value.replace(np.nan, 0)
-
-    @property
-    def info(self):
-        """Get or set the info DataFrame."""
-        return self._info
-
-    @info.setter
-    def info(self, value):
-        self._info = value
-
-    @property
-    def prediction_probas(self):
-        """Get or set the prediction_probas DataFrame."""
-        return self._prediction_probas
-
-    @prediction_probas.setter
-    def prediction_probas(self, value):
-        if isinstance(value, pd.DataFrame):
-            self._prediction_probas = value
-        else:
-            self._prediction_probas = pd.DataFrame(value, columns=self.sources.columns)
-
-    # endregion
-
-    # region DataFrame-specific properties
-
-    @property
-    def n_samples(self):
-        """Gets the number of samples included in the spectra dataframe,
-        where each row is a sample.
-        """
-        return self._spectra.shape[0]
-
-    @property
-    def n_channels(self):
-        """Gets the number of channels included in the spectra DataFrame.
-        Channels may also be referred to as bins.
-        """
-        return self._spectra.shape[1]
-
-    @property
-    def n_extra_data_features(self):
-        """Gets the number of features included in the extra_data DataFrame.
-        """
-        return self._extra_data.shape[1]
-
-    @property
-    def n_features(self):
-        """Get the number of features included in the SampleSet
-        object. The number of features is given as the number of
-        columns (channels) in the spectra DataFrame plus the number
-        of columns in the extra_data DataFrame.
-        """
-        return self.n_channels + self.n_extra_data_features
+        return score
 
     @property
     def ecal(self):
@@ -235,9 +223,13 @@ class SampleSet():
         self.info.loc[:, self.ECAL_INFO_COLUMNS[3]] = value[4]
 
     @property
-    def category_names(self):
-        """Gets the names of the categories involved in this SampleSet."""
-        return self.sources.columns.get_level_values("Category")
+    def info(self):
+        """Get or set the info DataFrame."""
+        return self._info
+
+    @info.setter
+    def info(self, value):
+        self._info = value
 
     @property
     def isotope_names(self):
@@ -245,270 +237,74 @@ class SampleSet():
         return self.sources.columns.get_level_values("Isotope")
 
     @property
+    def measured_or_synthetic(self):
+        """Get or set the value for measured_or_synthetic for the SampleSet object."""
+        return self._measured_or_synthetic
+
+    @measured_or_synthetic.setter
+    def measured_or_synthetic(self, value):
+        self._measured_or_synthetic = value
+
+    @property
+    def n_channels(self):
+        """Gets the number of channels included in the spectra DataFrame.
+        Channels may also be referred to as bins.
+        """
+        return self._spectra.shape[1]
+
+    @property
+    def n_samples(self):
+        """Gets the number of samples included in the spectra dataframe,
+        where each row is a sample.
+        """
+        return self._spectra.shape[0]
+
+    @property
+    def prediction_probas(self):
+        """Get or set the prediction_probas DataFrame."""
+        return self._prediction_probas
+
+    @prediction_probas.setter
+    def prediction_probas(self, value):
+        if isinstance(value, pd.DataFrame):
+            self._prediction_probas = value
+        else:
+            self._prediction_probas = pd.DataFrame(value, columns=self.sources.columns)
+
+    @property
     def seed_names(self):
         """Gets the names of the seeds involved in this SampleSet."""
         return self.sources.columns.get_level_values("Seed")
 
-    # endregion
-
-    # region SampleSet-specific methods
-
-    def __str__(self):
-        isotopes_present = \
-            ', '.join(np.unique(self.get_labels())) if not self.sources.empty else "Unknown"
-        return (
-            "SampleSet Summary:\n"
-            f"- # of samples:         {self.n_samples}\n"
-            f"- Spectrum channels:    {self.n_channels}\n"
-            f"- Detector:             {self.detector_info if self.detector_info else 'Unknown'}\n"
-            f"- Extra data present?   {'Yes' if self.n_extra_data_features else 'No'}\n"
-            f"- Predictions present?  {'No' if self.prediction_probas.empty else 'Yes'}\n"
-            f"- Classified by:        {self.classified_by if self.classified_by else 'N/A'}\n"  # noqa
-            f"- Isotopes present:     {isotopes_present}\n"
-            f"- PyRIID version:       {self.pyriid_version if self.pyriid_version else 'Unknown'}"
-        )
-
-    def __repr__(self):
-        return self.__str__()
-
-    def __len__(self):
-        return self.n_samples
-
-    def __bool__(self):
-        return bool(len(self))
-
-    def __getitem__(self, key: Union[slice, int]):
-        selection = key
-        if isinstance(key, int):
-            selection = slice(key, key+1)
-
-        sub_ss = copy.copy(self)
-        sub_ss.spectra = sub_ss.spectra[selection].reset_index(drop=True)
-        if not sub_ss.extra_data.empty:
-            sub_ss.extra_data = sub_ss.extra_data[selection].reset_index(drop=True)
-        sub_ss.sources = sub_ss.sources[selection].reset_index(drop=True)
-        sub_ss.info = sub_ss.info[selection].reset_index(drop=True)
-        if not sub_ss.prediction_probas.empty:
-            sub_ss.prediction_probas = sub_ss.prediction_probas[selection].reset_index(drop=True)
-
-        return sub_ss
-
-    def to_smpl(self, file_path: str, verbose=1):
-        """Writes the sampleset to disk at the given path.
-
-        Args:
-            file_path: Defines the string representing the file path for the output
-                .smpl file. Should include '.smpl' extension in name.
-
+    @property
+    def sources(self):
+        """Get or set the sources DataFrame for the SampleSet object.
         """
-        _write_hdf(self, file_path)
-        if verbose:
-            logging.info(f"Saved SampleSet to '{file_path}'")
+        return self._sources
 
-    def sample(self, n_samples: int, random_seed: int = None):
-        """Randomly samples the SampleSet.
+    @sources.setter
+    def sources(self, value):
+        self._sources = value.replace(np.nan, 0)
 
-        Args:
-            n_samples: the number of random samples to be returned.
-            random_seed: the seed value for random number generation.
+    @property
+    def spectra(self):
+        """Get or set the spectra DataFrame for the SampleSet object."""
+        return self._spectra
 
-        Returns:
-            A sampleset of `n_samples` randomly selected measurements.
+    @spectra.setter
+    def spectra(self, value):
+        self._spectra = value
 
-        """
-        if random_seed:
-            random.seed(random_seed)
+    @property
+    def synthesis_info(self):
+        """Get or set the information that was used to by a synthesizer."""
+        return self._synthesis_info
 
-        if n_samples > self.n_samples:
-            n_samples = self.n_samples
-
-        random_indices = random.sample(self.spectra.index.values.tolist(), n_samples)
-        random_mask = np.isin(self.spectra.index, random_indices)
-        return self[random_mask]
-
-    def get_samples(self):
-        """Gets only the data (spectra + extra data) within the SampleSet
-        as a NumPy array ready for use in model training.
-
-        Returns:
-            An ndarray containing the NaN-trimmed values for spectra and
-            extra data.
-
-        """
-        spectra_values = np.nan_to_num(self._spectra)
-        if not self._extra_data.empty:
-            extra_data_values = np.nan_to_num(self._extra_data)
-            return np.concatenate(
-                (spectra_values, extra_data_values),
-                axis=1
-            )
-        return spectra_values
-
-    def get_source_contributions(self, target_level="Isotope"):
-        """Gets the 2D array of values representing the percent contributions of each source.
-
-        Returns:
-            An ndarray containing the source contributions for each sample (i.e., ground truth).
-
-        """
-        return self.sources.sum(level=target_level, axis=1)
-
-    def concat(self, ss_list: list):
-        """Provides a way to vertically combine many SampleSets.
-
-        Combining of non-DataFrame properties (e.g., detector_info, synthesis_info, etc.)
-        is NOT performed - it is the responsiblity of the user to ensure proper bookkeeping for
-        these properties when concatenating SampleSets.
-
-        This method is most applicable to SampleSets containing measured data from the same
-        detector which could not be made as a single SampleSet because of how measurements had to
-        be taken (i.e., measurements were taken by distinct processes separated by time).
-        Therefore, the user should avoid concatenating SampleSets when:
-            - the data is from different detectors
-              (note that SampleSets are given to models for prediction, and models should be
-              1-to-1 with physical detectors);
-            - a mix of synthetic and measured data would occur
-              (this could make an existing `synthesis_info` value ambiguous, but one way to handle
-              this would be to add a new column to `info` distinguishing between synthetic and
-              measured on a per-sample basis).
-
-        Args:
-            ss_list: Defines the list of SampleSets to concatenate.
-
-        Return:
-            A single SampleSet object of the concatenated SampleSet data.
-
-        """
-        if not ss_list:
-            return
-        if not isinstance(ss_list, list):
-            ss_list = [ss_list]
-
-        self._extra_data = pd.concat(
-            [self._extra_data] + [ss.extra_data for ss in ss_list],
-            ignore_index=True,
-            sort=False
-        )
-        self._spectra = pd.concat(
-            [self._spectra] + [ss.spectra for ss in ss_list],
-            ignore_index=True,
-            sort=False
-        )
-        self._sources = pd.concat(
-            [self._sources] + [ss.sources for ss in ss_list],
-            ignore_index=True,
-            sort=False
-        )
-        self._sources = self._sources.where(pd.notnull(self._sources), 0)
-        self._info = pd.concat(
-            [self._info] + [ss.info for ss in ss_list],
-            ignore_index=True,
-            sort=False
-        )
-        self._info = self._info.where(pd.notnull(self._info), None)
-        self._prediction_probas = pd.concat(
-            [self._prediction_probas] + [ss.prediction_probas for ss in ss_list],
-            ignore_index=True,
-            sort=False
-        )
-        self._prediction_probas = self._prediction_probas.where(
-            pd.notnull(self._prediction_probas),
-            0
-        )
-
-    def extend(self, spectra: Union[dict, list, np.array, pd.DataFrame],
-               sources: pd.DataFrame, info: Union[list, pd.DataFrame]):
-        """Extends the current SampleSet with the given data.
-
-        Always verify that the data was appended in the way you expect based on what input type
-        you are preferring to work with.
-
-        Args:
-            spectra: Defines the spectra to append to the current spectra DataFrame.
-            sources: Defines the sources to append to the current sources DataFrame.
-            info: Defines the info to append to the current info DataFrame.
-
-        """
-        if not spectra.shape[0] == sources.shape[0] == info.shape[0]:
-            msg = "The number of rows in each of the required positional arguments must be same."
-            raise ValueError(msg)
-
-        self._spectra = self._spectra\
-            .append(pd.DataFrame(spectra), ignore_index=True, sort=True)\
-            .fillna(0)
-
-        new_sources_column_index = pd.MultiIndex.from_tuples(
-            sources.keys(),
-            names=SampleSet.SOURCES_MULTI_INDEX_NAMES
-        )
-        new_sources_df = pd.DataFrame(sources.values(), columns=new_sources_column_index)
-        self._sources = self._sources\
-            .append(new_sources_df, ignore_index=True, sort=True)\
-            .fillna(0)
-
-        self._info = self._info\
-            .append(pd.DataFrame(info), ignore_index=True, sort=True)
-
-    def all_spectra_sum_to_one(self) -> bool:
-        """Checks if all spectra are normalized to sum to one."""
-        return np.all(np.isclose(self.spectra.sum(axis=1).values, 1))
+    @synthesis_info.setter
+    def synthesis_info(self, value):
+        self._synthesis_info = value
 
     # endregion
-
-    # region DataFrame-specific methods
-
-    def update_timestamp(self):
-        """Sets the timestamp for all samples to now (UTC) in a standard format."""
-        self.info.timestamp = datetime.utcnow().isoformat().replace(":", "_")
-
-    def normalize(self, p: float = 2, clip_negatives: bool = True):
-        """Normalizes spectra by L-p normalization.
-
-        Default is L2 norm, i.e. unit energy (sum of squares == 1)
-        L1 norm (p=1) can be interpreted as a probability mass function (PMF)
-
-        Ref: "https://en.wikipedia.org/wiki/Parseval's_theorem"
-
-        Args:
-            p: Defines the exponent to which the spectra values are raised.
-            clip_negatives: Determines whether or not negative values will
-                be removed from the spectra and replaced with 0.
-
-        """
-        if clip_negatives:
-            self.clip_negatives()
-        elif (self._spectra.values < 0).sum():
-            logging.warning(
-                "You are performing a normalization operation on spectra which contain negative " +
-                "values.  Consider applying `clip_negatives`."
-            )
-
-        energy = (self._spectra.values ** p).sum(axis=1)[:, np.newaxis]
-        energy[energy == 0] = 1
-        self._spectra = pd.DataFrame(data=self._spectra.values / energy ** (1/p))
-        if p == 1:
-            self.spectra_state = SpectraState.L1Normalized
-        elif p == 2:
-            self.spectra_state = SpectraState.L2Normalized
-        else:
-            self.spectra_state = SpectraState.Unknown
-
-    def to_pmf(self, clip_negatives: bool = True):
-        """Converts spectra to probability mass function (PMF).
-
-        Args:
-            clip_negatives: Determines whether or not negative values
-                will be replaced with 0 in the spectra data.
-
-        """
-        self.normalize(p=1, clip_negatives=clip_negatives)
-
-    def normalize_sources(self):
-        """Converts sources to a valid probability mass function (PMF)."""
-        self._sources = self._sources.divide(
-            self._sources.sum(axis=1),
-            axis=0
-        )
 
     def _channels_to_energies(self, fractional_energy_bins,
                               offset: float, gain: float, quadratic: float, cubic: float,
@@ -521,40 +317,9 @@ class SampleSet():
             low_energy / (1 + 60 * fractional_energy_bins)
         return channel_energies
 
-    def get_channel_energies(self, index, fractional_energy_bins=None) -> np.ndarray:
-        """Returns an array representing the energy (in keV) represented by the
-        lower edge of each channel for the sample at the specified index.
-
-        Raises:
-            ValueError: raised if any energy calibration terms are missing.
-
-        """
-        if fractional_energy_bins is None:
-            fractional_energy_bins = np.linspace(0, 1, self.n_channels)
-
-        # TODO: raise error if ecal info is missing for any row
-        offset, gain, quadratic, cubic, low_energy = self.ecal[index]
-        channel_energies = self._channels_to_energies(
-            fractional_energy_bins,
-            offset, gain, quadratic, cubic, low_energy
-        )
-
-        return channel_energies
-
-    def get_all_channel_energies(self) -> np.ndarray:
-        """Returns an array representing the energy (in keV) represented by the
-        lower edge of each channel for all samples.
-
-        Raises:
-            ValueError: raised if any energy calibration terms are missing.
-
-        """
-        fractional_energy_bins = np.linspace(0, 1, self.n_channels)
-        all_channel_energies = []
-        for i in range(self.n_samples):
-            channel_energies = self.get_channel_energies(i, fractional_energy_bins)
-            all_channel_energies.append(channel_energies)
-        return all_channel_energies
+    def all_spectra_sum_to_one(self) -> bool:
+        """Checks if all spectra are normalized to sum to one."""
+        return np.all(np.isclose(self.spectra.sum(axis=1).values, 1))
 
     def as_ecal(self, new_offset: float = None, new_gain: float = None,
                 new_quadratic: float = None, new_cubic: float = None,
@@ -635,7 +400,6 @@ class SampleSet():
 
         """
         flat_spectra = self.spectra.sum(axis=0).to_frame().T
-        flat_extra_data = self.extra_data.sum(axis=0).to_frame().T
         flat_sources = self.sources.sum(axis=0).to_frame().T
         flat_prediction_probas = self.prediction_probas.sum(axis=0).to_frame().T
         flat_info = self.info.iloc[0].to_frame().T
@@ -668,7 +432,6 @@ class SampleSet():
         # Create a new SampleSet with the flattened data
         flat_ss = SampleSet()
         flat_ss.spectra = flat_spectra
-        flat_ss.extra_data = flat_extra_data
         flat_ss.sources = flat_sources
         flat_ss.prediction_probas = flat_prediction_probas
         flat_ss.info = flat_info
@@ -676,7 +439,6 @@ class SampleSet():
         flat_ss._detector_info = self._detector_info
         flat_ss._synthesis_info = self._synthesis_info
         flat_ss._measured_or_synthetic = self._measured_or_synthetic
-        flat_ss.detector_hash = self.detector_hash
 
         return flat_ss
 
@@ -690,16 +452,63 @@ class SampleSet():
         """
         self._spectra = pd.DataFrame(data=self._spectra.clip(min_value))
 
-    def replace_nan(self, replace_value: float = 0):
-        """Replaces np.nan() values with replace_value.
+    def concat(self, ss_list: list):
+        """Provides a way to vertically combine many SampleSets.
+
+        Combining of non-DataFrame properties (e.g., detector_info, synthesis_info, etc.)
+        is NOT performed - it is the responsiblity of the user to ensure proper bookkeeping for
+        these properties when concatenating SampleSets.
+
+        This method is most applicable to SampleSets containing measured data from the same
+        detector which could not be made as a single SampleSet because of how measurements had to
+        be taken (i.e., measurements were taken by distinct processes separated by time).
+        Therefore, the user should avoid concatenating SampleSets when:
+            - the data is from different detectors
+              (note that SampleSets are given to models for prediction, and models should be
+              1-to-1 with physical detectors);
+            - a mix of synthetic and measured data would occur
+              (this could make an existing `synthesis_info` value ambiguous, but one way to handle
+              this would be to add a new column to `info` distinguishing between synthetic and
+              measured on a per-sample basis).
 
         Args:
-            replace_value: The value with which NaN will be replaced.
+            ss_list: Defines the list of SampleSets to concatenate.
+
+        Return:
+            A single SampleSet object of the concatenated SampleSet data.
 
         """
-        self._spectra.replace(np.nan, replace_value)
-        self._sources.replace(np.nan, replace_value)
-        self._info.replace(np.nan, replace_value)
+        if not ss_list:
+            return
+        if not isinstance(ss_list, list):
+            ss_list = [ss_list]
+
+        self._spectra = pd.concat(
+            [self._spectra] + [ss.spectra for ss in ss_list],
+            ignore_index=True,
+            sort=False
+        )
+        self._sources = pd.concat(
+            [self._sources] + [ss.sources for ss in ss_list],
+            ignore_index=True,
+            sort=False
+        )
+        self._sources = self._sources.where(pd.notnull(self._sources), 0)
+        self._info = pd.concat(
+            [self._info] + [ss.info for ss in ss_list],
+            ignore_index=True,
+            sort=False
+        )
+        self._info = self._info.where(pd.notnull(self._info), None)
+        self._prediction_probas = pd.concat(
+            [self._prediction_probas] + [ss.prediction_probas for ss in ss_list],
+            ignore_index=True,
+            sort=False
+        )
+        self._prediction_probas = self._prediction_probas.where(
+            pd.notnull(self._prediction_probas),
+            0
+        )
 
     def downsample_spectra(self, target_bins: int = 128):
         """Replaces spectra with downsampled version. Uniform binning is assumed.
@@ -728,6 +537,235 @@ class SampleSet():
                 self._spectra.values,
                 transformation.T))
 
+    def extend(self, spectra: Union[dict, list, np.array, pd.DataFrame],
+               sources: pd.DataFrame, info: Union[list, pd.DataFrame]):
+        """Extends the current SampleSet with the given data.
+
+        Always verify that the data was appended in the way you expect based on what input type
+        you are preferring to work with.
+
+        Args:
+            spectra: Defines the spectra to append to the current spectra DataFrame.
+            sources: Defines the sources to append to the current sources DataFrame.
+            info: Defines the info to append to the current info DataFrame.
+
+        """
+        if not spectra.shape[0] == sources.shape[0] == info.shape[0]:
+            msg = "The number of rows in each of the required positional arguments must be same."
+            raise ValueError(msg)
+
+        self._spectra = self._spectra\
+            .append(pd.DataFrame(spectra), ignore_index=True, sort=True)\
+            .fillna(0)
+
+        new_sources_column_index = pd.MultiIndex.from_tuples(
+            sources.keys(),
+            names=SampleSet.SOURCES_MULTI_INDEX_NAMES
+        )
+        new_sources_df = pd.DataFrame(sources.values(), columns=new_sources_column_index)
+        self._sources = self._sources\
+            .append(new_sources_df, ignore_index=True, sort=True)\
+            .fillna(0)
+
+        self._info = self._info\
+            .append(pd.DataFrame(info), ignore_index=True, sort=True)
+
+    def get_all_channel_energies(self) -> np.ndarray:
+        """Returns an array representing the energy (in keV) represented by the
+        lower edge of each channel for all samples.
+
+        Raises:
+            ValueError: raised if any energy calibration terms are missing.
+
+        """
+        fractional_energy_bins = np.linspace(0, 1, self.n_channels)
+        all_channel_energies = []
+        for i in range(self.n_samples):
+            channel_energies = self.get_channel_energies(i, fractional_energy_bins)
+            all_channel_energies.append(channel_energies)
+        return all_channel_energies
+
+    def get_channel_energies(self, index, fractional_energy_bins=None) -> np.ndarray:
+        """Returns an array representing the energy (in keV) represented by the
+        lower edge of each channel for the sample at the specified index.
+
+        Raises:
+            ValueError: raised if any energy calibration terms are missing.
+
+        """
+        if fractional_energy_bins is None:
+            fractional_energy_bins = np.linspace(0, 1, self.n_channels)
+
+        # TODO: raise error if ecal info is missing for any row
+        offset, gain, quadratic, cubic, low_energy = self.ecal[index]
+        channel_energies = self._channels_to_energies(
+            fractional_energy_bins,
+            offset, gain, quadratic, cubic, low_energy
+        )
+
+        return channel_energies
+
+    def get_labels(self, target_level="Isotope", max_only=True,
+                   include_value=False, min_value=0.01,
+                   level_aggregation="sum"):
+        """Gets row labels for each spectrum based on source values.
+
+        See docstring for `_get_row_labels()` for more details.
+
+        """
+        labels = _get_row_labels(
+            self.sources,
+            target_level=target_level,
+            max_only=max_only,
+            include_value=include_value,
+            min_value=min_value,
+            level_aggregation=level_aggregation,
+        )
+        return labels
+
+    def get_predictions(self, target_level="Isotope", max_only=True,
+                        include_value=False, min_value=0.01,
+                        level_aggregation="sum"):
+        """Gets row labels for each spectrum based on prediction values.
+
+        See docstring for `_get_row_labels()` for more details.
+
+        """
+        labels = _get_row_labels(
+            self.prediction_probas,
+            target_level=target_level,
+            max_only=max_only,
+            include_value=include_value,
+            min_value=min_value,
+            level_aggregation=level_aggregation,
+        )
+        return labels
+
+    def get_samples(self):
+        """Gets only the data (spectra + extra data) within the SampleSet
+        as a NumPy array ready for use in model training.
+
+        Returns:
+            An ndarray containing the NaN-trimmed values for spectra and
+            extra data.
+
+        """
+        spectra_values = np.nan_to_num(self._spectra)
+        return spectra_values
+
+    def get_source_contributions(self, target_level="Isotope"):
+        """Gets the 2D array of values representing the percent contributions of each source.
+
+        Returns:
+            An ndarray containing the source contributions for each sample (i.e., ground truth).
+
+        """
+        return self.sources.sum(level=target_level, axis=1)
+
+    def normalize(self, p: float = 1, clip_negatives: bool = True):
+        """Normalizes spectra by L-p normalization.
+
+        Default is L1 norm (p=1) can be interpreted as a forming a probability mass function (PMF).
+        L2 norm (p=2) is unit energy (sum of squares == 1).
+
+        Ref: "https://en.wikipedia.org/wiki/Parseval's_theorem"
+
+        Args:
+            p: Defines the exponent to which the spectra values are raised.
+            clip_negatives: Determines whether or not negative values will
+                be removed from the spectra and replaced with 0.
+
+        """
+        if clip_negatives:
+            self.clip_negatives()
+        elif (self._spectra.values < 0).sum():
+            logging.warning(
+                "You are performing a normalization operation on spectra which contain negative " +
+                "values.  Consider applying `clip_negatives`."
+            )
+
+        energy = (self._spectra.values ** p).sum(axis=1)[:, np.newaxis]
+        energy[energy == 0] = 1
+        self._spectra = pd.DataFrame(data=self._spectra.values / energy ** (1/p))
+        if p == 1:
+            self.spectra_state = SpectraState.L1Normalized
+        elif p == 2:
+            self.spectra_state = SpectraState.L2Normalized
+        else:
+            self.spectra_state = SpectraState.Unknown
+
+    def normalize_sources(self):
+        """Converts sources to a valid probability mass function (PMF)."""
+        self._sources = self._sources.divide(
+            self._sources.sum(axis=1),
+            axis=0
+        )
+
+    def replace_nan(self, replace_value: float = 0):
+        """Replaces np.nan() values with replace_value.
+
+        Args:
+            replace_value: The value with which NaN will be replaced.
+
+        """
+        self._spectra.replace(np.nan, replace_value)
+        self._sources.replace(np.nan, replace_value)
+        self._info.replace(np.nan, replace_value)
+
+    def sample(self, n_samples: int, random_seed: int = None):
+        """Randomly samples the SampleSet.
+
+        Args:
+            n_samples: the number of random samples to be returned.
+            random_seed: the seed value for random number generation.
+
+        Returns:
+            A sampleset of `n_samples` randomly selected measurements.
+
+        """
+        if random_seed:
+            random.seed(random_seed)
+
+        if n_samples > self.n_samples:
+            n_samples = self.n_samples
+
+        random_indices = random.sample(self.spectra.index.values.tolist(), n_samples)
+        random_mask = np.isin(self.spectra.index, random_indices)
+        return self[random_mask]
+
+    def to_hdf(self, path: str, verbose=1):
+        """Writes the sampleset to disk as a HDF file at the given path.
+
+        Args:
+            path: the intended location and name of the resulting file.
+
+        """
+        if not path.lower().endswith(riid.SAMPLESET_FILE_EXTENSION):
+            logging.warning(f"Path does not end in {riid.SAMPLESET_FILE_EXTENSION}")
+
+        _write_hdf(self, path)
+        if verbose:
+            logging.info(f"Saved SampleSet to '{path}'")
+
+    def to_pcf(self, path: str, verbose=1):
+        """Writes the sampleset to disk as a PCF at the given path.
+
+        Args:
+            path: the intended location and name of the resulting file.
+
+        """
+        if not path.lower().endswith(riid.PCF_FILE_EXTENSION):
+            logging.warning(f"Path does not end in {riid.PCF_FILE_EXTENSION}")
+
+        _dict_to_pcf(_ss_to_pcf_dict(self), path)
+
+        if verbose:
+            logging.info(f"Saved SampleSet to '{path}'")
+
+    def update_timestamp(self):
+        """Sets the timestamp for all samples to now (UTC) in a standard format."""
+        self.info.timestamp = datetime.utcnow().isoformat().replace(":", "_")
+
     def upsample_spectra(self, target_bins: int = 4096):
         """Replaces spectra with upsampled version. Uniform binning is assumed.
 
@@ -752,48 +790,49 @@ class SampleSet():
                 self._spectra.values,
                 transformation.T))
 
-    def get_labels(self, target_level="Isotope", max_only=True,
-                   include_value=False, min_value=0.01,
-                   level_aggregation="sum"):
-        """Gets row labels for each spectrum based on source values.
 
-        See docstring for `get_row_labels()` for more detail.
+def read_hdf(path: str) -> SampleSet:
+    """Reads the HDF file in from the given filepath and creates
+    a SampleSet object with the data.
 
-        """
-        labels = get_row_labels(
-            self.sources,
-            target_level=target_level,
-            max_only=max_only,
-            include_value=include_value,
-            min_value=min_value,
-            level_aggregation=level_aggregation,
-        )
-        return labels
+    Args:
+        path: Defines the path to the file to be read in.
 
-    def get_predictions(self, target_level="Isotope", max_only=True,
-                        include_value=False, min_value=0.01,
-                        level_aggregation="sum"):
-        """Gets row labels for each spectrum based on prediction values.
+    Returns:
+        A SampleSet object.
 
-        See docstring for `get_row_labels()` for more detail.
+    """
+    ss = None
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"No file found at location '{path}'.")
 
-        """
-        labels = get_row_labels(
-            self.prediction_probas,
-            target_level=target_level,
-            max_only=max_only,
-            include_value=include_value,
-            min_value=min_value,
-            level_aggregation=level_aggregation,
-        )
-        return labels
+    ss = _read_hdf(path)
 
-    # endregion
+    if not ss:
+        raise FileNotFoundError(f"No data found at location '{path}'.")
+
+    return ss
 
 
-def get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: bool = True,
-                   include_value: bool = False, min_value: float = 0.01,
-                   level_aggregation: str = "sum") -> pd.Series:
+def read_pcf(path: str, verbose: bool = False) -> SampleSet:
+    """Converts pcf file to sampleset object.
+
+    Args:
+        path: Defines the path to the PCF file to be read in.
+        verbose: Determines whether or not to show verbose function output in terminal.
+
+    Returns:
+        A Sampleset object containing information of pcf file in sampleset format
+
+    Raises:
+        None.
+    """
+    return _pcf_dict_to_ss(_pcf_to_dict(path, verbose))
+
+
+def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: bool = True,
+                    include_value: bool = False, min_value: float = 0.01,
+                    level_aggregation: str = "sum") -> pd.Series:
     """Interprets the cell values in conjunction with the columns to determine an
         appropriate label for each row.
 
@@ -855,43 +894,6 @@ def get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: bo
     return pd.Series(labels)
 
 
-class RebinningCalculationError(Exception):
-    """An exception that indicates an issue when rebinning
-    (up-binning or down-binning) a sample or collection of samples.
-    """
-    pass
-
-
-class InvalidSampleSetFileError(Exception):
-    """An exception that indicates missing or invalid keys
-    in a file being parsed into a SampleSet.
-    """
-    pass
-
-
-def read_smpl(file_path: str) -> SampleSet:
-    """Reads the .smpl file in from the given filepath and creates
-    a SampleSet object with the data.
-
-    Args:
-        file_path: Defines the string relative path to the .smpl.
-
-    Returns:
-        A SampleSet object containing the data from the .smpl file.
-
-    """
-    ss = None
-    if not os.path.isfile(file_path):
-        raise FileNotFoundError(f"No file found at location '{file_path}'.")
-
-    ss = _read_hdf(file_path)
-
-    if not ss:
-        raise FileNotFoundError(f"No file found at location '{file_path}'.")
-
-    return ss
-
-
 def _validate_hdf_store_keys(keys: list):
     """Validates the SampleSet keys based on whether or not
     it contains the minimum required set of keys. Used when creating
@@ -907,10 +909,9 @@ def _validate_hdf_store_keys(keys: list):
 
     """
     required_keys = [
-        ("/info", "/collection_information"),
+        "/info",
         "/spectra",
         "/sources",
-        ("/extra_data", "/features"),
         "/prediction_probas"
     ]
     for rk in required_keys:
@@ -930,10 +931,10 @@ def _read_hdf(file_name: str) -> SampleSet:
 
     Args:
         file_name: Defines the string representing the relative
-            path to the .hdf file.
+            path to the HDF file.
 
     Returns:
-        A SampleSet containing the .hdf data.
+        A SampleSet containing the HDF data.
 
     """
     store = pd.HDFStore(file_name, mode="r")
@@ -942,15 +943,8 @@ def _read_hdf(file_name: str) -> SampleSet:
 
     # Pull data from data store
     spectra = store.get("spectra")
-    if "/info" in store_keys:
-        info = store.get("info")
-    elif "/collection_information" in store_keys:
-        info = store.get("collection_information")
+    info = store.get("info")
     sources = store.get("sources")
-    if "/extra_data" in store_keys:
-        extra_data = store.get("extra_data")
-    elif "/features" in store_keys:
-        extra_data = store.get("features")
     prediction_probas = store.get("prediction_probas")
     other_info = store.get("other_info")
     store.close()
@@ -958,7 +952,6 @@ def _read_hdf(file_name: str) -> SampleSet:
     # Build SampleSet object
     ss = SampleSet()
     ss.spectra = spectra
-    ss.extra_data = extra_data
     ss.sources = sources
     ss.info = info
     ss.prediction_probas = prediction_probas
@@ -968,15 +961,8 @@ def _read_hdf(file_name: str) -> SampleSet:
         ss.detector_info = other_info["detector_info"].iloc[0]
     if "synthesis_info" in other_info:
         ss.synthesis_info = other_info["synthesis_info"].iloc[0]
-    if "detector_hash" in other_info:
-        ss.detector_hash = other_info["detector_hash"].iloc[0]
-    if "neutron_detector_hash" in other_info:
-        ss.neutron_detector_hash = other_info["neutron_detector_hash"].iloc[0]
     if "classified_by" in other_info:
         ss.classified_by = other_info["classified_by"].iloc[0]
-
-    # Migrate columns names
-    ss.info.rename(columns={"distance": "distance_cm"})
 
     return ss
 
@@ -995,7 +981,6 @@ def _write_hdf(ss: SampleSet, output_path: str):
 
         store = pd.HDFStore(output_path, "w")
         store.put("spectra", ss.spectra)
-        store.put("extra_data", pd.DataFrame(ss.extra_data))
         store.put("sources", ss.sources)
         store.put("info", ss.info)
         store.put("prediction_probas", ss.prediction_probas)
@@ -1004,54 +989,223 @@ def _write_hdf(ss: SampleSet, output_path: str):
             "measured_or_synthetic": ss.measured_or_synthetic,
             "detector_info": ss.detector_info,
             "synthesis_info": ss.synthesis_info,
-            "detector_hash": ss.detector_hash,
-            "neutron_detector_hash": ss.neutron_detector_hash,
             "classified_by": ss.classified_by
         }
         store.put("other_info", pd.DataFrame(data=[other_info]))
         store.close()
 
 
-def difficulty_score(ss: SampleSet, mean=10.0, std=3.0) -> float:
-    """Computes a metric representing the "difficulty" of the given SampleSet on a
-    scale of 0 to 1, where 0 is easiest and 1 is hardest.
+def _ss_to_pcf_dict(ss: SampleSet):
+    """Converts a Sampleset to a dictionary of values.
 
-    The difficulty of a SampleSet is the mean of the individual sample difficulties.
-    Each sample's difficulty is determined by where its signal strength (sigma)
-    falls on the survival function (AKA reliability function, or 1 - CDF) for a
-    logistic distribution.
-    The decision to use this distribution is based on empirical data showing that
-    classifier performance increases in a logistic fashion as signal strength increases.
-
-    The primary use of this function is for situations where ground truth is unknown
-    and you want to get an idea of how "difficult" it will be for a model
-    to make predictions.  Consider the following example:
-        Given a SampleSet for which ground truth is unknown and the signal strength for
-        each spectrum is low.
-        A model considering, say, 100+ isotopes will see this SampleSet as quite
-        difficult, whereas a model considering 5 isotopes will, being more specialized,
-        see the SampleSet as easier.
-        Of course, this makes the assumption that both models were trained to the
-        isotope(s) contained in the test SampleSet.
-
-    Based on the previous example, the unfortunate state of this function is that you
-    must know how to pick means and standard deviations which properly reflect the:
-        - number of target isotopes
-        - amount of variation within each isotope (i.e., shielding, scattering, etc.)
-        - detector resolution
-    A future goal of ours is to provide updates to this function and docstring which make
-    choosing the mean and standard deviation easier/automated based on more of our findings.
-
-    Arguments:
-        ss: the SampleSet for which to determine the difficulty
-        mean: the sigma value representing the mean of the logistic distribution
-        std: the standard deviation of the logistic distribution
+    Args:
+        ss: Defines a Sampleset object to be converted.
 
     Returns:
-        The mean of all sigma values passed through a logistic survival function.
+        A dictionary containing the values from the Sampleset.
 
+    Raises:
+        None.
     """
-    sigmas: np.ndarray = ss.info.sigma.clip(1e-6)
-    score = float(stats.logistic.sf(sigmas, loc=mean, scale=std).mean())
+    n_channels = ss.n_channels
+    n_records_per_spectrum = int((n_channels / 64) + 1)
 
-    return score
+    if "pcf_metadata" in ss.detector_info and ss.detector_info["pcf_metadata"]:
+        pcf_header = ss.detector_info["pcf_metadata"]
+    else:
+        pcf_header = {
+            "NRPS": n_records_per_spectrum,
+            "Version": "DHS",
+            "last_mod_hash": " " * 7,
+            "UUID": " " * 36,
+            "Inspection": " " * 16,
+            "Lane_Number": 0,
+            "Measurement_Remark": " " * 26,
+            "Intrument_Type": " " * 28,
+            "Manufacturer": " " * 28,
+            "Instrument_Model": " " * 18,
+            "Instrument_ID": " " * 18,
+            "Item_Description": " " * 20,
+            "Item_Location": " " * 16,
+            "Measurement_Coordinates": " " * 16,
+            "Item_to_detector_distance": 0,
+            "Occupancy_Number": 0,
+            "Cargo_Type": " " * 16,
+            "SRSI": 83,
+            "DevType": "DeviationPairsInFile",
+        }
+
+    spectra = []
+
+    isotopes, seeds = pd.Series(), pd.Series()
+    if not ss.sources.empty:
+        isotope_level_name = SampleSet.SOURCES_MULTI_INDEX_NAMES[1]
+        seed_level_names = SampleSet.SOURCES_MULTI_INDEX_NAMES[2]
+        if isotope_level_name in ss.sources.columns.names:
+            isotopes = ss.get_labels(target_level=isotope_level_name)
+        if seed_level_names in ss.sources.columns.names:
+            seeds = ss.get_labels(target_level=seed_level_names)
+
+    for i in range(ss.n_samples):
+        title = isotopes[i] if not isotopes.empty else NO_ISOTOPE
+        description = ss.info.description.fillna("").iloc[i]
+        source = seeds[i] if not seeds.empty else NO_SEED
+        compressed_text_buffer = _pack_compressed_text_buffer(title, description, source)
+
+        header = {
+            "Compressed_Text_Buffer": compressed_text_buffer,
+            "Energy_Calibration_Low_Energy": ss.info.ecal_low_e.fillna(0).iloc[i],
+            "Energy_Calibration_Offset": ss.info.ecal_order_0.fillna(0).iloc[i],
+            "Energy_Calibration_Gain": ss.info.ecal_order_1.fillna(0).iloc[i],
+            "Energy_Calibration_Quadratic": ss.info.ecal_order_2.fillna(0).iloc[i],
+            "Energy_Calibration_Cubic": ss.info.ecal_order_3.fillna(0).iloc[i],
+            "Live_Time": ss.info.live_time.fillna(0).iloc[i],
+            "Total_time_per_real_time": ss.info.real_time.fillna(0).iloc[i],
+            "Number_of_Channels": int(n_channels),
+            "Date-time_VAX": ss.info.timestamp.fillna("").iloc[i],
+            "Occupancy_Flag": ss.info.occupancy_flag.fillna(0).iloc[i],
+            "Tag": ss.info.tag.fillna("").iloc[i],
+            "Total_Neutron_Counts": ss.info.neutron_counts.fillna(0).iloc[i],
+        }
+
+        spectrum = ss.spectra.values[i, :]
+        spectra.append({"header": header, "spectrum": spectrum})
+    return {"header": pcf_header, "spectra": spectra}
+
+
+def _pcf_dict_to_ss(pcf_dict: dict):
+    """Converts pcf dictionary into a SampleSet.
+
+    Args:
+        pcf_dict: Defines the dictionary of pcf values.
+
+    Returns:
+        A Sampleset object containing the pcf dict values.
+
+    Raises:
+        None.
+    """
+    if not pcf_dict["spectra"]:
+        return
+
+    num_spectra = len(pcf_dict["spectra"])
+    num_channels = len(pcf_dict["spectra"][0]["spectrum"])
+
+    sources = []
+    infos = []
+    spectra = np.ndarray((num_spectra, num_channels))
+
+    for i in range(0, num_spectra):
+        spectrum = pcf_dict["spectra"][i]
+        compressed_text_buffer = spectrum["header"]["Compressed_Text_Buffer"]
+
+        title, description, source = _unpack_compressed_text_buffer(compressed_text_buffer)
+
+        if not title and not source:
+            source = NO_ISOTOPE
+            title = NO_ISOTOPE
+            category = NO_CATEGORY
+        else:
+            if not title:
+                title = _find_isotope(source)
+            elif not source:
+                source = title
+                title = _find_isotope(source)
+            category = _find_category(title)
+
+        # Extract any additional information from the source string
+        distance_search = re.search("@ ([0-9,.]+)", source)
+        if distance_search:
+            distance = float(distance_search.group(1)) / 100
+        else:
+            distance = np.nan
+        an_finds = re.findall("an=([0-9]+)", source)
+        if an_finds:
+            an = int(an_finds[0])
+        else:
+            an = None
+        ad_finds = re.findall("ad=([0-9, .]+)", source)
+        if ad_finds:
+            ad_string = ad_finds[0].replace(",", "")
+            ad = float(ad_string)
+        else:
+            ad = None
+
+        # PCF file contains energy calibration terms which are defined as:
+        # E_i = a0 + a1*x + a2*x^2 + a3*x^3 + a4 / (1 + 60*x)
+        # where:
+        #   a0 = order_0
+        #   a1 = order_1
+        #   a2 = order_2
+        #   a3 = order_3
+        #   a4 = low_E
+        #   x = channel number
+        #   E_i = Energy value of i"th channel
+
+        order_0 = float(spectrum["header"]["Energy_Calibration_Offset"])
+        order_1 = float(spectrum["header"]["Energy_Calibration_Gain"])
+        order_2 = float(spectrum["header"]["Energy_Calibration_Quadratic"])
+        order_3 = float(spectrum["header"]["Energy_Calibration_Cubic"])
+        low_E = float(spectrum["header"]["Energy_Calibration_Low_Energy"])
+
+        info = {
+            "description": description,
+            "timestamp": spectrum["header"]["Date-time_VAX"],
+            "live_time": spectrum["header"]["Live_Time"],
+            "real_time": spectrum["header"]["Total_time_per_real_time"],
+            # The following commented out fields are PyRIID-only, which can't be stored in PCF.
+            # They are shown here to explicitly communicate what would be lost in translation.
+            #   - snr_target
+            #   - snr_estimate
+            #   - sigma
+            #   - bg_counts
+            #   - fg_counts
+            #   - bg_counts_expected
+            #   - fg_counts
+            "total_counts": sum(spectrum["spectrum"]),
+            "total_neutron_counts": spectrum["header"]["Total_Neutron_Counts"],
+            "distance_cm": distance,
+            "area_density": ad,
+            "ecal_order_0": order_0,
+            "ecal_order_1": order_1,
+            "ecal_order_2": order_2,
+            "ecal_order_3": order_3,
+            "ecal_low_e": low_E,
+            "atomic_number": an,
+            "occupancy_flag": spectrum["header"]["Occupancy_Flag"],
+            "tag": spectrum["header"]["Tag"],
+        }
+
+        infos.append(info)
+        sources.append((category, title, source))
+        spectra[i, :] = np.array(spectrum["spectrum"])
+
+    n_sources = len(sources)
+    n_samples = len(spectra)
+    new_index = pd.MultiIndex.from_tuples(sources, names=SampleSet.SOURCES_MULTI_INDEX_NAMES)
+    sources_df = pd.DataFrame(np.zeros((n_samples, n_sources)), columns=new_index)
+    for i, key in enumerate(sources):
+        sources_df[key].iloc[i] = 1.0
+
+    ss = SampleSet()
+    ss.spectra = pd.DataFrame(data=spectra)
+    ss.sources = sources_df
+    ss.info = pd.DataFrame(data=infos)
+    ss.measured_or_synthetic = "synthetic",
+    ss.detector_info["pcf_metadata"] = pcf_dict["header"]
+
+    return ss
+
+
+class RebinningCalculationError(Exception):
+    """An exception that indicates an issue when rebinning
+    (up-binning or down-binning) a sample or collection of samples.
+    """
+    pass
+
+
+class InvalidSampleSetFileError(Exception):
+    """An exception that indicates missing or invalid keys
+    in a file being parsed into a SampleSet.
+    """
+    pass

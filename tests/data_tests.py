@@ -6,8 +6,9 @@ import os
 import tempfile
 import unittest
 
+from riid import SAMPLESET_FILE_EXTENSION
 from riid.data.labeling import BACKGROUND_LABEL, label_to_index_element
-from riid.data.sampleset import SampleSet, _write_hdf, read_smpl
+from riid.data.sampleset import SampleSet, _write_hdf, read_hdf
 from riid.data.synthetic.static import get_dummy_sampleset
 
 
@@ -18,17 +19,17 @@ class TestData(unittest.TestCase):
         """Test setup."""
         pass
 
-    def _get_temp_smpl_path(self):
+    def _get_temp_ss_path(self):
         default_temp_dir = tempfile._get_default_tempdir()
         temp_file_name = next(tempfile._get_candidate_names())
-        return os.path.join(default_temp_dir, temp_file_name + ".smpl")
+        return os.path.join(default_temp_dir, temp_file_name + SAMPLESET_FILE_EXTENSION)
 
-    def test_to_smpl_and_read_smpl(self):
+    def test_to_hdf_and_read_hdf(self):
         """Tests loading of SampleSets saved in hdf format."""
-        file_path = self._get_temp_smpl_path()
+        file_path = self._get_temp_ss_path()
         sampleset = get_dummy_sampleset()
         _write_hdf(sampleset, file_path)
-        sampleset_out = read_smpl(file_path)
+        sampleset_out = read_hdf(file_path)
         compare_samplesets(self, sampleset, sampleset_out)
         os.remove(file_path)
 
@@ -232,24 +233,14 @@ def compare_samplesets(unit_test, ss1: SampleSet, ss2: SampleSet):
     """ Compares two SampleSets.
 
         Extra data, info, predictions, and even sources can all be lost
-        in the following conversion: SMPL -> PCF -> SMPL.
+        in the following conversion: SS -> PCF -> SS.
         However, no information should be lost in the following
-        conversion: PCF -> SMPL -> PCF
+        conversion: PCF -> SS -> PCF
     """
     unit_test.assertEqual(
         ss1.measured_or_synthetic,
         ss2.measured_or_synthetic,
         "Measured or synthetic not equal"
-    )
-    unit_test.assertEqual(
-        ss1.detector_hash,
-        ss2.detector_hash,
-        "Detector hash not equal"
-    )
-    unit_test.assertEqual(
-        ss1.neutron_detector_hash,
-        ss2.neutron_detector_hash,
-        "Neutron detector hash not equal"
     )
     unit_test.assertEqual(
         ss1.detector_info,
@@ -277,10 +268,6 @@ def compare_samplesets(unit_test, ss1: SampleSet, ss2: SampleSet):
     unit_test.assertTrue(
         ss1.prediction_probas.equals(ss2.prediction_probas),
         "Predictions are not equal"
-    )
-    unit_test.assertTrue(
-        ss1.extra_data.equals(ss2.extra_data),
-        "Extra data is not equal"
     )
 
 

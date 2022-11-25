@@ -5,10 +5,11 @@
 detector.
 """
 import random
-from typing import Any
+from typing import Any, List
 
 import numpy as np
 import pandas as pd
+
 from riid.data import SampleSet
 from riid.data.labeling import BACKGROUND_LABEL, label_to_index_element
 
@@ -81,92 +82,180 @@ class PassbySynthesizer():
     def __setitem__(self, key, value):
         setattr(self, key, value)
 
-    def _get_distribution_values(self, function: str, function_args: Any, n_values: int):
-        """Gets the values for the synthetic data distribution based
-        on the sampling type used.
+    # region Properties
 
-        Args:
-            function: Defines the name of the distribution function.
-            function_args: Defines the argument or collection of arguments to be
-                passed to the function, if any.
-            n_values: Defines the size of the distribution.
+    @property
+    def background_cps(self) -> float:
+        """Get or set the counts per second contributed by background radiation."""
+        return self._background_cps
 
-        Returns:
-            The value or collection of values defining the distribution.
+    @background_cps.setter
+    def background_cps(self, value: float):
+        self._background_cps = value
+
+    @property
+    def detector_info(self) -> dict:
+        """Get or set the detector info dictionary, which includes values such as the
+        unique name of the physical detector associated with the provided
+        seeds. Used to determine where in the data directory to auto-cache the sample set.
+        """
+        return self._detector_info
+
+    @detector_info.setter
+    def detector_info(self, value: str):
+        self._detector_info = value
+
+    @property
+    def dwell_time_function(self) -> str:
+        """Get or set the function used to randomly sample the desired dwell time space.
 
         Raises:
             ValueError: Raised when an unsupported function type is provided.
         """
-        if function not in self._supported_functions:
-            raise ValueError("{} is not a valid function.".format(function))
+        return self._dwell_time_function
 
-        if function == "uniform":
-            value = np.random.uniform(*function_args, size=n_values)
-        elif function == "log10":
-            log10_args = tuple(map(np.log10, function_args))
-            value = np.power(10, np.random.uniform(*log10_args, size=n_values))
-        elif function == "discrete":
-            value = np.random.choice(function_args, size=n_values)
-        elif function == "list":
-            value = function_args
+    @dwell_time_function.setter
+    def dwell_time_function(self, value: str):
+        if value not in self._supported_functions:
+            raise ValueError("{} is not a valid function.".format(value))
+        self._dwell_time_function = value
 
-        return value
+    @property
+    def dwell_time_function_args(self) -> tuple:
+        """Get or set the dwell time space to be randomly sampled."""
+        return self._dwell_time_function_args
 
-    def _get_dwell_time_targets(self, n_samples: int) -> list:
-        """Obtains a list of random dwell time target values.
+    @dwell_time_function_args.setter
+    def dwell_time_function_args(self, value):
+        self._dwell_time_function_args = value
 
-        Args:
-            n_samples: Defines the number of samples for which the
-                dwell_time_targets should be calculated.
-
-        Returns:
-            A list containing the results of the call to
-                _get_distribution_values.
+    @property
+    def events_per_seed(self):
+        """Get or set the number of samples to create per seed (excluding the background seed).
 
         Raises:
-            None.
+            TypeError: Raised when provided _events_per_seed value is not of type int or dict.
         """
-        return self._get_distribution_values(
-            self.dwell_time_function,
-            self.dwell_time_function_args,
-            n_samples
-        )
+        return self._events_per_seed
 
-    def _get_fwhm_targets(self, n_samples: int) -> list:
-        """Obtains a list of random full-width-half-max (FWHM) target values.
+    @events_per_seed.setter
+    def events_per_seed(self, value):
+        if not isinstance(value, int) and not isinstance(value, dict):
+            raise TypeError("Property 'events_per_seed' key must be of type 'int' or 'dict'!")
 
-        Args:
-            n_samples: Defines the number of samples for which the
-                fwhm_targets should be calculated.
-        Returns:
-            A list containing the results of the call to
-                _get_distribution_values.
-        """
-        return self._get_distribution_values(
-            self.fwhm_function,
-            self.fwhm_function_args,
-            n_samples
-        )
+        self._events_per_seed = value
 
-    def _get_snr_targets(self, n_samples) -> list:
-        """Obtains a list of random SNR target values.
-
-        Args:
-            n_samples: Defines the number of samples for which the
-                fwhm_targets should be calculated.
-
-        Returns:
-            A list containing the results of the call to
-                _get_distribution_values.
+    @property
+    def fwhm_function(self) -> str:
+        """Get or set the function used to randomly sample the desired full-width-half-max (FWHM)
+        ratio space.
 
         Raises:
-            None.
+            ValueError: Raised when an unsupported function type is provided.
         """
-        return self._get_distribution_values(
-            self.snr_function,
-            self.snr_function_args,
-            n_samples
-        )
+        return self._fwhm_function
+
+    @fwhm_function.setter
+    def fwhm_function(self, value: str):
+        if value not in self._supported_functions:
+            raise ValueError("{} is not a valid function.".format(value))
+        self._fwhm_function = value
+
+    @property
+    def fwhm_function_args(self) -> tuple:
+        """Get or set the full-width-half-max (FWHM) space to be randomly sampled."""
+        return self._fwhm_function_args
+
+    @fwhm_function_args.setter
+    def fwhm_function_args(self, value):
+        self._fwhm_function_args = value
+
+    @property
+    def min_fraction(self) -> float:
+        """Get or set the percentage of the peak amplitude to exclude."""
+        return self._min_fraction
+
+    @min_fraction.setter
+    def min_fraction(self, value: float):
+        self._min_fraction = value
+
+    @property
+    def random_state(self) -> int:
+        """Get or set the seed for the random number generator. Used when trying to make
+        reproducible SampleSets.
+        """
+        return self._random_state
+
+    @random_state.setter
+    def random_state(self, value: int):
+        self._random_state = value
+
+    @property
+    def sample_interval(self) -> float:
+        """Get or set the sample interval (in seconds) at which the events are simulated."""
+        return self._sample_interval
+
+    @sample_interval.setter
+    def sample_interval(self, value: float):
+        self._sample_interval = value
+
+    @property
+    def seeds(self) -> SampleSet:
+        """Get or set the SampleSet of non-poisson sampled gamma spectra representing the perfect
+        responses given by a specific detector when observing a an isotope for an "sufficiently
+        large" live time. Each seed generally represents a single source of radiation, such as
+        K40, Th232, Ba133, Y88, etc., however other seeds which incorporate sources + shielding
+        are perfectly valid.
+
+        Raises:
+            ValueError: Raised when a background seed value is not provided.
+        """
+        return self._seeds
+
+    @seeds.setter
+    def seeds(self, ss: SampleSet):
+        labels = ss.get_labels().values
+        if BACKGROUND_LABEL not in labels:
+            raise ValueError(f"A seed with the label '{BACKGROUND_LABEL}' must be provided.")
+        self._seeds = ss
+
+    @property
+    def snr_function(self) -> str:
+        """Get or set the function used to randomly sample the desired signal-to-noise
+        (SNR) ratio space.
+
+        Raises:
+            ValueError: Raised when an unsupported function type is provided.
+        """
+        return self._snr_function
+
+    @snr_function.setter
+    def snr_function(self, value: str):
+        if value not in self._supported_functions:
+            raise ValueError("{} is not a valid function.".format(value))
+        self._snr_function = value
+
+    @property
+    def snr_function_args(self) -> tuple:
+        """Get or set the signal-to-noise (SNR) space to be randomly sampled."""
+        return self._snr_function_args
+
+    @snr_function_args.setter
+    def snr_function_args(self, value):
+        self._snr_function_args = value
+
+    @property
+    def subtract_background(self) -> bool:
+        """Get or set the flag for whether or not to include counts from background
+        in the final spectra.
+        """
+        return self._subtract_background
+
+    @subtract_background.setter
+    def subtract_background(self, value: bool):
+        self._subtract_background = value
+
+    # endregion
 
     def _calculate_passby_shape(self, fwhm: float):
         """Returns a pass-by shape with maximum of 1 which goes from min_fraction to min_fraction of
@@ -273,35 +362,116 @@ class PassbySynthesizer():
             spectra = net_spectra - bg_spectra
         else:
             spectra = net_spectra
-        comments = {
-            "fwhm": fwhm,
-            "snr": snr,
-            "dwell_time": dwell_time,
-            "event_length": n_event_spectra,
-            "total_length": n_samples,
-            "source": source
-        }
+
         ss = SampleSet()
         ss.spectra = pd.DataFrame(spectra)
 
         info.update(ss.info)
         ss.info = info
         ss.sources = sources
-        extra_data_cols = comments.keys()
-        extra_data_vals = [list(comments.values()) for n in range(n_samples)]
-        ss.extra_data = pd.DataFrame(data=extra_data_vals, columns=extra_data_cols)
-
+        ss.synthesis_info = {
+            "dwell_time": dwell_time,
+            "event_length": n_event_spectra,
+            "fwhm": fwhm,
+            "snr": snr,
+            "source": source,
+            "total_length": n_samples,
+        }
         ss.detector_info.update(self.detector_info)
         ss.measured_or_synthetic = "synthetic"
 
         return ss
 
-    def generate(self, verbose=0):
-        """Generate a list of sample sets where each represents a pass-by event.
+    def _get_distribution_values(self, function: str, function_args: Any, n_values: int):
+        """Gets the values for the synthetic data distribution based
+        on the sampling type used.
 
         Args:
-            verbose: Determines the whether or not the status messages are
-                printed to the terminal.
+            function: Defines the name of the distribution function.
+            function_args: Defines the argument or collection of arguments to be
+                passed to the function, if any.
+            n_values: Defines the size of the distribution.
+
+        Returns:
+            The value or collection of values defining the distribution.
+
+        Raises:
+            ValueError: Raised when an unsupported function type is provided.
+        """
+        if function not in self._supported_functions:
+            raise ValueError("{} is not a valid function.".format(function))
+
+        if function == "uniform":
+            value = np.random.uniform(*function_args, size=n_values)
+        elif function == "log10":
+            log10_args = tuple(map(np.log10, function_args))
+            value = np.power(10, np.random.uniform(*log10_args, size=n_values))
+        elif function == "discrete":
+            value = np.random.choice(function_args, size=n_values)
+        elif function == "list":
+            value = function_args
+
+        return value
+
+    def _get_dwell_time_targets(self, n_samples: int) -> list:
+        """Obtains a list of random dwell time target values.
+
+        Args:
+            n_samples: Defines the number of samples for which the
+                dwell_time_targets should be calculated.
+
+        Returns:
+            A list containing the results of the call to
+                _get_distribution_values.
+
+        Raises:
+            None.
+        """
+        return self._get_distribution_values(
+            self.dwell_time_function,
+            self.dwell_time_function_args,
+            n_samples
+        )
+
+    def _get_fwhm_targets(self, n_samples: int) -> list:
+        """Obtains a list of random full-width-half-max (FWHM) target values.
+
+        Args:
+            n_samples: Defines the number of samples for which the
+                fwhm_targets should be calculated.
+        Returns:
+            A list containing the results of the call to
+                _get_distribution_values.
+        """
+        return self._get_distribution_values(
+            self.fwhm_function,
+            self.fwhm_function_args,
+            n_samples
+        )
+
+    def _get_snr_targets(self, n_samples) -> list:
+        """Obtains a list of random SNR target values.
+
+        Args:
+            n_samples: Defines the number of samples for which the
+                fwhm_targets should be calculated.
+
+        Returns:
+            A list containing the results of the call to
+                _get_distribution_values.
+
+        Raises:
+            None.
+        """
+        return self._get_distribution_values(
+            self.snr_function,
+            self.snr_function_args,
+            n_samples
+        )
+
+    def generate(self) -> List[SampleSet]:
+        """Generate a list of sample sets where each SampleSets represents a pass-by as a
+        sequence of spectra.
 
         Returns:
             A list of SampleSets where each SampleSet represents a pass-by event.
@@ -342,174 +512,3 @@ class PassbySynthesizer():
 
         events = [self._generate_single_passby(*a) for a in args]
         return events
-
-    @property
-    def seeds(self) -> SampleSet:
-        """Get or set the SampleSet of non-poisson sampled gamma spectra representing the perfect
-        responses given by a specific detector when observing a an isotope for an "sufficiently
-        large" live time. Each seed generally represents a single source of radiation, such as
-        K40, Th232, Ba133, Y88, etc., however other seeds which incorporate sources + shielding
-        are perfectly valid.
-
-        Raises:
-            ValueError: Raised when a background seed value is not provided.
-        """
-        return self._seeds
-
-    @seeds.setter
-    def seeds(self, ss: SampleSet):
-        labels = ss.get_labels().values
-        if BACKGROUND_LABEL not in labels:
-            raise ValueError(f"A seed with the label '{BACKGROUND_LABEL}' must be provided.")
-        self._seeds = ss
-
-    @property
-    def detector_info(self) -> dict:
-        """Get or set the detector info dictionary, which includes values such as the
-        unique name of the physical detector associated with the provided
-        seeds. Used to determine where in the data directory to auto-cache the sample set.
-        """
-        return self._detector_info
-
-    @detector_info.setter
-    def detector_info(self, value: str):
-        self._detector_info = value
-
-    @property
-    def sample_interval(self) -> float:
-        """Get or set the sample interval (in seconds) at which the events are simulated."""
-        return self._sample_interval
-
-    @sample_interval.setter
-    def sample_interval(self, value: float):
-        self._sample_interval = value
-
-    @property
-    def events_per_seed(self):
-        """Get or set the number of samples to create per seed (excluding the background seed).
-
-        Raises:
-            TypeError: Raised when provided _events_per_seed value is not of type int or dict.
-        """
-        return self._events_per_seed
-
-    @events_per_seed.setter
-    def events_per_seed(self, value):
-        if not isinstance(value, int) and not isinstance(value, dict):
-            raise TypeError("Property 'events_per_seed' key must be of type 'int' or 'dict'!")
-
-        self._events_per_seed = value
-
-    @property
-    def background_cps(self) -> float:
-        """Get or set the counts per second contributed by background radiation."""
-        return self._background_cps
-
-    @background_cps.setter
-    def background_cps(self, value: float):
-        self._background_cps = value
-
-    @property
-    def subtract_background(self) -> bool:
-        """Get or set the flag for whether or not to include counts from background
-        in the final spectra.
-        """
-        return self._subtract_background
-
-    @subtract_background.setter
-    def subtract_background(self, value: bool):
-        self._subtract_background = value
-
-    @property
-    def dwell_time_function(self) -> str:
-        """Get or set the function used to randomly sample the desired dwell time space.
-
-        Raises:
-            ValueError: Raised when an unsupported function type is provided.
-        """
-        return self._dwell_time_function
-
-    @dwell_time_function.setter
-    def dwell_time_function(self, value: str):
-        if value not in self._supported_functions:
-            raise ValueError("{} is not a valid function.".format(value))
-        self._dwell_time_function = value
-
-    @property
-    def dwell_time_function_args(self) -> tuple:
-        """Get or set the dwell time space to be randomly sampled."""
-        return self._dwell_time_function_args
-
-    @dwell_time_function_args.setter
-    def dwell_time_function_args(self, value):
-        self._dwell_time_function_args = value
-
-    @property
-    def fwhm_function(self) -> str:
-        """Get or set the function used to randomly sample the desired full-width-half-max (FWHM)
-        ratio space.
-
-        Raises:
-            ValueError: Raised when an unsupported function type is provided.
-        """
-        return self._fwhm_function
-
-    @fwhm_function.setter
-    def fwhm_function(self, value: str):
-        if value not in self._supported_functions:
-            raise ValueError("{} is not a valid function.".format(value))
-        self._fwhm_function = value
-
-    @property
-    def fwhm_function_args(self) -> tuple:
-        """Get or set the full-width-half-max (FWHM) space to be randomly sampled."""
-        return self._fwhm_function_args
-
-    @fwhm_function_args.setter
-    def fwhm_function_args(self, value):
-        self._fwhm_function_args = value
-
-    @property
-    def snr_function(self) -> str:
-        """Get or set the function used to randomly sample the desired signal-to-noise
-        (SNR) ratio space.
-
-        Raises:
-            ValueError: Raised when an unsupported function type is provided.
-        """
-        return self._snr_function
-
-    @snr_function.setter
-    def snr_function(self, value: str):
-        if value not in self._supported_functions:
-            raise ValueError("{} is not a valid function.".format(value))
-        self._snr_function = value
-
-    @property
-    def snr_function_args(self) -> tuple:
-        """Get or set the signal-to-noise (SNR) space to be randomly sampled."""
-        return self._snr_function_args
-
-    @snr_function_args.setter
-    def snr_function_args(self, value):
-        self._snr_function_args = value
-
-    @property
-    def min_fraction(self) -> float:
-        """Get or set the percentage of the peak amplitude to exclude."""
-        return self._min_fraction
-
-    @min_fraction.setter
-    def min_fraction(self, value: float):
-        self._min_fraction = value
-
-    @property
-    def random_state(self) -> int:
-        """Get or set the seed for the random number generator. Used when trying to make
-        reproducible SampleSets.
-        """
-        return self._random_state
-
-    @random_state.setter
-    def random_state(self, value: int):
-        self._random_state = value

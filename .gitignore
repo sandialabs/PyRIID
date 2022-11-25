@@ -9,6 +9,7 @@ g_imgs/
 *.jpeg
 *.pdf
 *.smpl
+*.h5
 *.pcf
 */__pycache__
 _scripts/

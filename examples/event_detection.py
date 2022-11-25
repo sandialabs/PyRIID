@@ -7,6 +7,7 @@ algorithm.
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
+
 from riid.anomaly import PoissonNChannelEventDetector
 from riid.data.labeling import BACKGROUND_LABEL
 from riid.data.synthetic.passby import PassbySynthesizer
@@ -22,7 +23,7 @@ N_POST_EVENT_SAMPLES = (POST_EVENT_DURATION + SAMPLE_INTERVAL) / SAMPLE_INTERVAL
 seed_ss = get_dummy_sampleset(as_seeds=True)
 
 bg_seed_ss = seed_ss[seed_ss.get_labels() == BACKGROUND_LABEL]
-bg_seed_ss.to_pmf()
+bg_seed_ss.normalize()
 ed = PoissonNChannelEventDetector(
     long_term_duration=600,
     short_term_duration=SHORT_TERM_DURATION,

@@ -6,18 +6,19 @@ from time import time
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from sklearn.metrics import f1_score
+
 from riid.data.labeling import BACKGROUND_LABEL
 from riid.data.synthetic.static import StaticSynthesizer, get_dummy_sampleset
 from riid.models.bayes import PoissonBayes
 from riid.models.metrics import precision_recall_curve
 from riid.models.neural_nets import MLPClassifier
 from riid.visualize import plot_precision_recall
-from sklearn.metrics import f1_score
 
 seeds_ss = get_dummy_sampleset(as_seeds=True)
 # Separate foreground seeds from background seeds
 seeds_ss.clip_negatives()
-seeds_ss.to_pmf()
+seeds_ss.normalize()
 seeds_labels = seeds_ss.get_labels()
 fg_seeds_ss = seeds_ss[seeds_labels != BACKGROUND_LABEL]
 fg_seeds_ss.sources.drop(BACKGROUND_LABEL, axis=1, level="Category", inplace=True)
