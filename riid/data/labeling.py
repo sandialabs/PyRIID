@@ -196,7 +196,7 @@ def _find_category(isotope: str):
         return categories[0][0]
 
 
-def label_to_index_element(label_val: str, label_level="Isotope", verbose=True) -> tuple:
+def label_to_index_element(label_val: str, label_level="Isotope", verbose=False) -> tuple:
     """Tries to map a label to a tuple for use in DataFrame MultiIndex columns.
 
     Depending on the level of the label value, you will get different tuple:

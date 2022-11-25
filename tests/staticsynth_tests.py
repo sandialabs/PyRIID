@@ -6,6 +6,7 @@ import unittest
 
 import numpy as np
 import pandas as pd
+
 from riid.data.synthetic.static import (InvalidSeedError, get_dummy_sampleset,
                                         get_expected_spectra,
                                         get_merged_sources_samplewise,

@@ -6,6 +6,7 @@ import os
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Tuple, Union
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -378,9 +379,22 @@ class SeedMixer():
             columns=seeds_ss.info.columns
         )
 
-        for ecal_column in seeds_ss.ECAL_INFO_COLUMNS:
-            mixture_ss.info.loc[:, ecal_column] = seeds_ss.info[ecal_column][0]
-        mixture_ss.info.loc[:, 'tag'] = seeds_ss.info['tag'][0]
+        with warnings.catch_warnings():
+            # Setting values in-place is fine, ignore the warning in Pandas >= 1.5.0
+            # This can be removed, if Pandas 1.5.0 does not need to be supported any longer.
+            # See also: https://stackoverflow.com/q/74057367/859591
+            warnings.filterwarnings(
+                "ignore",
+                category=FutureWarning,
+                message=(
+                    ".*will attempt to set the values inplace instead "
+                    "of always setting a new array. "
+                    "To retain the old behavior, use either.*"
+                ),
+            )
+            for ecal_column in seeds_ss.ECAL_INFO_COLUMNS:
+                mixture_ss.info.loc[:, ecal_column] = seeds_ss.info[ecal_column][0]
+            mixture_ss.info.loc[:, 'tag'] = seeds_ss.info['tag'][0]
 
         # TODO: fill in rest of columns
         # description, timestamp, live_time, real_time, snr_target, snr_estimate, sigma, bg_counts,

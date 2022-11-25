@@ -91,13 +91,13 @@ class TestBayes(unittest.TestCase):
         bg_seed_ss = seeds_ss[labels == BACKGROUND_LABEL]
         pb_model = PoissonBayes(fg_seeds_ss)
 
-        gss = StaticSynthesizer(
+        static_syn = StaticSynthesizer(
             samples_per_seed=1,
             live_time_function_args=(4, 4),
             snr_function_args=(1, 1),
             random_state=42
         )
-        _, _, test_gross_ss = gss.generate(fg_seeds_ss, bg_seed_ss)
+        _, _, test_gross_ss = static_syn.generate(fg_seeds_ss, bg_seed_ss, verbose=False)
         pb_model.predict_old(test_gross_ss, bg_seed_ss)
         test_gross_ss.sources.drop(BACKGROUND_LABEL, axis=1, level="Category", inplace=True)
         truths = test_gross_ss.get_labels()

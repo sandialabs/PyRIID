@@ -33,15 +33,17 @@ class TestSeedMixer(unittest.TestCase):
 
     def test_mixture_combinations(self):
         # check that each mixture contains unique isotopes and the correct mixture size
-        for each in self.two_mix_seeds_ss.get_source_contributions(target_level="Seed").values:
-            mix_sources = self.sources[np.nonzero(each)]
-            self.assertEqual(np.unique(mix_sources, return_counts=True)[1].max(), 1)
-            self.assertEqual(np.count_nonzero(each), 2)
+        two_mix_isotopes = [
+            x.split(" + ")
+            for x in self.two_mix_seeds_ss.get_labels(target_level="Isotope", max_only=False)
+        ]
+        self.assertTrue(all([len(set(x)) == 2 for x in two_mix_isotopes]))
 
-        for each in self.three_mix_seeds_ss.get_source_contributions(target_level="Seed").values:
-            mix_sources = self.sources[np.nonzero(each)]
-            self.assertEqual(np.unique(mix_sources, return_counts=True)[1].max(), 1)
-            self.assertEqual(np.count_nonzero(each), 3)
+        three_mix_isotopes = [
+            x.split(" + ")
+            for x in self.three_mix_seeds_ss.get_labels(target_level="Isotope", max_only=False)
+        ]
+        self.assertTrue(all([len(set(x)) == 3 for x in three_mix_isotopes]))
 
     def test_mixture_ratios(self):
         # cehck for valid probability distribution and minimum contribution amount
@@ -93,7 +95,6 @@ class TestSeedMixer(unittest.TestCase):
             for idx, ratio in enumerate(source_ratios):
                 test_recon_spectra[row, :] += self.ss.spectra.loc[source_inds[idx], :]*ratio
 
-        print('testing')
         self.assertTrue(np.allclose(recon_spectra, test_recon_spectra))
 
 

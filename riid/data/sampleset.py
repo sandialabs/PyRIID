@@ -660,7 +660,7 @@ class SampleSet():
             An ndarray containing the source contributions for each sample (i.e., ground truth).
 
         """
-        return self.sources.sum(level=target_level, axis=1)
+        return self.sources.groupby(axis=1, level=target_level).sum()
 
     def normalize(self, p: float = 1, clip_negatives: bool = True):
         """Normalizes spectra by L-p normalization.
@@ -733,7 +733,7 @@ class SampleSet():
         random_mask = np.isin(self.spectra.index, random_indices)
         return self[random_mask]
 
-    def to_hdf(self, path: str, verbose=1):
+    def to_hdf(self, path: str, verbose=False):
         """Writes the sampleset to disk as a HDF file at the given path.
 
         Args:
@@ -747,7 +747,7 @@ class SampleSet():
         if verbose:
             logging.info(f"Saved SampleSet to '{path}'")
 
-    def to_pcf(self, path: str, verbose=1):
+    def to_pcf(self, path: str, verbose=False):
         """Writes the sampleset to disk as a PCF at the given path.
 
         Args:
@@ -827,7 +827,7 @@ def read_pcf(path: str, verbose: bool = False) -> SampleSet:
     Raises:
         None.
     """
-    return _pcf_dict_to_ss(_pcf_to_dict(path, verbose))
+    return _pcf_dict_to_ss(_pcf_to_dict(path, verbose), verbose)
 
 
 def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: bool = True,
@@ -857,10 +857,10 @@ def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: b
     """
     if max_only:
         if level_aggregation == "sum":
-            values = df.sum(level=target_level, axis=1)
+            values = df.groupby(axis=1, level=target_level).sum()
             labels = values.idxmax(axis=1)
         elif level_aggregation == "mean":
-            values = df.mean(level=target_level, axis=1)
+            values = df.groupby(axis=1, level=target_level).mean()
             labels = values.idxmax(axis=1)
         else:
             values = df
@@ -873,9 +873,9 @@ def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: b
             labels = [f"{x} ({y:.2f})" for x, y in zip(labels, values)]
     else:  # Much slower
         if level_aggregation == "sum":
-            values = df.sum(level=target_level, axis=1)
+            values = df.groupby(axis=1, level=target_level).sum()
         elif level_aggregation == "mean":
-            values = df.mean(level=target_level, axis=1)
+            values = df.groupby(axis=1, level=target_level).mean()
         else:
             values = df
         mask = values.ge(min_value).values
@@ -1037,7 +1037,7 @@ def _ss_to_pcf_dict(ss: SampleSet):
 
     spectra = []
 
-    isotopes, seeds = pd.Series(), pd.Series()
+    isotopes, seeds = pd.Series([], dtype=pd.StringDtype()), pd.Series([], dtype=pd.StringDtype())
     if not ss.sources.empty:
         isotope_level_name = SampleSet.SOURCES_MULTI_INDEX_NAMES[1]
         seed_level_names = SampleSet.SOURCES_MULTI_INDEX_NAMES[2]
@@ -1073,11 +1073,12 @@ def _ss_to_pcf_dict(ss: SampleSet):
     return {"header": pcf_header, "spectra": spectra}
 
 
-def _pcf_dict_to_ss(pcf_dict: dict):
+def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
     """Converts pcf dictionary into a SampleSet.
 
     Args:
         pcf_dict: Defines the dictionary of pcf values.
+        verbose: Whether to display output from attempting the conversion.
 
     Returns:
         A Sampleset object containing the pcf dict values.
@@ -1107,10 +1108,10 @@ def _pcf_dict_to_ss(pcf_dict: dict):
             category = NO_CATEGORY
         else:
             if not title:
-                title = _find_isotope(source)
+                title = _find_isotope(source, verbose)
             elif not source:
                 source = title
-                title = _find_isotope(source)
+                title = _find_isotope(source, verbose)
             category = _find_category(title)
 
         # Extract any additional information from the source string
