@@ -5,8 +5,7 @@
     "type": "object",
     "required": [
         "gamma_detector",
-        "foregrounds",
-        "backgrounds"
+        "sources"
     ],
     "properties": {
         "gamma_detector": {
@@ -30,7 +29,7 @@
                             "description": "Detector height off ground, in centimeters",
                             "type": "number"
                         },
-                        "dead_time_per_pulse_us": {
+                        "dead_time_per_pulse": {
                             "description": "Detector dead time, in microseconds",
                             "type": "number"
                         },
@@ -58,88 +57,14 @@
                 }
             },
             "required": [
-                "name"
+                "name",
+                "parameters"
             ]
         },
         "sources": {
-            "title": "Foreground Sources",
-            "description": "The list of non-background sources to obtain via inject(s).",
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string"
-                    },
-                    "activity_uci": {
-                        "type": "integer"
-                    },
-                    "configurations": {
-                        "type:": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "an": {
-                                    "type": "integer"
-                                },
-                                "ad": {
-                                    "type": "number"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "backgrounds": {
-            "title": "Foreground Sources",
-            "description": "The list of background sources to obtain via inject(s).",
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "include_cosmic": {
-                        "type": "boolean"
-                    },
-                    "include_terrestrial": {
-                        "type": "boolean"
-                    },
-                    "K40_percent": {
-                        "type": "number"
-                    },
-                    "U_ppm": {
-                        "type": "number"
-                    },
-                    "Th232_ppm": {
-                        "type": "number"
-                    },
-                    "attenuation": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 16
-                    },
-                    "low_energy_continuum": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 16
-                    },
-                    "high_energy_continuum": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 16
-                    },
-                    "suppression_scalar": {
-                        "type": "number"
-                    }
-                },
-                "required": [
-                    "cosmic",
-                    "terrestrial",
-                    "K40_percent",
-                    "U_ppm",
-                    "Th232_ppm"
-                ]
-            }
+            "title": "Sources",
+            "description": "The list of sources to obtain via inject(s).",
+            "type": "array"
         }
     },
     "$defs": {

@@ -3,21 +3,20 @@
 # the U.S. Government retains certain rights in this software.
 """This modules contains utilities for generating synthetic gamma spectrum templates from GADRAS."""
 import os
+import warnings
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Tuple, Union
-import warnings
 
 import numpy as np
 import pandas as pd
 import yaml
 
 from riid.data import SampleSet
-from riid.data.labeling import BACKGROUND_LABEL, label_to_index_element
+from riid.data.labeling import BACKGROUND_LABEL
 from riid.data.sampleset import read_pcf
 from riid.gadras.api import (DETECTOR_PARAMS, GADRAS_ASSEMBLY_PATH,
-                             INJECT_PARAMS, BackgroundInjector, SourceInjector,
-                             get_counts_per_bg_source_unit, get_gadras_api,
+                             INJECT_PARAMS, SourceInjector, get_gadras_api,
                              validate_inject_config)
 
 
@@ -36,35 +35,6 @@ class SeedSynthesizer():
             yield
         finally:
             os.chdir(oldpwd)
-
-    def _get_kut_and_cosmic_sources(self, k_pct, u_ppm, t_ppm, cosmic, counts,
-                                    k_counts_per_pct, u_counts_per_ppm, t_counts_per_ppm,
-                                    cosmic_counts):
-        """Assumes a live time of 1 second.
-        """
-        terrestrial_counts = counts - cosmic_counts if cosmic else counts
-
-        expected_k_counts = k_counts_per_pct * k_pct
-        expected_u_counts = u_counts_per_ppm * u_ppm
-        expected_t_counts = t_counts_per_ppm * t_ppm
-        expected_counts = expected_k_counts + expected_u_counts + expected_t_counts
-        expected_k_ratio = expected_k_counts / expected_counts
-        expected_u_ratio = expected_u_counts / expected_counts
-        expected_t_ratio = expected_t_counts / expected_counts
-
-        # rescaling
-        actual_k_counts = round(expected_k_ratio * terrestrial_counts)
-        actual_u_counts = round(expected_u_ratio * terrestrial_counts)
-        actual_t_counts = round(expected_t_ratio * terrestrial_counts)
-
-        sources = {
-            "K40": actual_k_counts,
-            "Ra226": actual_u_counts,
-            "Th232": actual_t_counts,
-            "Cosmic": cosmic_counts if cosmic else 0,
-        }
-
-        return sources
 
     def _get_detector_parameters(self, gadras_api) -> dict:
         params = {}
@@ -134,13 +104,10 @@ class SeedSynthesizer():
             original_detector_parameters = self._get_detector_parameters(gadras_api)
             now = datetime.utcnow().isoformat().replace(":", "_")
 
-            rel_fg_output_path = f"{now}_fg.pcf"
-            rel_bg_output_path = f"{now}_bg.pcf"
-            fg_list = []
-            bg_list = []
+            rel_output_path = f"{now}_sources.pcf"
+            source_list = []
             detector_setups = [new_detector_parameters]  # TODO: generate all detector_setups
             source_injector = SourceInjector(gadras_api)
-            background_injector = BackgroundInjector(gadras_api)
             try:
                 for d in detector_setups:
                     self._set_detector_parameters(gadras_api, d, verbose, dry_run)
@@ -153,63 +120,16 @@ class SeedSynthesizer():
                     # Source injects
                     if verbose:
                         print('Obtaining sources...')
-                    fg_pcf_abs_path = source_injector.generate(
+                    pcf_abs_path = source_injector.generate(
                         config,
-                        rel_fg_output_path,
+                        rel_output_path,
                         verbose=verbose
                     )
-                    fg_seeds_ss = read_pcf(fg_pcf_abs_path)
-                    fg_seeds_ss.normalize()
+                    seeds_ss = read_pcf(pcf_abs_path)
+                    seeds_ss.normalize()
                     if normalize_sources:
-                        fg_seeds_ss.normalize_sources()
-                    fg_list.append(fg_seeds_ss)
-
-                    # Background injects
-                    if verbose:
-                        print('Obtaining backgrounds...')
-                    bg_pcf_abs_path = background_injector.generate(
-                        config,
-                        rel_bg_output_path,
-                        verbose=verbose
-                    )
-                    bg_seeds_ss = read_pcf(bg_pcf_abs_path)
-
-                    # Calculate ground truth for backgrounds
-                    worker = gadras_api.GetBatchInjectWorker()
-                    bg_counts_params = (gadras_api, new_detector_parameters, worker)
-                    k_counts_per_pct = get_counts_per_bg_source_unit(*bg_counts_params, "K")
-                    u_counts_per_ppm = get_counts_per_bg_source_unit(*bg_counts_params, "U")
-                    t_counts_per_ppm = get_counts_per_bg_source_unit(*bg_counts_params, "T")
-                    cosmic_counts = get_counts_per_bg_source_unit(*bg_counts_params, "Cosmic")
-                    sources = []
-                    for i in range(bg_seeds_ss.n_samples):
-                        i_counts = round(bg_seeds_ss.spectra.iloc[i].sum())
-                        i_bg_config = config["backgrounds"][i]
-                        i_sources = self._get_kut_and_cosmic_sources(
-                            i_bg_config["K40_percent"],
-                            i_bg_config["U_ppm"],
-                            i_bg_config["Th232_ppm"],
-                            i_bg_config["cosmic"],
-                            i_counts,
-                            k_counts_per_pct,
-                            u_counts_per_ppm,
-                            t_counts_per_ppm,
-                            cosmic_counts
-                        )
-                        sources.append(i_sources)
-                    bg_sources_df = pd.DataFrame(sources)
-                    bg_sources_df.columns = pd.MultiIndex.from_tuples(
-                        [label_to_index_element(x, label_level="Seed")
-                         for x in bg_sources_df.columns],
-                        names=SampleSet.SOURCES_MULTI_INDEX_NAMES
-                    )
-                    bg_seeds_ss.sources = bg_sources_df
-
-                    bg_seeds_ss.normalize()
-                    if normalize_sources:
-                        bg_seeds_ss.normalize_sources()
-
-                    bg_list.append(bg_seeds_ss)
+                        seeds_ss.normalize_sources()
+                    source_list.append(seeds_ss)
 
                 if dry_run:
                     return None
@@ -224,14 +144,11 @@ class SeedSynthesizer():
             if not dry_run:
                 self._set_detector_parameters(gadras_api, original_detector_parameters)
 
-        all_fg_seeds_ss = SampleSet()
-        all_fg_seeds_ss.concat(fg_list)
-        all_fg_seeds_ss.detector_info = config["gamma_detector"]
-        all_bg_seeds_ss = SampleSet()
-        all_bg_seeds_ss.concat(bg_list)
-        all_fg_seeds_ss.detector_info = config["gamma_detector"]
+        ss = SampleSet()
+        ss.concat(source_list)
+        ss.detector_info = config["gamma_detector"]
 
-        return all_fg_seeds_ss, all_bg_seeds_ss
+        return ss
 
 
 class SeedMixer():

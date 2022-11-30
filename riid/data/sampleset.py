@@ -13,7 +13,7 @@ import re
 import warnings
 from datetime import datetime
 from enum import Enum
-from typing import Union
+from typing import Iterable, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -74,6 +74,12 @@ class SampleSet():
         "occupancy_flag",
         "tag",
     )
+    DEFAULT_BG_SEED_NAMES = (
+        "Cosmic",
+        "PotassiumInSoil",
+        "UraniumInSoil",
+        "ThoriumInSoil",
+    )
 
     def __init__(self):
         """Initializes the SampleSet class and provides default values
@@ -124,7 +130,7 @@ class SampleSet():
             f"- Spectrum channels:    {self.n_channels}\n"
             f"- Detector:             {self.detector_info if self.detector_info else 'Unknown'}\n"
             f"- Predictions present?  {'No' if self.prediction_probas.empty else 'Yes'}\n"
-            f"- Isotopes present:     {isotopes_present}\n"
+            f"- Sources present:      {isotopes_present}\n"
             f"- PyRIID version:       {self.pyriid_version if self.pyriid_version else 'Unknown'}"
         )
 
@@ -712,7 +718,7 @@ class SampleSet():
         self._sources.replace(np.nan, replace_value)
         self._info.replace(np.nan, replace_value)
 
-    def sample(self, n_samples: int, random_seed: int = None):
+    def sample(self, n_samples: int, random_seed: int = None) -> SampleSet:
         """Randomly samples the SampleSet.
 
         Args:
@@ -732,6 +738,31 @@ class SampleSet():
         random_indices = random.sample(self.spectra.index.values.tolist(), n_samples)
         random_mask = np.isin(self.spectra.index, random_indices)
         return self[random_mask]
+
+    def split_fg_and_bg(self, bg_seed_names: Iterable = DEFAULT_BG_SEED_NAMES) \
+            -> Tuple[SampleSet, SampleSet]:
+        """Splits the current SampleSet into two new SampleSets, one containing only foreground
+        sources and the other containing only background sources.
+
+        Foreground sources are assumed to be anything that is not designated as a background source.
+
+        Args:
+            bg_seeds_names: the names of the seeds which are considered background sources.
+                This list be customized to also extract atypical background sources such as
+                calibration sources.
+
+        Returns:
+            Two SampleSets, the first containing only foregrounds and the second only
+            containing backgrounds.
+
+        """
+        seed_labels = self.get_labels(target_level="Seed")
+        bg_indices = seed_labels.isin(bg_seed_names)
+
+        fg_seeds_ss = self[~bg_indices]
+        bg_seeds_ss = self[bg_indices]
+
+        return fg_seeds_ss, bg_seeds_ss
 
     def to_hdf(self, path: str, verbose=False):
         """Writes the sampleset to disk as a HDF file at the given path.
