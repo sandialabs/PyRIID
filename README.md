@@ -32,7 +32,7 @@ pip install -e ".[dev]"
 
 ## Examples
 
-Check out the `./examples` folder for numerous examples on how to use this package.
+Examples have been moved to a dedicated repo [here](https://github.com/sandialabs/PyRIID-Examples).
 
 ## Tests
 

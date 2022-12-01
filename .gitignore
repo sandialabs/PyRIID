@@ -1,7 +1,4 @@
 # Project-specific
-generated/
-g_data/
-g_imgs/
 *.zip
 *.p
 *.png
