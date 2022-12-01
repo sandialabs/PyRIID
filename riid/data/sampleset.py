@@ -543,6 +543,14 @@ class SampleSet():
                 self._spectra.values,
                 transformation.T))
 
+    def drop_sources_columns_with_all_zeros(self):
+        """Removes columns from the sources DataFrame that contain only zeros.
+
+            Modifications are made in-place.
+
+        """
+        self.sources = self.sources.loc[:, (self.sources != 0).any(axis=0)]
+
     def extend(self, spectra: Union[dict, list, np.array, pd.DataFrame],
                sources: pd.DataFrame, info: Union[list, pd.DataFrame]):
         """Extends the current SampleSet with the given data.
@@ -757,10 +765,12 @@ class SampleSet():
 
         """
         seed_labels = self.get_labels(target_level="Seed")
-        bg_indices = seed_labels.isin(bg_seed_names)
+        bg_mask = seed_labels.isin(bg_seed_names)
 
-        fg_seeds_ss = self[~bg_indices]
-        bg_seeds_ss = self[bg_indices]
+        fg_seeds_ss = self[~bg_mask]
+        fg_seeds_ss.drop_sources_columns_with_all_zeros()
+        bg_seeds_ss = self[bg_mask]
+        bg_seeds_ss.drop_sources_columns_with_all_zeros()
 
         return fg_seeds_ss, bg_seeds_ss
 
