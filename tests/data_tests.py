@@ -7,9 +7,9 @@ import tempfile
 import unittest
 
 from riid import SAMPLESET_FILE_EXTENSION
-from riid.data.labeling import BACKGROUND_LABEL, label_to_index_element
+from riid.data.labeling import label_to_index_element
 from riid.data.sampleset import SampleSet, _write_hdf, read_hdf
-from riid.data.synthetic.static import get_dummy_sampleset
+from riid.data.synthetic.static import get_dummy_seeds
 
 
 class TestData(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestData(unittest.TestCase):
     def test_to_hdf_and_read_hdf(self):
         """Tests loading of SampleSets saved in hdf format."""
         file_path = self._get_temp_ss_path()
-        sampleset = get_dummy_sampleset()
+        sampleset = get_dummy_seeds()
         _write_hdf(sampleset, file_path)
         sampleset_out = read_hdf(file_path)
         compare_samplesets(self, sampleset, sampleset_out)
@@ -35,7 +35,6 @@ class TestData(unittest.TestCase):
 
     def test_label_to_index_element(self):
         RAD_SOURCES = {
-            BACKGROUND_LABEL: (BACKGROUND_LABEL, BACKGROUND_LABEL),
             "K40,100uC": ("K40", "NORM"),
             "K40inCargo1": ("K40", "NORM"),
             "K40inCargo2": ("K40", "NORM"),

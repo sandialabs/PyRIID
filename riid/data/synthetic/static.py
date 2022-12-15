@@ -12,7 +12,6 @@ import numpy as np
 import pandas as pd
 
 from riid.data import SampleSet
-from riid.data.labeling import BACKGROUND_LABEL
 from riid.data.sampleset import SpectraState
 
 
@@ -342,14 +341,15 @@ class StaticSynthesizer():
             "contain all zeroes.")
 
     def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet,
-                 normalize_sources=True, verbose=True) -> Tuple[SampleSet, SampleSet, SampleSet]:
+                 normalize_sources: bool = True,
+                 verbose: bool = True) -> Tuple[SampleSet, SampleSet, SampleSet]:
         """Generate a sample set of gamma spectra from the given config.
 
         Args:
             fg_seeds_ss: Contains spectra normalized by total counts to be used
                 as the foreground (source only) component of spectra.
             bg_seeds_ss: Contains spectra normalized by total counts to be used
-                as the background component of gross spectra.
+                as the background components of gross spectra.
             normalize_sources: Whether to divide each row of the SampleSet's sources
                 DataFrame by its sum. Defaults to True.
             verbose: Whether to display output from synthesis.
@@ -430,20 +430,14 @@ def get_distribution_values(function: str, function_args: Any, n_values: int):
     return value
 
 
-def get_dummy_sampleset(n_channels: int = 512, as_seeds: bool = False,
-                        live_time: int = 60, fg_rate: int = 300,
-                        bg_rate: int = 300) -> SampleSet:
+def get_dummy_seeds(n_channels: int = 512, live_time: float = 1,
+                    count_rate: float = 100) -> SampleSet:
     """Builds a random, dummy SampleSet for demonstration or test purposes.
 
     Args:
         n_channels: the number of channels in the spectra DataFrame.
-        as_seeds: whether or not the SampleSet should be a seed file.
-            When True, the samples will be all be pure foregrounds
-            and one pure background.  When False, the samples will all
-            be gross measurements.
         live_time: the collection time for all measurements.
-        fg_rate: the count rate for foreground measurements.
-        bg_rate: the count rate for background measurements.
+        count_rate: the count rate for the seeds measurements.
 
     Returns:
         A SampleSet with randomly generated spectra
@@ -456,20 +450,17 @@ def get_dummy_sampleset(n_channels: int = 512, as_seeds: bool = False,
     sources = [
         ("Industrial",  "Am241",    "Unshielded Am241"),
         ("Industrial",  "Ba133",    "Unshielded Ba133"),
-        ("NORM",        "K40",      "Unshielded K40"),
+        ("NORM",        "K40",      "PotassiumInSoil"),
         ("NORM",        "K40",      "Moderately Shielded K40"),
-        ("NORM",        "Ra226",    "Unshielded Ra226"),
-        ("NORM",        "Th232",    "Unshielded Th232"),
-        ("NORM",        "U238",     "Unshielded U238"),
+        ("NORM",        "Ra226",    "UraniumInSoil"),
+        ("NORM",        "Th232",    "ThoriumInSoil"),
+        ("SNM",         "U238",     "Unshielded U238"),
         ("SNM",         "Pu239",    "Unshielded Pu239"),
         ("SNM",         "Pu239",    "Moderately Shielded Pu239"),
         ("SNM",         "Pu239",    "Heavily Shielded Pu239"),
     ]
     n_sources = len(sources)
     n_fg_sources = n_sources
-    if as_seeds:
-        sources.append((BACKGROUND_LABEL, BACKGROUND_LABEL, "k40=8%,U=8ppm,Th232=8ppm+cosmic"))
-        n_sources += 1
     sources_index = pd.MultiIndex.from_tuples(
         sources,
         names=SampleSet.SOURCES_MULTI_INDEX_NAMES
@@ -478,37 +469,29 @@ def get_dummy_sampleset(n_channels: int = 512, as_seeds: bool = False,
     ss.sources = pd.DataFrame(data=sources_data, columns=sources_index)
 
     histograms = []
-    N_BG_COUNTS = bg_rate * live_time
-    bg_counts = np.random.uniform(0, n_channels, size=N_BG_COUNTS)
-    bg_histogram, _ = np.histogram(bg_counts, bins=n_channels, range=(0, n_channels))
-
-    N_FG_COUNTS = fg_rate * live_time
+    N_FG_COUNTS = int(count_rate * live_time)
     fg_std = np.sqrt(n_channels / n_sources)
     channels_per_sources = n_channels / n_fg_sources
     for i in range(n_fg_sources):
         mu = i * channels_per_sources + channels_per_sources / 2
         counts = np.random.normal(mu, fg_std, size=N_FG_COUNTS)
         fg_histogram, _ = np.histogram(counts, bins=n_channels, range=(0, n_channels))
-        histogram = fg_histogram
-        if not as_seeds:
-            histogram += bg_histogram
+        histogram = np.random.poisson(fg_histogram)
         histograms.append(histogram)
-    if as_seeds:
-        histograms.append(bg_histogram)
     histograms = np.array(histograms)
 
     ss.spectra = pd.DataFrame(data=histograms)
 
-    ss.info.bg_counts = N_BG_COUNTS
-    ss.info.bg_counts_expected = N_BG_COUNTS
+    ss.info.bg_counts = None
+    ss.info.bg_counts_expected = None
     ss.info.fg_counts = N_FG_COUNTS
     ss.info.fg_counts_expected = N_FG_COUNTS
     ss.info.gross_counts = ss.spectra.sum(axis=1)
     ss.info.gross_counts_expected = ss.info.gross_counts
     ss.info.live_time = live_time
     ss.info.real_time = live_time
-    ss.info.snr = N_FG_COUNTS / N_BG_COUNTS
-    ss.info.sigma = N_FG_COUNTS / np.sqrt(N_BG_COUNTS)
+    ss.info.snr = None
+    ss.info.sigma = None
     ss.info.ecal_order_0 = 0
     ss.info.ecal_order_1 = 3000
     ss.info.ecal_order_2 = 100
@@ -517,8 +500,7 @@ def get_dummy_sampleset(n_channels: int = 512, as_seeds: bool = False,
     ss.info.description = ""
     ss.update_timestamp()
 
-    if as_seeds:
-        ss.normalize()
+    ss.normalize()
 
     return ss
 

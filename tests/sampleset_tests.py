@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from riid.data.sampleset import SampleSet, _get_row_labels
-from riid.data.synthetic.static import get_dummy_sampleset
+from riid.data.synthetic.static import get_dummy_seeds
 
 
 class TestSampleSet(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestSampleSet(unittest.TestCase):
         """Tests conversion of spectra to energy bins."""
         import sys
         np.set_printoptions(threshold=sys.maxsize)
-        ss = get_dummy_sampleset(n_channels=1024)
+        ss = get_dummy_seeds(n_channels=1024)
         spectra = ss.spectra.values
 
         new_ss = ss.as_ecal(0, 3000, 100, 0, 0)
@@ -38,7 +38,7 @@ class TestSampleSet(unittest.TestCase):
 
     def test_as_squashed(self):
         """Tests that sampleset squashing sums data as expected."""
-        ss = get_dummy_sampleset()
+        ss = get_dummy_seeds()
         ss.info["snr_target"] = 0
         flat_ss = ss.as_squashed()
 
@@ -703,7 +703,7 @@ class TestSampleSet(unittest.TestCase):
         """
         import sys
         np.set_printoptions(threshold=sys.maxsize)
-        ss = get_dummy_sampleset(n_channels=1024)
+        ss = get_dummy_seeds(n_channels=1024)
         ss.normalize_sources()
 
         sources = ss.sources.values
