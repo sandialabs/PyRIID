@@ -3,17 +3,16 @@
 # the U.S. Government retains certain rights in this software.
 """This modules contains utilities for generating synthetic gamma spectrum templates from GADRAS."""
 import os
-import warnings
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Tuple, Union
+from typing import Iterator, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import yaml
 
 from riid.data import SampleSet
-from riid.data.labeling import BACKGROUND_LABEL
+from riid.data.labeling import label_to_index_element
 from riid.data.sampleset import read_pcf
 from riid.gadras.api import (DETECTOR_PARAMS, GADRAS_ASSEMBLY_PATH,
                              INJECT_PARAMS, SourceInjector, get_gadras_api,
@@ -152,170 +151,221 @@ class SeedSynthesizer():
 
 
 class SeedMixer():
-    def __init__(self, mixture_size: int = 2, min_source_contribution: float = 0.1):
+    def __init__(self, seeds_ss: SampleSet, mixture_size: int = 2, dirichlet_alpha: float = 2.0,
+                 restricted_isotope_pairs: list[tuple[str, str]] = []):
         assert mixture_size >= 2
-        assert min_source_contribution >= 0.1
-        assert mixture_size * min_source_contribution < 1.0
 
         self.mixture_size = mixture_size
-        self.min_source_contribution = min_source_contribution
+        self.dirichlet_alpha = dirichlet_alpha
+        self.seeds_ss = seeds_ss
+        self.restricted_isotope_pairs = restricted_isotope_pairs
 
-    def generate(self, seeds_ss: SampleSet, n_samples: int = 10000) -> SampleSet:
-        """Computes random mixtures of seeds across the isotope level.
+        self._check_seeds()
 
-            n_mixture = seed_1 * ratio_1 + seed_2 * ratio_2 + ... + seed_n * ratio_n
-                where:
-                - ratio_1 + ratio_2 + ... + ratio_n = 1
-                - sum(seed_i) = 1
-                - sum(n_mixture) = self.mixture_size
-                  (this is before re-normalizing, at which point it will sum to 1)
-
-            For 3 contributors:
-                running_contribution = 0.0
-                contribution1 = uniform(min_contribution, 1 - running_contribution
-                                - n_remaining_contributors * min_contribution)
-                              = uniform(0.1, 1 - 0.0 - 2 * 0.1)
-                              = uniform(0.1, 0.8)
-                              = 0.80
-                running_contribution += contribution1
-                contribution2 = uniform(0.1, 1 - running_contribution - 1 * 0.1)
-                              = uniform(0.1, 0.1)
-                              = 0.10
-                running_contribution += contribution2
-                contribution3 = 1 - running_contribution
-        """
-        if seeds_ss and not seeds_ss.all_spectra_sum_to_one():
+    def _check_seeds(self):
+        if self.seeds_ss and not self.seeds_ss.all_spectra_sum_to_one():
             raise ValueError("At least one provided seed does not sum close to 1.")
-
-        if not np.all(np.count_nonzero(seeds_ss.get_source_contributions().values, axis=1) == 1):
-            raise ValueError("At least one provided seed contains mixture of sources.")
-
-        for ecal_column in seeds_ss.ECAL_INFO_COLUMNS:
-            if not np.all(np.isclose(seeds_ss.info[ecal_column], seeds_ss.info[ecal_column][0])):
-                raise ValueError("At least one ecal value is different than the others.")
-
-        non_bg_seeds_ss = seeds_ss[seeds_ss.get_labels() != BACKGROUND_LABEL]
-        non_bg_seeds_ss.sources.drop(
-            BACKGROUND_LABEL,
-            axis=1,
-            level="Isotope",
-            inplace=True,
-            errors='ignore'
+        n_sources_per_row = np.count_nonzero(
+            self.seeds_ss.get_source_contributions().values,
+            axis=1
         )
-        isotopes = non_bg_seeds_ss.get_labels().values
-        n_sources = non_bg_seeds_ss.n_samples
-        unique_isotopes, indices = np.unique(isotopes, return_index=True)
-        n_isotopes = len(unique_isotopes)
+        if not np.all(n_sources_per_row == 1):
+            raise ValueError("At least one provided seed contains a mixture of sources.")
+        if np.any(np.count_nonzero(self.seeds_ss.get_source_contributions().values, axis=1) == 0):
+            raise ValueError("At least one provided seed contains no ground truth.")
+        for ecal_column in self.seeds_ss.ECAL_INFO_COLUMNS:
+            all_ecal_columns_close_to_one = np.all(np.isclose(
+                self.seeds_ss.info[ecal_column],
+                self.seeds_ss.info[ecal_column][0]
+            ))
+            if not all_ecal_columns_close_to_one:
+                raise ValueError((
+                    f"{ecal_column} is not consistent. "
+                    "All seeds must have the same energy calibration."
+                ))
 
-        # preserve original order of isotopes (np.unique() sorts them)
-        unique_isotopes = np.array([isotopes[i] for i in sorted(indices)])
-        cnts = np.array([np.count_nonzero(isotopes == isotope) for isotope in unique_isotopes])
+    def __call__(self, n_samples: int, max_batch_size: int = 100) -> Iterator[SampleSet]:
+        """Yields batches of seeds one at a time until a specified number of samples has
+            been reached.
 
-        isotope_inds = [np.arange(cnts[:idx].sum(), cnts[:idx+1].sum())
-                        for idx in range(n_isotopes)]
-        isotope_dict = dict(zip(unique_isotopes, isotope_inds))
-        mixture_inds = {i+1: [] for i in range(self.mixture_size)}
-        mixture_inds[1] = [(each,) for each in range(n_sources)]
+            Dirichlet intuition:
+                Higher alpha: values will converge on 1/N where N is mixture size
+                Lower alpha: values will converge on ~0 but there will be a single 1
 
-        # first generate mixture indices
-        for n in range(2, self.mixture_size+1):
-            for mix_idx in mixture_inds[n-1]:
-                # get first source index for next isotope after last isotope in the mixture
-                last_isotope = isotopes[mix_idx[-1]]
-                if last_isotope != unique_isotopes[-1]:
-                    next_source = np.where(unique_isotopes == last_isotope)[0].squeeze() + 1
-                    next_isotope = unique_isotopes[next_source]
-                    next_idx = isotope_dict[next_isotope][0]
+                Using `np.random.dirichlet` with too small of an alpha will result in nans
+                    (per https://github.com/rust-random/rand/pull/1209)
+                Using `numpy.random.Generator.dirichlet` instead avoids this.
 
-                    # generate next set of mixture indices
-                    mixtures = [(*mix_idx, each) for each in range(next_idx, n_sources)]
-                    mixture_inds[n].extend(mixtures)
+            TODO: seed-level restrictions
 
-        # generate sampling probability distribution to accomadate mixture balancing
-        # at isotope level
-        flat_mixture_inds = [item for sublist in mixture_inds[self.mixture_size]
-                             for item in sublist]
-        flat_mixture_sources = [isotopes[each] for each in flat_mixture_inds]
-        unique_isotopes_sorted, isotope_occurences = np.unique(flat_mixture_sources,
-                                                               return_counts=True)
-        isotope_weights = 1/isotope_occurences
-        isotope_weights_dict = dict(zip(unique_isotopes_sorted, isotope_weights))
+        Args:
+            n_samples: the total number of mixture seeds to produce across all batches
+            max_batch_size: the maxmimum size of a batch per yield
 
-        mixture_weights = np.zeros(len(mixture_inds[self.mixture_size]))
-        for idx, mixture in enumerate(mixture_inds[self.mixture_size]):
-            mixture_weights[idx] = sum([isotope_weights_dict[isotopes[ind]] for ind in mixture])
-        mixture_weights = mixture_weights/mixture_weights.sum()  # normalize to make pdf
+        Returns:
+            A generator of SampleSets
 
-        # randomly sample mixtures
-        random_seed_inds = np.random.choice(len(mixture_weights),
-                                            size=n_samples,
-                                            replace=True,
-                                            p=mixture_weights)
-        random_isotopes = list(sum([mixture_inds[self.mixture_size][each]
-                               for each in random_seed_inds], ()))
-        random_isotopes = [isotopes[each] for each in random_isotopes]
+        """
+        self._check_seeds()
 
-        mixture_seeds = np.zeros((n_samples, seeds_ss.n_channels))
-        source_matrix = np.zeros((n_samples, n_sources))
-
-        # create mixture seeds
-        for idx, random_mixture_ind in enumerate(random_seed_inds):
-            # randomly sample probability distribution
-            ratios = [0.0 for i in range(self.mixture_size)]
-            for ratio_idx in range(self.mixture_size - 1):
-                ratios[ratio_idx] = np.random.uniform(self.min_source_contribution,
-                                                      1 - sum(ratios) -
-                                                      (self.mixture_size - ratio_idx + 1) *
-                                                      self.min_source_contribution)
-            ratios[-1] = 1.0 - sum(ratios)
-
-            # generate mixture data
-            mixture = mixture_inds[self.mixture_size][random_mixture_ind]
-            source_contributions = np.zeros(n_sources)
-            for ratio_idx, spectra_idx in enumerate(mixture):
-                source_contribution = seeds_ss.spectra.values[spectra_idx, :]\
-                    * ratios[ratio_idx]
-                mixture_seeds[idx, :] += source_contribution
-                source_contributions[spectra_idx] = ratios[ratio_idx]
-            source_matrix[idx, :] = source_contributions
-
-        source_matrix = np.array(source_matrix)
-
-        mixture_ss = SampleSet()
-        mixture_ss.spectra = pd.DataFrame(
-            mixture_seeds
-        )
-        mixture_ss.sources = pd.DataFrame(
-            source_matrix,
-            columns=non_bg_seeds_ss.sources.columns
+        isotope_to_seeds = self.seeds_ss.sources_columns_to_dict(target_level="Isotope")
+        isotopes = list(isotope_to_seeds.keys())
+        seeds = list(isotope_to_seeds.values())  # not necessarily distinct
+        seeds = [item for sublist in seeds for item in sublist]
+        n_seeds = len(seeds)
+        n_distinct_seeds = len(set(seeds))
+        if n_distinct_seeds != n_seeds:
+            raise ValueError("Seed names must be unique.")
+        isotope_probas = list([len(isotope_to_seeds[i]) / n_seeds for i in isotopes])
+        spectra_row_labels = self.seeds_ss.get_labels(target_level="Seed")
+        restricted_isotope_bidict = bidict({k: v for k, v in self.restricted_isotope_pairs})
+        seed_cols = self.seeds_ss.sources.columns.get_level_values('Seed')
+        batch_info = pd.DataFrame(
+            [self.seeds_ss.info.iloc[0].values] * 5,
+            columns=self.seeds_ss.info.columns
         )
 
-        # populate SampleSet info
-        mixture_ss.info = pd.DataFrame(
-            np.full((mixture_ss.spectra.shape[0], seeds_ss.info.shape[1]), None),
-            columns=seeds_ss.info.columns
-        )
-
-        with warnings.catch_warnings():
-            # Setting values in-place is fine, ignore the warning in Pandas >= 1.5.0
-            # This can be removed, if Pandas 1.5.0 does not need to be supported any longer.
-            # See also: https://stackoverflow.com/q/74057367/859591
-            warnings.filterwarnings(
-                "ignore",
-                category=FutureWarning,
-                message=(
-                    ".*will attempt to set the values inplace instead "
-                    "of always setting a new array. "
-                    "To retain the old behavior, use either.*"
-                ),
+        n_samples_produced = 0
+        while n_samples_produced < n_samples:
+            batch_size = n_samples - n_samples_produced
+            if batch_size > max_batch_size:
+                batch_size = max_batch_size
+            # Make batch
+            isotope_choices = [
+                get_choices(
+                    [],
+                    isotopes.copy(),
+                    np.array(isotope_probas.copy()),
+                    restricted_isotope_bidict,
+                    self.mixture_size
+                )
+                for _ in range(batch_size)
+            ]
+            seed_choices = [
+                [np.random.choice(isotope_to_seeds[i]) for i in c]
+                for c in isotope_choices
+            ]
+            seed_ratios = np.random.default_rng().dirichlet(
+                alpha=[self.dirichlet_alpha] * self.mixture_size,
+                size=batch_size
             )
-            for ecal_column in seeds_ss.ECAL_INFO_COLUMNS:
-                mixture_ss.info.loc[:, ecal_column] = seeds_ss.info[ecal_column][0]
-            mixture_ss.info.loc[:, 'tag'] = seeds_ss.info['tag'][0]
+            spectra_mask = np.array([spectra_row_labels.isin(c) for c in seed_choices])
 
-        # TODO: fill in rest of columns
-        # description, timestamp, live_time, real_time, snr_target, snr_estimate, sigma, bg_counts,
-        # fg_counts, bg_counts_expected, fg_counts_expected, total_counts, total_neutron_counts,
-        # distance_cm, area_density, atomic_number
+            # Compute the spectra
+            spectra = np.array([
+                (seed_ratios[i] * self.seeds_ss.spectra.values[m].T).sum(axis=1)
+                for i, m in enumerate(spectra_mask)
+            ])
 
-        return mixture_ss
+            # Build SampleSet
+            batch_ss = SampleSet()
+            batch_ss.detector_info = self.seeds_ss.detector_info
+            batch_ss.spectra = pd.DataFrame(spectra)
+            batch_ss.info = batch_info
+            #   Sources
+            batch_sources_dfs = []
+            for r, s in zip(seed_ratios, seed_choices):
+                seed_cols = pd.MultiIndex.from_tuples(
+                    [label_to_index_element(x, label_level="Seed") for x in s],
+                    names=SampleSet.SOURCES_MULTI_INDEX_NAMES,
+                )
+                sources_df = pd.DataFrame([r], columns=seed_cols)
+                batch_sources_dfs.append(sources_df)
+            batch_ss.sources = pd.concat(
+                [pd.DataFrame([], columns=self.seeds_ss.sources.columns)] + batch_sources_dfs
+            ).fillna(0.0)
+
+            n_samples_produced += batch_size
+
+            yield batch_ss
+
+    def generate(self, n_samples: int, max_batch_size: int = 100) -> SampleSet:
+        """Computes random mixtures of seeds at the isotope level.
+        """
+        batches = []
+        for batch_ss in self(n_samples, max_batch_size=max_batch_size):
+            batches.append(batch_ss)
+        mixtures_ss = SampleSet()
+        mixtures_ss.concat(batches)
+
+        return mixtures_ss
+
+
+class bidict(dict):
+    """Bi-directional hash table to perform efficient reverse lookups.
+
+        Source: https://stackoverflow.com/a/21894086
+    """
+    def __init__(self, *args, **kwargs):
+        super(bidict, self).__init__(*args, **kwargs)
+        self.inverse = {}
+        for key, value in self.items():
+            self.inverse.setdefault(value, []).append(key)
+
+    def __setitem__(self, key, value):
+        if key in self:
+            self.inverse[self[key]].remove(key)
+        super(bidict, self).__setitem__(key, value)
+        self.inverse.setdefault(value, []).append(key)
+
+    def __delitem__(self, key):
+        self.inverse.setdefault(self[key], []).remove(key)
+        if self[key] in self.inverse and not self.inverse[self[key]]:
+            del self.inverse[self[key]]
+        super(bidict, self).__delitem__(key)
+
+
+def get_choices(choices_so_far: list, options: list, options_probas: np.array,
+                restricted_pairs: bidict, n_choices_remaining: int):
+    """Makes a random choice from the given options until the desired number of choices
+        is reached.
+
+        After a choice is made, future options are adjusted as follows:
+        - The current choice itself is excluded
+        - If the current choice is not allowed to co-exist with other options,
+          those options are also exclude
+
+    Args:
+        choices_so_far: the list being build up over time with random choices from `options`
+        options: the list being reduced over time as choices and restricted choices are removed
+        options_probas: the probability assigned to each option
+        restricted_pairs: a bi-directional hash table allowing us to quickly find restrictions
+            regardless of the order in which the pair has been specified
+        n_choices_remaining: the number of choices remaining
+
+    Raises:
+        ValueError: if the number of choices desired exceeds the number of options available
+
+    """
+    if n_choices_remaining == 0:
+        return choices_so_far
+    elif len(options) < n_choices_remaining:
+        raise ValueError("There are not enough options to achieve the specified number of choices.")
+
+    choice = np.random.choice(a=options, replace=False, p=options_probas)
+    choices_so_far.append(choice)
+
+    # Remove current choice from future options
+    choice_index = options.index(choice)
+    del options[choice_index]
+    options_probas = np.delete(options_probas, choice_index)
+
+    # If the current choice places restrictions on future options, then get those out too
+    restricted_choices = []
+    if choice in restricted_pairs:
+        restricted_choices = [restricted_pairs[choice]]
+    elif choice in restricted_pairs.inverse:
+        restricted_choices = restricted_pairs.inverse[choice]
+
+    relevant_restrictions = [rc for rc in restricted_choices if rc in options]
+    for rc in relevant_restrictions:
+        restricted_choice_index = options.index(rc)
+        del options[restricted_choice_index]
+        options_probas = np.delete(options_probas, restricted_choice_index)
+
+    # Re-normalize probabilities
+    options_probas = options_probas / options_probas.sum()
+
+    n_choices_remaining -= 1
+    return get_choices(choices_so_far, options, options_probas, restricted_pairs,
+                       n_choices_remaining)

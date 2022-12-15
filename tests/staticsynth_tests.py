@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from riid.data.synthetic.static import (InvalidSeedError, get_dummy_sampleset,
+from riid.data.synthetic.static import (InvalidSeedError, get_dummy_seeds,
                                         get_expected_spectra,
                                         get_merged_sources_samplewise,
                                         get_samples_per_seed)
@@ -74,8 +74,8 @@ class TestStaticSynthesis(unittest.TestCase):
     def test_get_merged_sources_samplewise(self):
         """Tests that sources DataFrames are properly merged."""
         # Adding identical DataFrames should result in the same source matrix times 2
-        ss1 = get_dummy_sampleset()
-        ss2 = get_dummy_sampleset()
+        ss1 = get_dummy_seeds()
+        ss2 = get_dummy_seeds()
         merged_sources_df = get_merged_sources_samplewise(ss1.sources, ss2.sources)
         expected_df = 2 * pd.DataFrame(
             np.identity(merged_sources_df.shape[0]),
@@ -116,7 +116,7 @@ class TestStaticSynthesis(unittest.TestCase):
 
     def test_get_samples_per_seed(self):
         """Tests label balancing at different levels."""
-        seeds_ss = get_dummy_sampleset(as_seeds=True)
+        seeds_ss = get_dummy_seeds()
         MIN_SPS = 1
 
         # Seed-level balancing
@@ -137,15 +137,13 @@ class TestStaticSynthesis(unittest.TestCase):
         self.assertEqual(seed_level_results["Th232"], 3)        # 3 samples
         self.assertEqual(seed_level_results["U238"], 3)         # 3 samples
         self.assertEqual(seed_level_results["Pu239"], 1)        # 3 samples
-        self.assertEqual(seed_level_results["Background"], 3)   # 3 samples
-        self.assertEqual(25, n_samples_expected)
+        self.assertEqual(22, n_samples_expected)
 
         # Category-level balancing
         seed_level_results, n_samples_expected = get_samples_per_seed(
             seeds_ss.sources.columns, MIN_SPS, "Category"
         )
-        self.assertEqual(seed_level_results["Industrial"], 3)   # 6 samples
-        self.assertEqual(seed_level_results["NORM"], 1)         # 5 samples
-        self.assertEqual(seed_level_results["SNM"], 2)          # 6 samples
-        self.assertEqual(seed_level_results["Background"], 5)   # 5 samples
-        self.assertEqual(22, n_samples_expected)
+        self.assertEqual(seed_level_results["Industrial"], 2)   # 4 samples
+        self.assertEqual(seed_level_results["NORM"], 1)         # 4 samples
+        self.assertEqual(seed_level_results["SNM"], 1)          # 4 samples
+        self.assertEqual(12, n_samples_expected)

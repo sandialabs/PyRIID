@@ -5,7 +5,7 @@
 import unittest
 
 import pandas as pd
-from riid.data.synthetic.static import get_dummy_sampleset
+from riid.data.synthetic.static import get_dummy_seeds
 from riid.gadras.pcf import (_pack_compressed_text_buffer,
                              _unpack_compressed_text_buffer)
 
@@ -70,22 +70,22 @@ class TestGadras(unittest.TestCase):
         TEMP_PCF_PATH = "temp.pcf"
 
         # With all levels
-        ss = get_dummy_sampleset()
+        ss = get_dummy_seeds()
         ss.to_pcf(TEMP_PCF_PATH)
 
         # Without seed level (only category and isotope)
-        ss = get_dummy_sampleset()
+        ss = get_dummy_seeds()
         ss.sources.columns.droplevel("Seed")
         ss.to_pcf(TEMP_PCF_PATH)
 
         # Without seed and isotope levels (only category)
-        ss = get_dummy_sampleset()
+        ss = get_dummy_seeds()
         ss.sources.columns.droplevel("Seed")
         ss.sources.columns.droplevel("Isotope")
         ss.to_pcf(TEMP_PCF_PATH)
 
         # With no sources
-        ss = get_dummy_sampleset()
+        ss = get_dummy_seeds()
         ss.sources = pd.DataFrame()
         ss.to_pcf(TEMP_PCF_PATH)
 

@@ -7,7 +7,6 @@ import unittest
 import numpy as np
 import pandas as pd
 from riid.data import SampleSet
-from riid.data.labeling import BACKGROUND_LABEL
 from riid.data.synthetic.static import StaticSynthesizer
 from riid.models.bayes import (NegativeSpectrumError, PoissonBayes,
                                ZeroTotalCountsError)
@@ -56,19 +55,19 @@ class TestBayes(unittest.TestCase):
             [0.2, 0.2, 0.2, 0.4],
             [0.0, 0.1, 0.8, 0.1],
             [0.0, 0.0, 0.2, 0.8],
-            [0.1, 0.7, 0.2, 0.0],
+            [0.1, 0.8, 0.1, 0.0],
         ])
         iso_seed_pairs = [
-            ('SNM',     'U235',  'U235Unshielded'),
-            ('NORM',    'K40',   'K40Unshielded'),
-            ('SNM',     'Pu239', 'Pu239Unshielded'),
-            (BACKGROUND_LABEL, BACKGROUND_LABEL, BACKGROUND_LABEL),
+            ('SNM',  'U235',  'U235Unshielded'),
+            ('NORM', 'K40',   'K40Unshielded'),
+            ('SNM',  'Pu239', 'Pu239Unshielded'),
+            ('NORM', 'Th232', 'ThoriumInSoil'),
         ]
         source_matrix = np.array([
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
-            [0, 0, 1, 0],
-            [0, 0, 0, 1],
+            [1., 0., 0., 0.],
+            [0., 1., 0., 0.],
+            [0., 0., 1., 0.],
+            [0., 0., 0., 1.],
         ])
         sources = pd.DataFrame(
             data=source_matrix,
@@ -85,21 +84,17 @@ class TestBayes(unittest.TestCase):
         seeds_ss.info.gross_counts = [300.0, 300.0, 300.0, 300.0]
         seeds_ss.sources = sources
 
-        labels = seeds_ss.get_labels()
-        fg_seeds_ss = seeds_ss[labels != BACKGROUND_LABEL]
-        fg_seeds_ss.sources.drop(BACKGROUND_LABEL, axis=1, level="Category", inplace=True)
-        bg_seed_ss = seeds_ss[labels == BACKGROUND_LABEL]
+        fg_seeds_ss, bg_seeds_ss = seeds_ss.split_fg_and_bg()
         pb_model = PoissonBayes(fg_seeds_ss)
 
         static_syn = StaticSynthesizer(
             samples_per_seed=1,
             live_time_function_args=(4, 4),
-            snr_function_args=(1, 1),
+            snr_function_args=(10, 10),
             random_state=42
         )
-        _, _, test_gross_ss = static_syn.generate(fg_seeds_ss, bg_seed_ss, verbose=False)
-        pb_model.predict_old(test_gross_ss, bg_seed_ss)
-        test_gross_ss.sources.drop(BACKGROUND_LABEL, axis=1, level="Category", inplace=True)
+        _, _, test_gross_ss = static_syn.generate(fg_seeds_ss, bg_seeds_ss, verbose=False)
+        pb_model.predict_old(test_gross_ss, bg_seeds_ss)
         truths = test_gross_ss.get_labels()
         predictions = test_gross_ss.get_predictions(min_value=-1e4)
         assert (truths == predictions).all()
