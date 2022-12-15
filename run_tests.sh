@@ -1,4 +1,3 @@
 set -e
-coverage run -m unittest tests/*.py -v
-coverage report -i
-coverage xml -i
+coverage run --source=./riid -m unittest tests/*.py
+coverage report -i --skip-empty
