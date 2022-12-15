@@ -5,7 +5,7 @@
 import os
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Iterator, Tuple, Union
+from typing import Iterator, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -152,7 +152,7 @@ class SeedSynthesizer():
 
 class SeedMixer():
     def __init__(self, seeds_ss: SampleSet, mixture_size: int = 2, dirichlet_alpha: float = 2.0,
-                 restricted_isotope_pairs: list[tuple[str, str]] = []):
+                 restricted_isotope_pairs: List[Tuple[str, str]] = []):
         assert mixture_size >= 2
 
         self.mixture_size = mixture_size
