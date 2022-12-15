@@ -11,6 +11,7 @@
 */__pycache__
 _scripts/
 debug/
+*.whl
 
 # Mac-specific
 *.DS_Store
