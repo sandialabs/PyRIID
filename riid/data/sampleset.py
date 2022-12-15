@@ -323,6 +323,14 @@ class SampleSet():
             low_energy / (1 + 60 * fractional_energy_bins)
         return channel_energies
 
+    def _check_target_level(self, target_level,
+                            levels_allowed=SOURCES_MULTI_INDEX_NAMES):
+        if target_level not in levels_allowed:
+            raise ValueError((
+                f"'{target_level}' is not an appropriate target level. "
+                f"Acceptable values are: {levels_allowed}."
+            ))
+
     def all_spectra_sum_to_one(self) -> bool:
         """Checks if all spectra are normalized to sum to one."""
         return np.all(np.isclose(self.spectra.sum(axis=1).values, 1))
@@ -675,6 +683,48 @@ class SampleSet():
 
         """
         return self.sources.groupby(axis=1, level=target_level).sum()
+
+    def sources_columns_to_dict(self, target_level="Isotope") -> Union[dict, list]:
+        """Converts the MultiIndex columns of the sources DataFrame to a dictionary.
+
+        Note: depending on `target_level` and sources columns, duplicate values are possible.
+
+        Args:
+            target_level: the level of the MultiIndex at which the dictionary should start.
+                If "Seed" is chosen, then a flat list will be returned.
+
+        Returns:
+            If `target_level` is "Category" or "Isotope," then a dict is returned.
+            If `target_level` is "Seed," then a list is returned.
+
+        Raises:
+            ValueError: if `target_level` is invalid.
+        """
+        self._check_target_level(
+            target_level,
+            levels_allowed=SampleSet.SOURCES_MULTI_INDEX_NAMES
+        )
+
+        d = {}
+        column_tuples = self.sources.columns.to_list()
+        if target_level == "Seed":
+            d = [c[2] for c in column_tuples]
+        elif target_level == "Isotope":
+            for _, i, s in column_tuples:
+                if i not in d:
+                    d[i] = [s]
+                if s not in d[i]:
+                    d[i].append(s)
+        else:  # target_level == "Category":
+            for c, i, s in column_tuples:
+                if c not in d:
+                    d[c] = {}
+                if i not in d[c]:
+                    d[c][i] = [s]
+                if s not in d[c][i]:
+                    d[c][i].append(s)
+
+        return d
 
     def normalize(self, p: float = 1, clip_negatives: bool = True):
         """Normalizes spectra by L-p normalization.
