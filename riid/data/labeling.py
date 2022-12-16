@@ -10,11 +10,34 @@ NO_SEED = "Unknown"
 NO_ISOTOPE = "Unknown"
 NO_CATEGORY = "Uncategorized"
 CATEGORY_ISOTOPES = {
-    BACKGROUND_LABEL: {
-        "severity": 0,
+    "Fission Product": {
+        "severity": 3,
         "isotopes": [
-            BACKGROUND_LABEL
-        ],
+            "Ag112",
+            "As78",
+            "Ba139",
+            "Ce143",
+            "I132",
+            "I133",
+            "I134",
+            "I135",
+            "Kr85m",
+            "Kr87",
+            "La140",
+            "La142",
+            "Nd149",
+            "Pm150",
+            "Rh105",
+            "Ru105",
+            "Sb115",
+            "Sb129",
+            "Sr91",
+            "Sr92",
+            "Te132",
+            "Y93",
+            "Y91m",
+            "Zr95",
+        ]
     },
     "Industrial": {
         "severity": 2,
@@ -52,6 +75,7 @@ CATEGORY_ISOTOPES = {
             "Ga68",
             "Ge68",
             "I123",
+            "I124",
             "I125",
             "I129",
             "I131",
