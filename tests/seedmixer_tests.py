@@ -14,6 +14,8 @@ class TestSeedMixer(unittest.TestCase):
     """Test seed mixing functionality of SampleSet.
     """
     def setUp(self):
+        np.random.seed(42)
+
         self.ss, _ = get_dummy_seeds().split_fg_and_bg()
         self.ss.normalize()
         self.sources = self.ss.get_labels().values
@@ -21,11 +23,13 @@ class TestSeedMixer(unittest.TestCase):
         self.two_mix_seeds_ss = SeedMixer(
             self.ss,
             mixture_size=2,
+            dirichlet_alpha=10,
         ).generate(n_samples=20)
 
         self.three_mix_seeds_ss = SeedMixer(
             self.ss,
             mixture_size=3,
+            dirichlet_alpha=10,
         ).generate(n_samples=20)
 
     def test_mixture_combinations(self):

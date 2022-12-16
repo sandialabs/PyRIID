@@ -12,7 +12,6 @@ import pandas as pd
 import yaml
 
 from riid.data import SampleSet
-from riid.data.labeling import label_to_index_element
 from riid.data.sampleset import read_pcf
 from riid.gadras.api import (DETECTOR_PARAMS, GADRAS_ASSEMBLY_PATH,
                              INJECT_PARAMS, SourceInjector, get_gadras_api,
@@ -217,13 +216,8 @@ class SeedMixer():
         if n_distinct_seeds != n_seeds:
             raise ValueError("Seed names must be unique.")
         isotope_probas = list([len(isotope_to_seeds[i]) / n_seeds for i in isotopes])
-        spectra_row_labels = self.seeds_ss.get_labels(target_level="Seed")
+        spectra_row_labels = self.seeds_ss.sources.idxmax(axis=1)
         restricted_isotope_bidict = bidict({k: v for k, v in self.restricted_isotope_pairs})
-        seed_cols = self.seeds_ss.sources.columns.get_level_values('Seed')
-        batch_info = pd.DataFrame(
-            [self.seeds_ss.info.iloc[0].values] * 5,
-            columns=self.seeds_ss.info.columns
-        )
 
         n_samples_produced = 0
         while n_samples_produced < n_samples:
@@ -242,7 +236,7 @@ class SeedMixer():
                 for _ in range(batch_size)
             ]
             seed_choices = [
-                [np.random.choice(isotope_to_seeds[i]) for i in c]
+                [isotope_to_seeds[i][np.random.choice(len(isotope_to_seeds[i]))] for i in c]
                 for c in isotope_choices
             ]
             seed_ratios = np.random.default_rng().dirichlet(
@@ -261,19 +255,22 @@ class SeedMixer():
             batch_ss = SampleSet()
             batch_ss.detector_info = self.seeds_ss.detector_info
             batch_ss.spectra = pd.DataFrame(spectra)
-            batch_ss.info = batch_info
-            #   Sources
+            batch_ss.info = pd.DataFrame(
+                [self.seeds_ss.info.iloc[0].values] * batch_size,
+                columns=self.seeds_ss.info.columns
+            )
             batch_sources_dfs = []
             for r, s in zip(seed_ratios, seed_choices):
-                seed_cols = pd.MultiIndex.from_tuples(
-                    [label_to_index_element(x, label_level="Seed") for x in s],
+                sources_cols = pd.MultiIndex.from_tuples(
+                    s,
                     names=SampleSet.SOURCES_MULTI_INDEX_NAMES,
                 )
-                sources_df = pd.DataFrame([r], columns=seed_cols)
+                sources_df = pd.DataFrame([r], columns=sources_cols)
                 batch_sources_dfs.append(sources_df)
-            batch_ss.sources = pd.concat(
-                [pd.DataFrame([], columns=self.seeds_ss.sources.columns)] + batch_sources_dfs
-            ).fillna(0.0)
+            empty_sources_df = pd.DataFrame([], columns=self.seeds_ss.sources.columns)
+            batch_ss.sources = pd\
+                .concat([empty_sources_df] + batch_sources_dfs)\
+                .fillna(0.0)
 
             n_samples_produced += batch_size
 

@@ -708,21 +708,23 @@ class SampleSet():
         d = {}
         column_tuples = self.sources.columns.to_list()
         if target_level == "Seed":
-            d = [c[2] for c in column_tuples]
+            d = column_tuples
         elif target_level == "Isotope":
-            for _, i, s in column_tuples:
+            for t in column_tuples:
+                _, i, _ = t
                 if i not in d:
-                    d[i] = [s]
-                if s not in d[i]:
-                    d[i].append(s)
+                    d[i] = [t]
+                if t not in d[i]:
+                    d[i].append(t)
         else:  # target_level == "Category":
-            for c, i, s in column_tuples:
+            for t in column_tuples:
+                c, i, _ = t
                 if c not in d:
                     d[c] = {}
                 if i not in d[c]:
-                    d[c][i] = [s]
-                if s not in d[c][i]:
-                    d[c][i].append(s)
+                    d[c][i] = [t]
+                if t not in d[c][i]:
+                    d[c][i].append(t)
 
         return d
 

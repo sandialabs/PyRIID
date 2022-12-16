@@ -350,6 +350,16 @@ class StaticSynthesizer():
                 as the foreground (source only) component of spectra.
             bg_seeds_ss: Contains spectra normalized by total counts to be used
                 as the background components of gross spectra.
+            fixed_bg_ss: Contains a single spectrum to be used as a fixed (or intrinsic)
+                background source, where live time information must be present.
+                This spectrum is used to represent things like:
+                - cosmic background (which is location-specific);
+                - one or more calibration sources; or
+                - intrinsic counts from the detector material (e.g., LaBr3).
+                This spectrum will form the base of each background spectrum where seeds in
+                `bg_seeds_ss`, which represent mixtures of K-U-T, get added on top.
+                Note: this spectrum is not considered part of the `background_cps` parameter,
+                but is instead added on top of it. This parameter is optional.
             normalize_sources: Whether to divide each row of the SampleSet's sources
                 DataFrame by its sum. Defaults to True.
             verbose: Whether to display output from synthesis.
