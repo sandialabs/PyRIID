@@ -331,13 +331,13 @@ class SampleSet():
                 f"Acceptable values are: {levels_allowed}."
             ))
 
-    def all_spectra_sum_to_one(self) -> bool:
+    def all_spectra_sum_to_one(self, rtol: float = 0.0, atol: float = 1e-4) -> bool:
         """Checks if all spectra are normalized to sum to one."""
-        return np.all(np.isclose(self.spectra.sum(axis=1).values, 1))
+        return np.all(np.isclose(self.spectra.sum(axis=1).values, 1, rtol=rtol, atol=atol))
 
-    def as_ecal(self, new_offset: float = None, new_gain: float = None,
-                new_quadratic: float = None, new_cubic: float = None,
-                new_low_energy: float = None) -> SampleSet:
+    def as_ecal(self, new_offset: float, new_gain: float,
+                new_quadratic: float, new_cubic: float,
+                new_low_energy: float) -> SampleSet:
         """Re-bins spectra based on energy by interpolating the current shape from the current
         binning structure to a new one.
 
@@ -361,16 +361,11 @@ class SampleSet():
 
         ecal_cols = list(self.ECAL_INFO_COLUMNS)
         new_ecal = self.info[ecal_cols].copy()
-        if new_offset:
-            new_ecal.ecal_order_0 = new_offset
-        if new_gain:
-            new_ecal.ecal_order_1 = new_gain
-        if new_quadratic:
-            new_ecal.ecal_order_2 = new_quadratic
-        if new_cubic:
-            new_ecal.ecal_order_3 = new_cubic
-        if new_low_energy:
-            new_ecal.ecal_low_e = new_low_energy
+        new_ecal.ecal_order_0 = new_offset
+        new_ecal.ecal_order_1 = new_gain
+        new_ecal.ecal_order_2 = new_quadratic
+        new_ecal.ecal_order_3 = new_cubic
+        new_ecal.ecal_low_e = new_low_energy
 
         all_original_channel_energies = self.get_all_channel_energies()
         all_new_channel_energies = []
