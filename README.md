@@ -30,6 +30,13 @@ If you are developing PyRIID, clone this repository and run:
 pip install -e ".[dev]"
 ```
 
+If you have trouble with Pylance resolving imports for an editable install, try this:
+
+```
+pip install -e ".[dev]" --config-settings editable_mode=strict
+```
+
+
 ## Examples
 
 Examples have been moved to a dedicated repo [here](https://github.com/sandialabs/PyRIID-Examples).
