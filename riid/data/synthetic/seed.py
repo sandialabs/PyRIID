@@ -64,7 +64,7 @@ class SeedSynthesizer():
             gadras_api.detectorSaveParameters()
 
     def generate(self, config: Union[str, dict], normalize_sources=True,
-                 dry_run=False, verbose: bool = False) -> Tuple[SampleSet, SampleSet]:
+                 dry_run=False, verbose: bool = False) -> SampleSet:
         """Produces a SampleSet containing foreground and/or background seeds using GADRAS based
         on the given inject configuration.
 
