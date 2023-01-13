@@ -207,9 +207,12 @@ def _pcf_to_dict(pcf_file_path: str, verbose: bool = False):
     pcf_data = np.fromfile(pcf_file_path, dtype=np.uint8)
     version = struct.unpack("3s", pcf_data[2:5])[0].decode("utf-8")
     header_def = HEADER_DEFINITIONS[version]
-    deviation_values = struct.unpack("5120f", pcf_data[512:512+20480])
-    if not set(deviation_values) == {0} and verbose:
-        print("Deviation values exist in file")
+    has_deviation_pairs = "DeviationPairsInFile" in header_def or \
+        "DeviationPairsInFileCompressed" in header_def
+    if has_deviation_pairs:
+        deviation_values = struct.unpack("5120f", pcf_data[512:512+20480])
+        if not set(deviation_values) == {0} and verbose:
+            print("Deviation pairs exist in file")
     # Header provides metadata about the collection. Spectra is a list
     #  of "header" and "spectrum" pairs for each spectrum in file.
     header = _read_header(pcf_data[:256], header_def)
