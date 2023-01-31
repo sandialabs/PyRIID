@@ -624,7 +624,7 @@ class SampleSet():
 
     def get_labels(self, target_level="Isotope", max_only=True,
                    include_value=False, min_value=0.01,
-                   level_aggregation="sum"):
+                   level_aggregation=None):
         """Gets row labels for each spectrum based on source values.
 
         See docstring for `_get_row_labels()` for more details.
@@ -642,7 +642,7 @@ class SampleSet():
 
     def get_predictions(self, target_level="Isotope", max_only=True,
                         include_value=False, min_value=0.01,
-                        level_aggregation="sum"):
+                        level_aggregation=None):
         """Gets row labels for each spectrum based on prediction values.
 
         See docstring for `_get_row_labels()` for more details.
@@ -952,9 +952,11 @@ def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: b
             labels = values.idxmax(axis=1)
         else:
             values = df
+            level_idx = SampleSet.SOURCES_MULTI_INDEX_NAMES.index(target_level)
+            level_cols_subset = SampleSet.SOURCES_MULTI_INDEX_NAMES[:level_idx+1]
             labels = pd.MultiIndex.from_tuples(
                 values.idxmax(axis=1),
-                names=SampleSet.SOURCES_MULTI_INDEX_NAMES
+                names=level_cols_subset
             ).get_level_values(target_level)
         if include_value:
             values = values.max(axis=1)
