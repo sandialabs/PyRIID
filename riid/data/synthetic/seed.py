@@ -154,9 +154,9 @@ class SeedMixer():
                  restricted_isotope_pairs: List[Tuple[str, str]] = []):
         assert mixture_size >= 2
 
+        self.seeds_ss = seeds_ss
         self.mixture_size = mixture_size
         self.dirichlet_alpha = dirichlet_alpha
-        self.seeds_ss = seeds_ss
         self.restricted_isotope_pairs = restricted_isotope_pairs
 
         self._check_seeds()
@@ -219,6 +219,15 @@ class SeedMixer():
         spectra_row_labels = self.seeds_ss.sources.idxmax(axis=1)
         restricted_isotope_bidict = bidict({k: v for k, v in self.restricted_isotope_pairs})
 
+        try:
+            _ = iter(self.dirichlet_alpha)
+        except TypeError:
+            seed_to_alpha = {s: self.dirichlet_alpha for s in seeds}
+        else:
+            if n_seeds != len(self.dirichlet_alpha):
+                raise ValueError("Number of Dirichlet alphas does not equal the number of seeds.")
+            seed_to_alpha = {s: a for s, a in zip(seeds, self.dirichlet_alpha)}
+
         n_samples_produced = 0
         while n_samples_produced < n_samples:
             batch_size = n_samples - n_samples_produced
@@ -239,10 +248,16 @@ class SeedMixer():
                 [isotope_to_seeds[i][np.random.choice(len(isotope_to_seeds[i]))] for i in c]
                 for c in isotope_choices
             ]
-            seed_ratios = np.random.default_rng().dirichlet(
-                alpha=[self.dirichlet_alpha] * self.mixture_size,
-                size=batch_size
-            )
+            batch_dirichlet_alphas = np.array([
+                [seed_to_alpha[i] for i in s]
+                for s in seed_choices
+            ])
+            seed_ratios = [
+                np.random.default_rng().dirichlet(
+                    alpha=alpha,
+                    size=1
+                )[0] for alpha in batch_dirichlet_alphas
+            ]
             spectra_mask = np.array([spectra_row_labels.isin(c) for c in seed_choices])
 
             # Compute the spectra
