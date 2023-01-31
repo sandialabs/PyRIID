@@ -308,7 +308,7 @@ def plot_strength_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: f
 def plot_snr_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float = 0.5,
                       marker_size=75, xscale: str = "log", yscale: str = "linear",
                       xlim: tuple = (None, None), ylim: tuple = (0, 1.05),
-                      title: str = "SNR vs. Score", figsize=(6.4, 4.8)):
+                      title: str = "SNR vs. Score", figsize=(6.4, 4.8), target_level="Isotope"):
     """Plots SNR against prediction score for all samples in a SampleSet.
 
     Prediction and label information is used to distinguish between correct and incorrect
@@ -324,13 +324,14 @@ def plot_snr_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float 
         ylim: Defines a tuple containing the Y-axis min and max values.
         title: Defines the plot title.
         figsize: Width, height of figure in inches.
+        target_level: The level of the sources multi index to use for comparing correctness.
 
     Returns:
         A tuple (Figure, Axes) of matplotlib objects.
 
     """
-    labels = ss.get_labels()
-    predictions = ss.get_predictions()
+    labels = ss.get_labels(target_level=target_level)
+    predictions = ss.get_predictions(target_level=target_level, level_aggregation=None)
     correct_ss = ss[labels == predictions]
     incorrect_ss = ss[labels != predictions]
     if not xlim:
@@ -703,7 +704,7 @@ def plot_correlation_between_all_labels(ss: SampleSet, mean: bool = False,
         A tuple (Figure, Axes) of matplotlib objects.
 
     """
-    labels = ss.get_labels(target_level=target_level, minimum_contribution=1)
+    labels = ss.get_labels(target_level=target_level)
     X = np.zeros((len(labels), len(labels)))
     for i, label1 in enumerate(labels):
         spectra1 = ss[labels == label1].spectra
