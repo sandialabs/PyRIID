@@ -131,7 +131,7 @@ class PoissonBayesClassifier(TFModelBase):
 
         prediction_probas = self.model.predict((
             gross_spectra, gross_lts, bg_spectra, bg_lts
-        ))
+        ), batch_size=512)
 
         # Normalization
         if normalize_scores:
