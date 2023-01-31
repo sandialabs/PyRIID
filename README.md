@@ -33,7 +33,7 @@ pip install -e ".[dev]"
 If you have trouble with Pylance resolving imports for an editable install, try this:
 
 ```
-pip install -e ".[dev]" --config-settings editable_mode=strict
+pip install -e ".[dev]" --config-settings editable_mode=compat
 ```
 
 
