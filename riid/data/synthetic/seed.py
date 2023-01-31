@@ -254,9 +254,8 @@ class SeedMixer():
             ])
             seed_ratios = [
                 np.random.default_rng().dirichlet(
-                    alpha=alpha,
-                    size=1
-                )[0] for alpha in batch_dirichlet_alphas
+                    alpha=alpha
+                ) for alpha in batch_dirichlet_alphas
             ]
             spectra_mask = np.array([spectra_row_labels.isin(c) for c in seed_choices])
 
