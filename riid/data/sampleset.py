@@ -951,13 +951,9 @@ def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: b
             values = df.groupby(axis=1, level=target_level).mean()
             labels = values.idxmax(axis=1)
         else:
-            values = df
-            level_idx = SampleSet.SOURCES_MULTI_INDEX_NAMES.index(target_level)
-            level_cols_subset = SampleSet.SOURCES_MULTI_INDEX_NAMES[:level_idx+1]
-            labels = pd.MultiIndex.from_tuples(
-                values.idxmax(axis=1),
-                names=level_cols_subset
-            ).get_level_values(target_level)
+            levels_to_drop = [x for x in SampleSet.SOURCES_MULTI_INDEX_NAMES if x != target_level]
+            values = df.droplevel(levels_to_drop, axis=1)
+            labels = values.idxmax(axis=1)
         if include_value:
             values = values.max(axis=1)
             labels = [f"{x} ({y:.2f})" for x, y in zip(labels, values)]
