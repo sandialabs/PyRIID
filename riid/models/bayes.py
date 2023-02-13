@@ -13,18 +13,19 @@ from riid.models import TFModelBase
 
 class PoissonBayesClassifier(TFModelBase):
     def __init__(self):
-        """Creates a Poisson-Bayes classifcation model using the
-        the foreground seeds sample set.
+        """This Poisson-Bayes classifier calculates the conditional Poisson log
+        probability of each seed spectrum given the measurement.
 
-        Args:
-            seeds_ss (SampleSet): Defines a SampleSet of `n` foreground
-                seed spectra where `n` >= 1.
-
-        Returns:
-            None
-
-        Raises:
-            None
+        This implementation is an adaptation of a naive Bayes classifier, a formal
+        description of which can be found in ESLII:
+            Hastie, Trevor, et al. The elements of statistical learning: data mining,
+                inference, and prediction. Vol. 2. New York: springer, 2009.
+        For this model, each channel (read: feature) is treated as a Poisson random
+        variable and expectations are provided by the user in the form of
+        seeds rather than learned. Like the model described in ESLII, all classes are
+        considered equally likely and features are assumed to be independent.
+        The latter assumption is generally not true, however it makes estimation far
+        more simple.
         """
         super().__init__()
 
@@ -74,7 +75,7 @@ class PoissonBayesClassifier(TFModelBase):
             ), axis=-1)
         )
         max_value = tf.math.reduce_max(expected_fg_spectrum)
-        expected_fg_spectrum = tf.clip_by_value(expected_fg_spectrum, 1, max_value)
+        expected_fg_spectrum = tf.clip_by_value(expected_fg_spectrum, 1e-8, max_value)
         expected_gross_spectum = tf.add(
             expected_fg_spectrum,
             tf.expand_dims(expected_bg_spectrum, axis=1)
@@ -96,7 +97,7 @@ class PoissonBayesClassifier(TFModelBase):
         self.model.compile()
 
     def fit(self, seeds_ss: SampleSet = None):
-        """Constructs the TF-version of a poisson-bayes classifier in terms
+        """Constructs a TF-based implementation of a poisson-bayes classifier in terms
         of the given seeds.
 
         Args:
@@ -134,20 +135,7 @@ class PoissonBayesClassifier(TFModelBase):
                 by the minimum value present in given the dataset.
                 While this can be helpful in terms of visualizing probabilities in log scale,
                 it can adversely affects one's ability to detect significantly anomalous signatures.
-
-        Raises:
-            ValueError: Raised when no spectra are provided.
-            ValueError: Raised when spectrum channel sizes are inconsisent.
         """
-        if gross_ss.n_samples <= 0:
-            raise ValueError("No gross spectr[a|um] provided!")
-        if bg_ss.n_samples <= 0:
-            raise ValueError("No background spectr[a|um] provided!")
-        if gross_ss.n_channels != bg_ss.n_channels != self.seeds_ss.n_channels:
-            msg = "The provided spectra must have the same number of channels same as the seeds!  "
-            msg += f"Seed spectra contain {self.seeds_ss.n_channels} channels."
-            raise ValueError(msg)
-
         gross_spectra = tf.convert_to_tensor(gross_ss.spectra.values, dtype=tf.float32)
         gross_lts = tf.convert_to_tensor(gross_ss.info.live_time.values, dtype=tf.float32)
         bg_spectra = tf.convert_to_tensor(bg_ss.spectra.values, dtype=tf.float32)
