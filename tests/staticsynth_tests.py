@@ -10,12 +10,57 @@ import pandas as pd
 from riid.data.synthetic.static import (InvalidSeedError, get_dummy_seeds,
                                         get_expected_spectra,
                                         get_merged_sources_samplewise,
-                                        get_samples_per_seed)
+                                        get_samples_per_seed,
+                                        StaticSynthesizer)
+from riid.data.synthetic.seed import SeedMixer
 
 
 class TestStaticSynthesis(unittest.TestCase):
     """Test class for static synthesis.
     """
+    def test_random_state_output(self):
+        fg_seeds_ss, bg_seeds_ss = get_dummy_seeds().split_fg_and_bg()
+        mixed_bg_seeds_ss = SeedMixer(bg_seeds_ss, mixture_size=3).generate(10)
+
+        static_syn = StaticSynthesizer(
+            samples_per_seed=2,
+            # log10 sampling samples lower SNR values more frequently.
+            # This makes the SampleSet overall "harder" to classify.
+            snr_function="log10",
+            random_state=1
+        )
+        fg_1, bg_1, gross_1 = static_syn.generate(
+            fg_seeds_ss=fg_seeds_ss, bg_seeds_ss=mixed_bg_seeds_ss)
+
+        static_syn = StaticSynthesizer(
+            samples_per_seed=2,
+            # log10 sampling samples lower SNR values more frequently.
+            # This makes the SampleSet overall "harder" to classify.
+            snr_function="log10",
+            random_state=1
+        )
+
+        fg_2, bg_2, gross_2 = static_syn.generate(
+            fg_seeds_ss=fg_seeds_ss, bg_seeds_ss=mixed_bg_seeds_ss)
+
+        static_syn = StaticSynthesizer(
+            samples_per_seed=2,
+            # log10 sampling samples lower SNR values more frequently.
+            # This makes the SampleSet overall "harder" to classify.
+            snr_function="log10",
+            random_state=2
+        )
+
+        fg_3, bg_3, gross_3 = static_syn.generate(
+            fg_seeds_ss=fg_seeds_ss, bg_seeds_ss=mixed_bg_seeds_ss)
+
+        self.assertEqual(fg_1, fg_2)  # used the same random_state
+        self.assertEqual(bg_1, bg_2)  # used the same random_state
+        self.assertEqual(gross_1, gross_2)  # used the same random_state
+
+        self.assertNotEqual(fg_3, fg_2)  # used different random_state
+        self.assertNotEqual(bg_3, bg_2)  # used different random_state
+        self.assertNotEqual(gross_3, gross_2)  # used different random_state
 
     def test_get_expected_spectra(self):
         """Tests batch processing of seeds to expected counts.

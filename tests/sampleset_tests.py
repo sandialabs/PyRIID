@@ -9,11 +9,19 @@ import pandas as pd
 
 from riid.data.sampleset import SampleSet, _get_row_labels
 from riid.data.synthetic.static import get_dummy_seeds
+from riid.data.synthetic.seed import SeedMixer
 
 
 class TestSampleSet(unittest.TestCase):
     """Test class for SampleSet.
     """
+    def test__eq__(self):
+        """Tests equality of two SampleSets"""
+        ss = get_dummy_seeds(n_channels=1024)
+        ss2 = get_dummy_seeds(n_channels=512)
+
+        assert ss == ss
+        assert ss != ss2
 
     def test_as_ecal(self):
         """Tests conversion of spectra to energy bins."""
