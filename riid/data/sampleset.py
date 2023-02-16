@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from scipy.interpolate import interp1d
+from scipy.spatial import distance
 
 import riid
 from riid.data.labeling import (NO_CATEGORY, NO_ISOTOPE, NO_SEED,
@@ -76,6 +77,12 @@ class SampleSet():
     SUPPORTED_STATES_FOR_ARITHMETIC = (
         SpectraState.Counts.value,
         SpectraState.L1Normalized.value
+    )
+    DEFAULT_EXCLUSIONS_FROM_COMPARISON = (
+        "timestamp",
+        "description",
+        "occupancy_flag",
+        "tag",
     )
 
     def __init__(self):
@@ -915,6 +922,92 @@ class SampleSet():
             data=np.matmul(
                 self._spectra.values,
                 transformation.T))
+
+    def compare_to(self, ss: SampleSet, n_bins: int = 20, density: bool = False) \
+            -> Tuple[dict, dict, dict]:
+        """Compares the current sample set to another.
+
+        The function only compares the selected, mutual information of
+        each sampleset by computing the Jensen-Shannon distance between
+        histograms of that information. The distance value can be interpreted
+        as follows: closer to 0 means more similar and closer to 1 means
+        more dissimilar.
+
+        Args:
+            ss: The sample set we will compare to.
+            n_bins: The number of bins we will sort both sample sets by.
+            density: whether histograms should be in counts or density
+
+        Returns:
+            ss1_stats: dict of stats for the first sampleset.
+            ss2_stats: dict of stats for the second sampleset.
+            col_comparisons: dict of distance values comparing each column.
+        """
+        TARGET_SUMMARY_STATS = ['min', 'max', 'median', 'mean', 'std']
+        STAT_PRECISION = 3
+
+        # Get info columns we want to compare
+        info_columns = [x for x in list(self.DEFAULT_INFO_COLUMNS)
+                        if x not in list(self.DEFAULT_EXCLUSIONS_FROM_COMPARISON)]
+
+        # Get both sample sets comparable columns of data
+        info_df1 = self.info[info_columns]
+        info_df2 = ss.info[info_columns]
+
+        # Check valid columns in each sample set (cannot have None or 0)
+        ss1_valid_cols = [
+            c for c in info_df1.columns
+            if pd.to_numeric(info_df1[c], errors='coerce').notnull().all() and any(info_df1[c])
+        ]
+        ss2_valid_cols = [
+            c for c in info_df2.columns
+            if pd.to_numeric(info_df2[c], errors='coerce').notnull().all() and any(info_df2[c])
+        ]
+
+        # Remove non shared column lists
+        for i in ss1_valid_cols:
+            if i not in ss2_valid_cols:
+                ss1_valid_cols.remove(i)
+        for i in ss2_valid_cols:
+            if i not in ss1_valid_cols:
+                ss2_valid_cols.remove(i)
+
+        # Remove non shared column data
+        info_df1 = info_df1[ss1_valid_cols]
+        info_df2 = info_df2[ss2_valid_cols]
+
+        # Bin the data
+        ss1_stats = {}
+        ss2_stats = {}
+        col_comparisons = {}
+        for i in ss1_valid_cols:
+            ss1_stats[i] = {}
+            ss2_stats[i] = {}
+            hist_range = (
+                min(min(info_df1[i]), min(info_df2[i])),
+                max(max(info_df1[i]), max(info_df2[i]))
+            )
+            # Get data in bins and get counts for each bin
+            hist1, bins1 = np.histogram(info_df1[i], bins=n_bins, range=hist_range, density=density)
+            hist2, bins2 = np.histogram(info_df2[i], bins=n_bins, range=hist_range, density=density)
+            ss1_stats[i]["density"] = density
+            ss2_stats[i]["density"] = density
+            ss1_stats[i]["hist"] = hist1
+            ss2_stats[i]["hist"] = hist2
+            ss1_stats[i]["bins"] = bins1
+            ss2_stats[i]["bins"] = bins2
+            ss1_stats[i]["range"] = hist_range
+            ss2_stats[i]["range"] = hist_range
+
+            summary_stats_df1 = info_df1[i].agg(TARGET_SUMMARY_STATS).round(decimals=STAT_PRECISION)
+            ss1_stats[i].update(summary_stats_df1.to_dict())
+            summary_stats_df2 = info_df2[i].agg(TARGET_SUMMARY_STATS).round(decimals=STAT_PRECISION)
+            ss2_stats[i].update(summary_stats_df2.to_dict())
+
+            js_dist = distance.jensenshannon(hist1, hist2, axis=0)
+            col_comparisons[i] = js_dist
+
+        return ss1_stats, ss2_stats, col_comparisons
 
 
 def read_hdf(path: str) -> SampleSet:
