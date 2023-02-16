@@ -10,8 +10,9 @@ import pandas as pd
 
 from riid.data.sampleset import (ChannelCountMismatchError,
                                  InvalidSampleCountError, SampleSet,
-                                 SpectraStateMismatchError, _get_row_labels, SpectraState)
-from riid.data.synthetic.static import get_dummy_seeds
+                                 SpectraState, SpectraStateMismatchError,
+                                 _get_row_labels)
+from riid.data.synthetic.static import StaticSynthesizer, get_dummy_seeds
 
 
 class TestSampleSet(unittest.TestCase):
@@ -794,6 +795,38 @@ class TestSampleSet(unittest.TestCase):
         sources = ss.sources.values
         self.assertTrue(np.allclose(sources.sum(axis=1), np.ones(sources.shape[0])))
         self.assertGreaterEqual(sources.min(), 0)
+
+    def test_compare_to(self):
+        SYNTHETIC_DATA_CONFIG = {
+            "samples_per_seed": 10,
+            "background_cps": 10,
+            "snr_function": "uniform",
+            "snr_function_args": (1, 100),
+            "live_time_function": "uniform",
+            "live_time_function_args": (0.25, 10),
+            "apply_poisson_noise": True,
+            "balance_level": "Isotope",
+        }
+        fg_seeds_ss1, bg_seeds_ss1 = get_dummy_seeds().split_fg_and_bg()
+        static_syn1 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)
+        _, _, gross_ss1 = static_syn1.generate(fg_seeds_ss1, bg_seeds_ss1, verbose=False)
+        """ |      |         |
+            |      |         |> gross samples
+            |      |> background-only samples
+            |> source-only samples
+        """
+
+        fg_seeds_ss2, bg_seeds_ss2 = get_dummy_seeds().split_fg_and_bg()
+        static_syn2 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)
+        _, _, gross_ss2 = static_syn2.generate(fg_seeds_ss2, bg_seeds_ss2, verbose=False)
+
+        _, _, _ = gross_ss1.compare_to(gross_ss2)
+        _, _, col_comparison_same = gross_ss1.compare_to(gross_ss1)
+        for k, v in col_comparison_same.items():
+            self.assertTrue(
+                v == 0.0,
+                f"Key '{k}' failed to be zero when comparing SampleSet to itself."
+            )
 
     def _assert_row_labels(self, level, actual, expected):
         for i, (a, e) in enumerate(zip(actual, expected)):

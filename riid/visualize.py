@@ -746,6 +746,56 @@ def plot_precision_recall(precision, recall, marker="D", lw=2, show_legend=True,
     return fig, ax
 
 
+@save_or_show_plot
+def plot_ss_comparison(info_stats1: dict, info_stats2: dict, col_comparisons: dict,
+                       target_col: str = None, title: str = None, x_label: str = None,
+                       distance_precision: int = 3):
+    """Creates a plot for output from SampleSet.compare_to().
+    Args:
+        info_stats1: stats for first SampleSet
+        info_stats2: stats for second SampleSet
+        col_comparisons: Jensen-Shannon distance for each info column histogram
+        target_col: the SampleSet.info column that will be plotted
+        title: the plot title
+        distance_precision: number of decimals to include for distance metric value
+
+    Returns:
+        A tuple (Figure, Axes) of matplotlib objects.
+    """
+    fig, ax = plt.subplots()
+
+    if info_stats1[target_col]["density"]:
+        ax.set_ylabel('Density')
+    else:
+        ax.set_ylabel('Count')
+
+    if x_label:
+        ax.set_xlabel(x_label)
+        xlbl = x_label
+    else:
+        ax.set_xlabel(target_col)
+        xlbl = target_col
+
+    dist_value = col_comparisons[target_col]
+    if title:
+        ax.set_title(f'{title}\nJ-S Distance: {round(dist_value, distance_precision)}')
+    else:
+        ax.set_title(f'Histogram of {xlbl} Occurrences'
+                     f'\nJ-S Distance: {round(dist_value, distance_precision)}')
+
+    stats1 = info_stats1[target_col]
+    bin_width = stats1["bins"][1] - stats1["bins"][0]
+    ax.bar(stats1["bins"][:-1], stats1["hist"], label="hist. 1", width=bin_width)
+
+    stats2 = info_stats2[target_col]
+    bin_width = stats2["bins"][1] - stats2["bins"][0]
+    ax.bar(stats2["bins"][:-1], stats2["hist"], label="hist. 2", width=bin_width)
+
+    ax.legend()
+
+    return fig, ax
+
+
 class EmptyPredictionsArrayError(Exception):
     pass
 

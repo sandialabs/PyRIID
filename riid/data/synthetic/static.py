@@ -180,7 +180,6 @@ class StaticSynthesizer():
         ss.info.live_time = lt_targets
         ss.info.real_time = lt_targets
         ss.info.total_counts = spectra.sum(axis=1)
-        ss.info.snr = fg_counts / np.sqrt(bg_counts)
         ss.info.ecal_order_0 = ecal[0]
         ss.info.ecal_order_1 = ecal[1]
         ss.info.ecal_order_2 = ecal[2]
@@ -188,6 +187,13 @@ class StaticSynthesizer():
         ss.info.ecal_low_e = ecal[4]
         ss.info.occupancy_flag = 0
         ss.info.tag = " "  # TODO: test if this can be empty string
+
+        if ss_spectra_type == "fg":
+            ss.info.snr = fg_counts
+        elif ss_spectra_type == "bg":
+            ss.info.snr = 0
+        elif ss_spectra_type == "gross":
+            ss.info.snr = fg_counts / np.sqrt(bg_counts.clip(1))
 
         if ss_spectra_type == "gross":
             ss.sources = sources
