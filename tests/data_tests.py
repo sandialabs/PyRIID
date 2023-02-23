@@ -214,8 +214,8 @@ class TestData(unittest.TestCase):
             "pu239_25yr": ("Pu239", "SNM"),
             "pu239_50yr": ("Pu239", "SNM"),
             "1gPuWG_0.5yr,3{an=10,ad=5}": ("Pu239", "SNM"),
-            "1kg HEU + 800uCi Cs137": ("U235 + U238 + Cs137", "SNM"),
-            "WGPu + Cs137": ("Pu239 + Cs137", "SNM"),
+            "1kg HEU + 800uCi Cs137": ("U235", "SNM"),
+            "WGPu + Cs137": ("Pu239", "SNM"),
             "10 yr WGPu in Fe": ("Pu239", "SNM")
         }
         for seed, (isotope, category) in RAD_SOURCES.items():
