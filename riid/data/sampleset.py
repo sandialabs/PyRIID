@@ -140,6 +140,55 @@ class SampleSet():
     def __eq__(self, ss: SampleSet):
         return np.array_equal(self._spectra.values, ss._spectra.values)
 
+    def _check_arithmetic_supported(self, ss2: SampleSet):
+        if ss2.n_samples != 1:
+            raise ValueError("Only one background spectrum may be provided!")
+        if self.spectra_state != ss2.spectra_state:
+            state_str = f"({self.spectra_state} != {ss2.spectra_state})"
+            raise ValueError(f"Spectra states are incompatible {state_str}!")
+        if self.n_channels != ss2.n_channels:
+            channel_str = f"({self.n_channels} != {ss2.n_channels})"
+            raise ValueError(f"#'s of spectra channels are incompatible {channel_str}!")
+        SUPPORTED_STATES = (SpectraState.Counts.value, SpectraState.L1Normalized.value)
+        if self.spectra_state.value not in SUPPORTED_STATES:
+            raise ValueError(f"{self.spectra_state} spectra state of left operand not supported!")
+        if ss2.spectra_state.value not in SUPPORTED_STATES:
+            raise ValueError(f"{ss2.spectra_state} spectra state of right operand not supported!")
+
+    def _get_scaled_bg_spectra(self, bg_ss: SampleSet) -> np.ndarray:
+        bg_spectrum_in_counts = bg_ss.spectra.iloc[0].values
+        if bg_ss.spectra_state == SpectraState.L1Normalized:
+            bg_spectrum_in_counts *= bg_ss.info.iloc[0].bg_counts
+        bg_live_time = bg_ss.info.iloc[0].live_time
+        bg_spectrum_in_cps = bg_spectrum_in_counts / bg_live_time
+        scaled_bg_spectra = np.concatenate(
+            bg_spectrum_in_cps * self.info.live_time.values[:, np.newaxis, np.newaxis]
+        )
+        return scaled_bg_spectra
+
+    def __add__(self, bg_ss: SampleSet) -> SampleSet:
+        """Adds a single given background spectrum to the spectra of the current SampleSet."""
+        self._check_arithmetic_supported(bg_ss)
+
+        scaled_bg_spectra = self._get_scaled_bg_spectra(bg_ss)
+        new_ss = self[:]
+        if new_ss.spectra_state == SpectraState.L1Normalized:
+            new_ss.spectra *= new_ss.info.iloc[0].fg_counts.values
+        new_ss.spectra += scaled_bg_spectra
+        return new_ss
+
+    def __sub__(self, bg_ss: SampleSet) -> SampleSet:
+        """Subtracts a single given background spectrum from the spectra of the current SampleSet.
+        """
+        self._check_arithmetic_supported(bg_ss)
+
+        scaled_bg_spectra = self._get_scaled_bg_spectra(bg_ss)
+        new_ss = self[:]
+        if new_ss.spectra_state == SpectraState.L1Normalized:
+            new_ss.spectra *= new_ss.info.iloc[0].fg_counts.values
+        new_ss.spectra -= scaled_bg_spectra
+        return new_ss
+
     # region Properties
 
     @property
