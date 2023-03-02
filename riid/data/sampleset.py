@@ -7,6 +7,7 @@ from __future__ import \
 
 import copy
 import logging
+import operator
 import os
 import random
 import re
@@ -161,8 +162,7 @@ class SampleSet():
         )
         return scaled_bg_spectra
 
-    def __add__(self, bg_ss: SampleSet) -> SampleSet:
-        """Adds a single given background spectrum to the spectra of the current SampleSet."""
+    def _get_arithmetic_result(self, bg_ss: SampleSet, op) -> SampleSet:
         self._check_arithmetic_supported(bg_ss)
 
         scaled_bg_spectra = self._get_scaled_bg_spectra(bg_ss)
@@ -171,28 +171,21 @@ class SampleSet():
         is_l1_normalized = new_ss.spectra_state == SpectraState.L1Normalized
         if new_ss.spectra_state == SpectraState.L1Normalized:
             new_ss.spectra *= new_ss.info.iloc[0].total_counts
-        new_ss.spectra += scaled_bg_spectra
+        new_ss.spectra = op(new_ss.spectra, scaled_bg_spectra)
         if is_l1_normalized:
             new_ss.normalize()
 
         return new_ss
+
+    def __add__(self, bg_ss: SampleSet) -> SampleSet:
+        """Adds a single given background spectrum to the spectra of the current SampleSet.
+        """
+        return self._get_arithmetic_result(bg_ss, operator.add)
 
     def __sub__(self, bg_ss: SampleSet) -> SampleSet:
         """Subtracts a single given background spectrum from the spectra of the current SampleSet.
         """
-        self._check_arithmetic_supported(bg_ss)
-
-        scaled_bg_spectra = self._get_scaled_bg_spectra(bg_ss)
-        new_ss = self[:]
-
-        is_l1_normalized = new_ss.spectra_state == SpectraState.L1Normalized
-        if is_l1_normalized:
-            new_ss.spectra *= new_ss.info.iloc[0].total_counts
-        new_ss.spectra -= scaled_bg_spectra
-        if is_l1_normalized:
-            new_ss.normalize()
-
-        return new_ss
+        return self._get_arithmetic_result(bg_ss, operator.sub)
 
     # region Properties
 
