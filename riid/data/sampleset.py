@@ -59,7 +59,6 @@ class SampleSet():
         "real_time",
         "total_counts",
         "snr",
-        "sigma",
         "neutron_counts",
         "distance_cm",
         *ECAL_INFO_COLUMNS,
@@ -224,7 +223,7 @@ class SampleSet():
         scale of 0 to 1, where 0 is easiest and 1 is hardest.
 
         The difficulty of a SampleSet is the mean of the individual sample difficulties.
-        Each sample's difficulty is determined by where its signal strength (sigma)
+        Each sample's difficulty is determined by where its signal strength (SNR)
         falls on the survival function (AKA reliability function, or 1 - CDF) for a
         logistic distribution.
         The decision to use this distribution is based on empirical data showing that
@@ -250,15 +249,15 @@ class SampleSet():
         choosing the mean and standard deviation easier/automated based on more of our findings.
 
         Arguments:
-            mean: the sigma value representing the mean of the logistic distribution
+            mean: the SNR value representing the mean of the logistic distribution
             std: the standard deviation of the logistic distribution
 
         Returns:
-            The mean of all sigma values passed through a logistic survival function.
+            The mean of all SNR values passed through a logistic survival function.
 
         """
-        sigmas: np.ndarray = self.info.sigma.clip(1e-6)
-        score = float(stats.logistic.sf(sigmas, loc=mean, scale=std).mean())
+        snrs: np.ndarray = self.info.snr.clip(1e-6)
+        score = float(stats.logistic.sf(snrs, loc=mean, scale=std).mean())
 
         return score
 
@@ -444,7 +443,7 @@ class SampleSet():
         # Update spectra and info DataFrames
         new_ss = self[:]
         new_ss.spectra = pd.DataFrame(new_spectra)
-        new_ss.info["gross_counts"] = new_ss.spectra.sum(axis=1)
+        new_ss.info.total_counts = new_ss.spectra.sum(axis=1)
         new_ss.info[ecal_cols] = new_ecal
         return new_ss
 
@@ -473,8 +472,6 @@ class SampleSet():
             flat_info.total_counts = self.info.total_counts.sum()
         if "snr" in flat_info:
             flat_info.snr = self.info.snr.sum()
-        if "sigma" in flat_info:
-            flat_info.sigma = self.info.sigma.sum()
 
         # Create a new SampleSet with the flattened data
         flat_ss = SampleSet()
@@ -1280,13 +1277,7 @@ def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
             "real_time": spectrum["header"]["Total_time_per_real_time"],
             # The following commented out fields are PyRIID-only, which can't be stored in PCF.
             # They are shown here to explicitly communicate what would be lost in translation.
-            #   - snr_target
-            #   - snr_estimate
-            #   - sigma
-            #   - bg_counts
-            #   - fg_counts
-            #   - bg_counts_expected
-            #   - fg_counts
+            #   - SNR
             "total_counts": sum(spectrum["spectrum"]),
             "total_neutron_counts": spectrum["header"]["Total_Neutron_Counts"],
             "distance_cm": distance,

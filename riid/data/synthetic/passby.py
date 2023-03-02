@@ -314,8 +314,7 @@ class PassbySynthesizer():
         net_spectra = bg_spectra + fg_spectra
         total_counts = bg_counts + fg_counts
         excess_from_expected = total_counts - bg_counts_expected
-        snr_estimates = excess_from_expected / bg_counts_expected
-        sigmas = excess_from_expected / np.sqrt(bg_counts_expected)
+        snrs = excess_from_expected / np.sqrt(bg_counts_expected)
 
         source_data = np.hstack(
             (np.full([n_samples, 1], 1))
@@ -332,13 +331,8 @@ class PassbySynthesizer():
         info = pd.DataFrame(
                 data=np.vstack((
                     live_times,
-                    snr_targets,
-                    snr_estimates,
-                    bg_counts,
-                    fg_counts,
-                    bg_counts_expected,
                     total_counts,
-                    sigmas,
+                    snrs,
                     ecal_vals,
                     ecal_vals,
                     ecal_vals,
@@ -347,13 +341,8 @@ class PassbySynthesizer():
                 ).T,
                 columns=[
                     "live_time",
+                    "total_counts",
                     "snr",
-                    "snr_estimate",
-                    "fg_counts",
-                    "bg_counts",
-                    "bg_counts_expected",
-                    "gross_counts",
-                    "sigma",
                     *SampleSet.ECAL_INFO_COLUMNS
                 ]
             )
