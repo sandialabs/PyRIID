@@ -85,7 +85,6 @@ class TestSampleSet(unittest.TestCase):
         self.assertEqual(flat_ss.info["real_time"][0], ss.info["real_time"].sum())
         self.assertEqual(flat_ss.info["total_counts"][0], ss.info["total_counts"].sum())
         self.assertEqual(flat_ss.info["snr"][0], ss.info["snr"].sum())
-        self.assertEqual(flat_ss.info["sigma"][0], ss.info["sigma"].sum())
         info_columns_are_the_same = np.array_equal(
             ss.info.columns,
             flat_ss.info.columns

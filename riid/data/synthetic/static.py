@@ -188,9 +188,10 @@ class StaticSynthesizer():
         ss.spectra = pd.DataFrame(spectra)
         ss.info.description = np.full(n_samples, "")
         ss.info.timestamp = self._synthesis_start_dt
-        ss.info.total_counts = spectra.sum(axis=1)
         ss.info.live_time = lt_targets
         ss.info.real_time = lt_targets
+        ss.info.total_counts = spectra.sum(axis=1)
+        ss.info.snr = fg_counts / np.sqrt(bg_counts)
         ss.info.ecal_order_0 = ecal[0]
         ss.info.ecal_order_1 = ecal[1]
         ss.info.ecal_order_2 = ecal[2]
@@ -198,15 +199,6 @@ class StaticSynthesizer():
         ss.info.ecal_low_e = ecal[4]
         ss.info.occupancy_flag = 0
         ss.info.tag = " "  # TODO: test if this can be empty string
-
-        if ss_spectra_type == "bg":
-            ss.info.snr = 0
-            ss.info.sigma = 0
-        elif ss_spectra_type == "fg" or ss_spectra_type == "gross":
-            ss.info.snr = fg_counts / bg_counts
-            ss.info.sigma = fg_counts / np.sqrt(bg_counts)
-        else:
-            raise ValueError("Unrecognized spectra type.")
 
         if ss_spectra_type == "gross":
             ss.sources = sources
@@ -240,7 +232,7 @@ class StaticSynthesizer():
         fg_ss = self._get_sampleset(fg_spectra, fg_sources, ecal, lt_targets,
                                     fg_counts, bg_counts, "fg")
         bg_ss = self._get_sampleset(bg_spectra, bg_sources, ecal, lt_targets,
-                                    None, None, "bg")
+                                    0, 1, "bg")
         gross_sources = get_merged_sources_samplewise(fg_ss.sources, bg_ss.sources)
         gross_ss = self._get_sampleset(gross_spectra, gross_sources, ecal, lt_targets,
                                        fg_counts, bg_counts, "gross")
@@ -477,7 +469,6 @@ def get_dummy_seeds(n_channels: int = 512, live_time: float = 1,
     ss.info.live_time = live_time
     ss.info.real_time = live_time
     ss.info.snr = None
-    ss.info.sigma = None
     ss.info.ecal_order_0 = 0
     ss.info.ecal_order_1 = 3000
     ss.info.ecal_order_2 = 100
