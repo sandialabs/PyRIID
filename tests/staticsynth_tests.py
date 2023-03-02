@@ -30,7 +30,10 @@ class TestStaticSynthesis(unittest.TestCase):
             random_state=1
         )
         fg_1, bg_1, gross_1 = static_syn.generate(
-            fg_seeds_ss=fg_seeds_ss, bg_seeds_ss=mixed_bg_seeds_ss)
+            fg_seeds_ss=fg_seeds_ss,
+            bg_seeds_ss=mixed_bg_seeds_ss,
+            verbose=False
+        )
 
         static_syn = StaticSynthesizer(
             samples_per_seed=2,
@@ -41,7 +44,10 @@ class TestStaticSynthesis(unittest.TestCase):
         )
 
         fg_2, bg_2, gross_2 = static_syn.generate(
-            fg_seeds_ss=fg_seeds_ss, bg_seeds_ss=mixed_bg_seeds_ss)
+            fg_seeds_ss=fg_seeds_ss,
+            bg_seeds_ss=mixed_bg_seeds_ss,
+            verbose=False
+        )
 
         static_syn = StaticSynthesizer(
             samples_per_seed=2,
@@ -52,7 +58,10 @@ class TestStaticSynthesis(unittest.TestCase):
         )
 
         fg_3, bg_3, gross_3 = static_syn.generate(
-            fg_seeds_ss=fg_seeds_ss, bg_seeds_ss=mixed_bg_seeds_ss)
+            fg_seeds_ss=fg_seeds_ss,
+            bg_seeds_ss=mixed_bg_seeds_ss,
+            verbose=False
+        )
 
         self.assertEqual(fg_1, fg_2)  # used the same random_state
         self.assertEqual(bg_1, bg_2)  # used the same random_state

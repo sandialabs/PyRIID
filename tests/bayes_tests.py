@@ -66,7 +66,7 @@ class TestPoissonBayesClassifier(unittest.TestCase):
             snr_function_args=(10, 10),
             random_state=42
         )
-        _, test_bg_ss, test_ss = gss.generate(fg_seeds_ss, bg_seeds_ss)
+        _, test_bg_ss, test_ss = gss.generate(fg_seeds_ss, bg_seeds_ss, verbose=False)
 
         # Predict
         pb_model.predict(test_ss, test_bg_ss)

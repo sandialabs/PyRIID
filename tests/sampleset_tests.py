@@ -2,12 +2,15 @@
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
 """This module tests the sampleset module."""
+import itertools
 import unittest
 
 import numpy as np
 import pandas as pd
 
-from riid.data.sampleset import SampleSet, _get_row_labels
+from riid.data.sampleset import (ChannelCountMismatchError,
+                                 InvalidSampleCountError, SampleSet,
+                                 SpectraStateMismatchError, _get_row_labels, SpectraState)
 from riid.data.synthetic.static import get_dummy_seeds
 from riid.data.synthetic.seed import SeedMixer
 
@@ -17,11 +20,11 @@ class TestSampleSet(unittest.TestCase):
     """
     def test__eq__(self):
         """Tests equality of two SampleSets"""
-        ss = get_dummy_seeds(n_channels=1024)
-        ss2 = get_dummy_seeds(n_channels=512)
+        ss1 = get_dummy_seeds(live_time=1, normalize=False)
+        ss2 = get_dummy_seeds(live_time=5, normalize=False)
 
-        assert ss == ss
-        assert ss != ss2
+        self.assertTrue(ss1 == ss1)
+        self.assertTrue(ss1 != ss2)
 
     def test_as_ecal(self):
         """Tests conversion of spectra to energy bins."""
@@ -96,6 +99,89 @@ class TestSampleSet(unittest.TestCase):
             flat_ss.info.columns
         )
         self.assertTrue(info_columns_are_the_same)
+
+    def test_check_arithmetic_supported(self):
+        N_TARGET_CHANNELS = 5
+        fg_ss = get_dummy_seeds(N_TARGET_CHANNELS)
+
+        self.assertRaises(
+            InvalidSampleCountError,
+            fg_ss._check_arithmetic_supported,
+            get_dummy_seeds(n_channels=N_TARGET_CHANNELS)
+        )
+        self.assertRaises(
+            ChannelCountMismatchError,
+            fg_ss._check_arithmetic_supported,
+            get_dummy_seeds(n_channels=N_TARGET_CHANNELS + 1)[0]
+        )
+        mismatched_states = [
+            (left, right)
+            for left, right in itertools.combinations(SpectraState, r=2)
+            if left != right
+        ]
+        for left_state, right_state in mismatched_states:
+            l_ss = get_dummy_seeds(N_TARGET_CHANNELS)
+            l_ss.spectra_state = left_state
+            r_ss = get_dummy_seeds(N_TARGET_CHANNELS)[0]
+            r_ss.spectra_state = right_state
+            self.assertRaises(
+                SpectraStateMismatchError,
+                l_ss._check_arithmetic_supported,
+                r_ss
+            )
+        unsupported_matching_states = [
+            (left, right)
+            for left, right in itertools.combinations(SpectraState, r=2)
+            if left == right and left in SampleSet.SUPPORTED_STATES_FOR_ARITHMETIC
+        ]
+        for left_state, right_state in unsupported_matching_states:
+            l_ss = get_dummy_seeds(N_TARGET_CHANNELS)
+            l_ss.spectra_state = left_state
+            r_ss = get_dummy_seeds(N_TARGET_CHANNELS)[0]
+            r_ss.spectra_state = right_state
+            self.assertRaises(
+                ValueError,
+                l_ss._check_arithmetic_supported,
+                r_ss
+            )
+
+    def test_addition_and_subtraction_with_counts(self):
+        default_fg_spectra = np.ones((5, 10))
+        default_bg_spectra = np.ones((1, 10))
+        ss1 = SampleSet()
+        ss1.spectra_state = SpectraState.Counts
+        ss1.spectra = pd.DataFrame(default_fg_spectra)
+        ss1.info["total_counts"] = ss1.spectra.sum(axis=1)
+        ss1.info.live_time = 1
+        ss2 = SampleSet()
+        ss2.spectra_state = SpectraState.Counts
+        ss2.spectra = pd.DataFrame(default_bg_spectra)
+        ss2.info["total_counts"] = ss1.spectra.sum(axis=1)
+        ss2.info.live_time = 1
+
+        ss3 = ss1 + ss2
+        ss4 = ss3 - ss2
+
+        self.assertTrue(ss1 == ss4)
+
+    def test_addition_and_subtraction_with_l1_norm(self):
+        default_fg_spectra = np.ones((5, 10))
+        default_bg_spectra = np.ones((1, 10))
+        ss1 = SampleSet()
+        ss1.spectra = pd.DataFrame(default_fg_spectra)
+        ss1.info["total_counts"] = ss1.spectra.sum(axis=1)
+        ss1.info.live_time = 1
+        ss1.normalize()
+        ss2 = SampleSet()
+        ss2.spectra = pd.DataFrame(default_bg_spectra)
+        ss2.info["total_counts"] = ss1.spectra.sum(axis=1)
+        ss2.info.live_time = 10
+        ss2.normalize()
+
+        ss3 = ss1 + ss2
+        ss4 = ss3 - ss2
+
+        self.assertTrue(ss1 == ss4)
 
     def test_get_row_labels_max_only_no_value_no_aggregation(self):
         df = _get_test_df()
