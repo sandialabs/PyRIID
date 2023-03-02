@@ -441,13 +441,14 @@ def get_distribution_values(function: str, function_args: Any, n_values: int):
 
 
 def get_dummy_seeds(n_channels: int = 512, live_time: float = 1,
-                    count_rate: float = 100) -> SampleSet:
+                    count_rate: float = 100, normalize: bool = True) -> SampleSet:
     """Builds a random, dummy SampleSet for demonstration or test purposes.
 
     Args:
         n_channels: the number of channels in the spectra DataFrame.
         live_time: the collection time for all measurements.
         count_rate: the count rate for the seeds measurements.
+        normalize: whether to apply an L1-norm to the spectra.
 
     Returns:
         A SampleSet with randomly generated spectra
@@ -492,12 +493,7 @@ def get_dummy_seeds(n_channels: int = 512, live_time: float = 1,
 
     ss.spectra = pd.DataFrame(data=histograms)
 
-    ss.info.bg_counts = None
-    ss.info.bg_counts_expected = None
-    ss.info.fg_counts = N_FG_COUNTS
-    ss.info.fg_counts_expected = N_FG_COUNTS
-    ss.info.gross_counts = ss.spectra.sum(axis=1)
-    ss.info.gross_counts_expected = ss.info.gross_counts
+    ss.info["total_counts"] = ss.spectra.sum(axis=1)
     ss.info.live_time = live_time
     ss.info.real_time = live_time
     ss.info.snr = None
@@ -510,7 +506,8 @@ def get_dummy_seeds(n_channels: int = 512, live_time: float = 1,
     ss.info.description = ""
     ss.update_timestamp()
 
-    ss.normalize()
+    if normalize:
+        ss.normalize()
 
     return ss
 

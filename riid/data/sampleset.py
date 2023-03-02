@@ -80,6 +80,10 @@ class SampleSet():
         "UraniumInSoil",
         "ThoriumInSoil",
     )
+    SUPPORTED_STATES_FOR_ARITHMETIC = (
+        SpectraState.Counts.value,
+        SpectraState.L1Normalized.value
+    )
 
     def __init__(self):
         """Initializes the SampleSet class and provides default values
@@ -138,27 +142,25 @@ class SampleSet():
         return self.__str__()
 
     def __eq__(self, ss: SampleSet):
-        return np.array_equal(self._spectra.values, ss._spectra.values)
+        return np.allclose(self._spectra.values, ss._spectra.values)
 
     def _check_arithmetic_supported(self, ss2: SampleSet):
         if ss2.n_samples != 1:
-            raise ValueError("Only one background spectrum may be provided!")
-        if self.spectra_state != ss2.spectra_state:
-            state_str = f"({self.spectra_state} != {ss2.spectra_state})"
-            raise ValueError(f"Spectra states are incompatible {state_str}!")
+            raise InvalidSampleCountError("Only one background spectrum may be provided!")
         if self.n_channels != ss2.n_channels:
             channel_str = f"({self.n_channels} != {ss2.n_channels})"
-            raise ValueError(f"#'s of spectra channels are incompatible {channel_str}!")
-        SUPPORTED_STATES = (SpectraState.Counts.value, SpectraState.L1Normalized.value)
-        if self.spectra_state.value not in SUPPORTED_STATES:
-            raise ValueError(f"{self.spectra_state} spectra state of left operand not supported!")
-        if ss2.spectra_state.value not in SUPPORTED_STATES:
-            raise ValueError(f"{ss2.spectra_state} spectra state of right operand not supported!")
+            raise ChannelCountMismatchError(f"Mismatched spectra channels {channel_str}!")
+        if self.spectra_state != ss2.spectra_state:
+            state_str = f"({self.spectra_state} != {ss2.spectra_state})"
+            raise SpectraStateMismatchError(f"Mismatched spectra states {state_str}!")
+        if self.spectra_state.value not in self.SUPPORTED_STATES_FOR_ARITHMETIC:
+            raise ValueError(f"{self.spectra_state} spectra state not supported for arithmetic!")
+            # Don't need to check spectra state of ss2 since they passed the prior equality check
 
     def _get_scaled_bg_spectra(self, bg_ss: SampleSet) -> np.ndarray:
-        bg_spectrum_in_counts = bg_ss.spectra.iloc[0].values
+        bg_spectrum_in_counts = bg_ss.spectra.iloc[0].values.copy()
         if bg_ss.spectra_state == SpectraState.L1Normalized:
-            bg_spectrum_in_counts *= bg_ss.info.iloc[0].bg_counts
+            bg_spectrum_in_counts *= bg_ss.info.iloc[0].total_counts
         bg_live_time = bg_ss.info.iloc[0].live_time
         bg_spectrum_in_cps = bg_spectrum_in_counts / bg_live_time
         scaled_bg_spectra = np.concatenate(
@@ -172,9 +174,14 @@ class SampleSet():
 
         scaled_bg_spectra = self._get_scaled_bg_spectra(bg_ss)
         new_ss = self[:]
+
+        is_l1_normalized = new_ss.spectra_state == SpectraState.L1Normalized
         if new_ss.spectra_state == SpectraState.L1Normalized:
-            new_ss.spectra *= new_ss.info.iloc[0].fg_counts.values
+            new_ss.spectra *= new_ss.info.iloc[0].total_counts
         new_ss.spectra += scaled_bg_spectra
+        if is_l1_normalized:
+            new_ss.normalize()
+
         return new_ss
 
     def __sub__(self, bg_ss: SampleSet) -> SampleSet:
@@ -184,9 +191,14 @@ class SampleSet():
 
         scaled_bg_spectra = self._get_scaled_bg_spectra(bg_ss)
         new_ss = self[:]
-        if new_ss.spectra_state == SpectraState.L1Normalized:
-            new_ss.spectra *= new_ss.info.iloc[0].fg_counts.values
+
+        is_l1_normalized = new_ss.spectra_state == SpectraState.L1Normalized
+        if is_l1_normalized:
+            new_ss.spectra *= new_ss.info.iloc[0].total_counts
         new_ss.spectra -= scaled_bg_spectra
+        if is_l1_normalized:
+            new_ss.normalize()
+
         return new_ss
 
     # region Properties
@@ -1337,14 +1349,30 @@ def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
 
 
 class RebinningCalculationError(Exception):
-    """An exception that indicates an issue when rebinning
-    (up-binning or down-binning) a sample or collection of samples.
+    """An exception indicateing an issue when rebinning a sample or collection of samples.
     """
     pass
 
 
 class InvalidSampleSetFileError(Exception):
-    """An exception that indicates missing or invalid keys
-    in a file being parsed into a SampleSet.
+    """An exception indicating missing or invalid keys in a file being parsed into a SampleSet.
+    """
+    pass
+
+
+class InvalidSampleCountError(Exception):
+    """An exception indicating the wrong number of samples were encountered for some operation.
+    """
+    pass
+
+
+class SpectraStateMismatchError(Exception):
+    """An exception indicating two SampleSets have different SpectraState values.
+    """
+    pass
+
+
+class ChannelCountMismatchError(Exception):
+    """An exception indicating two SampleSets have different SpectraState values.
     """
     pass
