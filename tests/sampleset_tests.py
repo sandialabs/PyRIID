@@ -12,7 +12,6 @@ from riid.data.sampleset import (ChannelCountMismatchError,
                                  InvalidSampleCountError, SampleSet,
                                  SpectraStateMismatchError, _get_row_labels, SpectraState)
 from riid.data.synthetic.static import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
 
 
 class TestSampleSet(unittest.TestCase):
@@ -84,16 +83,9 @@ class TestSampleSet(unittest.TestCase):
         self.assertEqual(flat_ss.info["timestamp"][0], ss.info["timestamp"][0])
         self.assertEqual(flat_ss.info["live_time"][0], ss.info["live_time"].sum())
         self.assertEqual(flat_ss.info["real_time"][0], ss.info["real_time"].sum())
-        self.assertEqual(flat_ss.info["snr_target"][0], ss.info["snr_target"].sum())
+        self.assertEqual(flat_ss.info["total_counts"][0], ss.info["total_counts"].sum())
         self.assertEqual(flat_ss.info["snr"][0], ss.info["snr"].sum())
         self.assertEqual(flat_ss.info["sigma"][0], ss.info["sigma"].sum())
-        self.assertEqual(flat_ss.info["bg_counts"][0], ss.info["bg_counts"].sum())
-        self.assertEqual(flat_ss.info["fg_counts"][0], ss.info["fg_counts"].sum())
-        self.assertEqual(flat_ss.info["bg_counts_expected"][0], ss.info["bg_counts_expected"].sum())
-        self.assertEqual(flat_ss.info["fg_counts_expected"][0], ss.info["fg_counts_expected"].sum())
-        self.assertEqual(flat_ss.info["gross_counts"][0], ss.info["gross_counts"].sum())
-        self.assertEqual(flat_ss.info["gross_counts_expected"][0],
-                         ss.info["gross_counts_expected"].sum())
         info_columns_are_the_same = np.array_equal(
             ss.info.columns,
             flat_ss.info.columns
@@ -184,7 +176,7 @@ class TestSampleSet(unittest.TestCase):
         self.assertTrue(ss1 == ss4)
 
     def test_get_row_labels_max_only_no_value_no_aggregation(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": True,
             "include_value": False,
@@ -215,7 +207,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_max_only_no_value_with_sum(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": True,
             "include_value": False,
@@ -246,7 +238,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_max_only_no_value_with_mean(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": True,
             "include_value": False,
@@ -277,7 +269,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_max_only_with_value_no_aggregation(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": True,
             "include_value": True,
@@ -311,7 +303,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_max_only_with_value_with_sum(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": True,
             "include_value": True,
@@ -345,7 +337,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_max_only_with_value_with_mean(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": True,
             "include_value": True,
@@ -379,7 +371,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_multiple_no_value_no_aggregation(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": False,
             "include_value": False,
@@ -411,7 +403,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_multiple_no_value_with_sum(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": False,
             "include_value": False,
@@ -443,7 +435,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_multiple_no_value_with_mean(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": False,
             "include_value": False,
@@ -475,7 +467,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_multiple_with_value_no_aggregation(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": False,
             "include_value": True,
@@ -513,7 +505,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_multiple_with_value_with_sum(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": False,
             "include_value": True,
@@ -549,7 +541,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_multiple_with_value_with_mean(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": False,
             "include_value": True,
@@ -586,7 +578,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_multiple_no_value_no_aggregation_with_min_value(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": False,
             "include_value": False,
@@ -618,7 +610,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_multiple_no_value_with_sum_with_min_value(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": False,
             "include_value": False,
@@ -650,7 +642,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_multiple_no_value_with_mean_with_min_value(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": False,
             "include_value": False,
@@ -682,7 +674,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_multiple_with_value_no_aggregation_with_min_value(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": False,
             "include_value": True,
@@ -720,7 +712,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_multiple_with_value_with_sum_with_min_value(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": False,
             "include_value": True,
@@ -756,7 +748,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
     def test_get_row_labels_multiple_with_value_with_mean_with_min_value(self):
-        df = _get_test_df()
+        df = _get_test_sources_df()
         test_kwargs = {
             "max_only": False,
             "include_value": True,
@@ -812,7 +804,7 @@ class TestSampleSet(unittest.TestCase):
             )
 
 
-def _get_test_df():
+def _get_test_sources_df():
     df = pd.DataFrame(
         [
             # Single-isotope

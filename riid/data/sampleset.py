@@ -56,17 +56,10 @@ class SampleSet():
         "timestamp",
         "live_time",
         "real_time",
-        "bg_counts",
-        "bg_counts_expected",
-        "fg_counts",
-        "fg_counts_expected",
-        "gross_counts",
-        "gross_counts_expected",
-        "neutron_counts",
+        "total_counts",
         "snr",
-        "snr_expected",
         "sigma",
-        "sigma_expected",
+        "neutron_counts",
         "distance_cm",
         *ECAL_INFO_COLUMNS,
         "areal_density",
@@ -483,24 +476,12 @@ class SampleSet():
             flat_info.live_time = self.info.live_time.sum()
         if "real_time" in flat_info:
             flat_info.real_time = self.info.real_time.sum()
-        if "snr_target" in flat_info:
-            flat_info.snr_target = self.info.snr_target.sum()
+        if "total_counts" in flat_info:
+            flat_info.total_counts = self.info.total_counts.sum()
         if "snr" in flat_info:
             flat_info.snr = self.info.snr.sum()
         if "sigma" in flat_info:
             flat_info.sigma = self.info.sigma.sum()
-        if "bg_counts" in flat_info:
-            flat_info.bg_counts = self.info.bg_counts.sum()
-        if "fg_counts" in flat_info:
-            flat_info.fg_counts = self.info.fg_counts.sum()
-        if "bg_counts_expected" in flat_info:
-            flat_info.bg_counts_expected = self.info.bg_counts_expected.sum()
-        if "fg_counts_expected" in flat_info:
-            flat_info.fg_counts_expected = self.info.fg_counts_expected.sum()
-        if "gross_counts" in flat_info:
-            flat_info.gross_counts = self.info.gross_counts.sum()
-        if "gross_counts_expected" in flat_info:
-            flat_info.gross_counts_expected = self.info.gross_counts_expected.sum()
 
         # Create a new SampleSet with the flattened data
         flat_ss = SampleSet()

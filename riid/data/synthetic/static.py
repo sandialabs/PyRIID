@@ -180,6 +180,47 @@ class StaticSynthesizer():
 
     # endregion
 
+    def _get_sampleset(self, spectra, sources, ecal, lt_targets,
+                       fg_counts, bg_counts, ss_spectra_type: str):
+        n_samples = spectra.shape[0]
+        ss = SampleSet()
+        ss.spectra_state = SpectraState.Counts
+        ss.spectra = pd.DataFrame(spectra)
+        ss.info.description = np.full(n_samples, "")
+        ss.info.timestamp = self._synthesis_start_dt
+        ss.info.total_counts = spectra.sum(axis=1)
+        ss.info.live_time = lt_targets
+        ss.info.real_time = lt_targets
+        ss.info.ecal_order_0 = ecal[0]
+        ss.info.ecal_order_1 = ecal[1]
+        ss.info.ecal_order_2 = ecal[2]
+        ss.info.ecal_order_3 = ecal[3]
+        ss.info.ecal_low_e = ecal[4]
+        ss.info.occupancy_flag = 0
+        ss.info.tag = " "  # TODO: test if this can be empty string
+
+        if ss_spectra_type == "bg":
+            ss.info.snr = 0
+            ss.info.sigma = 0
+        elif ss_spectra_type == "fg" or ss_spectra_type == "gross":
+            ss.info.snr = fg_counts / bg_counts
+            ss.info.sigma = fg_counts / np.sqrt(bg_counts)
+        else:
+            raise ValueError("Unrecognized spectra type.")
+
+        if ss_spectra_type == "gross":
+            ss.sources = sources
+        else:
+            ss.sources = pd.DataFrame(
+                np.tile(sources.values, (n_samples, 1)),
+                columns=sources.index
+            )
+            # Multiplying normalized seed source values by spectrum counts.
+            # This is REQUIRED for properly merging sources DataFrames later and multi-isotope.
+            ss.sources = ss.sources.multiply(spectra.sum(axis=1), axis="index")
+
+        return ss
+
     def _get_fg_and_or_bg_batch(self, fg_seed, fg_sources, bg_seed, bg_sources, ecal,
                                 lt_targets, snr_targets):
         bg_counts_expected = lt_targets * self.background_cps
@@ -195,77 +236,16 @@ class StaticSynthesizer():
             fg_spectra = fg_spectra_expected
             bg_spectra = bg_spectra_expected
             gross_spectra = fg_spectra_expected + bg_spectra_expected
-        fg_ss = self._get_sampleset(fg_spectra, fg_sources, ecal,
-                                    lt_targets, snr_targets, "fg",
-                                    None, None, fg_counts_expected, bg_counts_expected)
-        bg_ss = self._get_sampleset(bg_spectra, bg_sources, ecal,
-                                    lt_targets, snr_targets, "bg",
-                                    None, None, fg_counts_expected, bg_counts_expected)
+        fg_counts, bg_counts = fg_spectra.sum(axis=1), bg_spectra.sum(axis=1)
+        fg_ss = self._get_sampleset(fg_spectra, fg_sources, ecal, lt_targets,
+                                    fg_counts, bg_counts, "fg")
+        bg_ss = self._get_sampleset(bg_spectra, bg_sources, ecal, lt_targets,
+                                    None, None, "bg")
         gross_sources = get_merged_sources_samplewise(fg_ss.sources, bg_ss.sources)
-        gross_ss = self._get_sampleset(gross_spectra, gross_sources, ecal,
-                                       lt_targets, snr_targets, "gross",
-                                       fg_spectra.sum(axis=1), bg_spectra.sum(axis=1),
-                                       fg_counts_expected, bg_counts_expected)
+        gross_ss = self._get_sampleset(gross_spectra, gross_sources, ecal, lt_targets,
+                                       fg_counts, bg_counts, "gross")
 
         return fg_ss, bg_ss, gross_ss
-
-    def _get_sampleset(self, spectra, sources, ecal, lt_targets, snr_targets,
-                       ss_spectra_type: str,
-                       fg_counts, bg_counts,
-                       fg_counts_expected, bg_counts_expected):
-        n_samples = spectra.shape[0]
-        ss = SampleSet()
-        ss.spectra_state = SpectraState.Counts
-        ss.spectra = pd.DataFrame(spectra)
-        ss.info.description = np.full(n_samples, "")
-        ss.info.timestamp = self._synthesis_start_dt
-        ss.info.live_time = lt_targets
-        ss.info.real_time = lt_targets
-        ss.info.bg_counts_expected = bg_counts_expected
-        ss.info.fg_counts_expected = fg_counts_expected
-        ss.info.gross_counts_expected = bg_counts_expected + fg_counts_expected
-        ss.info.snr_expected = snr_targets
-        ss.info.sigma_expected = fg_counts_expected / np.sqrt(bg_counts_expected)
-        ss.info.ecal_order_0 = ecal[0]
-        ss.info.ecal_order_1 = ecal[1]
-        ss.info.ecal_order_2 = ecal[2]
-        ss.info.ecal_order_3 = ecal[3]
-        ss.info.ecal_low_e = ecal[4]
-        ss.info.occupancy_flag = 0
-        ss.info.tag = " "  # TODO: test if this can be empty string
-
-        if ss_spectra_type == "bg":
-            ss.info.bg_counts = spectra.sum(axis=1)
-            ss.info.fg_counts = 0
-            ss.info.snr = 0
-            ss.info.sigma = 0
-        elif ss_spectra_type == "fg":
-            ss.info.bg_counts = 0
-            ss.info.fg_counts = spectra.sum(axis=1)
-            ss.info.snr = ss.info.fg_counts
-            ss.info.sigma = ss.info.fg_counts
-        elif ss_spectra_type == "gross":
-            ss.info.bg_counts = bg_counts
-            ss.info.fg_counts = fg_counts
-            ss.info.snr = fg_counts / bg_counts
-            ss.info.sigma = fg_counts / np.sqrt(bg_counts)
-        else:
-            raise ValueError("A non-count-based spectra state is permitted in synthesis.")
-
-        ss.info.gross_counts = ss.info.bg_counts + ss.info.fg_counts
-
-        if ss_spectra_type == "gross":
-            ss.sources = sources
-        else:
-            ss.sources = pd.DataFrame(
-                np.tile(sources.values, (n_samples, 1)),
-                columns=sources.index
-            )
-            # Multiplying normalized seed source values by spectrum counts.
-            # This is REQUIRED for properly merging sources DataFrames later and multi-isotope.
-            ss.sources = ss.sources.multiply(spectra.sum(axis=1), axis="index")
-
-        return ss
 
     def _get_synthetic_samples(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet, verbose=True):
         n_samples_expected = self.samples_per_seed * fg_seeds_ss.n_samples * bg_seeds_ss.n_samples
