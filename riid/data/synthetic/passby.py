@@ -5,13 +5,15 @@
 detector.
 """
 import random
+from datetime import datetime
 from typing import Any, List
 
 import numpy as np
 import pandas as pd
 
 from riid.data import SampleSet
-from riid.data.labeling import BACKGROUND_LABEL, label_to_index_element
+from riid.data.sampleset import SpectraState
+from riid.data.synthetic.static import get_merged_sources_samplewise
 
 
 class PassbySynthesizer():
@@ -27,8 +29,6 @@ class PassbySynthesizer():
         """Constructs a synthetic passy-by generator.
 
         Args:
-            seeds: Defines the known distributions of counts across all channels such
-                that all channels sum to 1. Must contain one background seed.
             samples_per_seed: Defines the number of synthetic samples to randomly generate
                 per seed.
             background_cps: Defines the constant rate of gammas from background.
@@ -43,9 +43,7 @@ class PassbySynthesizer():
                 signal-to-noise ratio values. Options: uniform; log10; discrete; list.
             snr_function_args: Defines the range of values which are sampled in the fashion
                 specified by the `snr_function` argument.
-            mixture_size: Defines the number of seeds to mix together.
-            mixture_min_contribution: Defines the minimum ratio of counts that a seed must
-                contribute.
+            min_fraction: Minimum proportion of peak amplitude to exclude.
             random_state: Defines the random seed value used to reproduce specific data sets.
 
         Returns:
@@ -54,7 +52,6 @@ class PassbySynthesizer():
         Raises:
             None.
         """
-        self.seeds = seeds
         self.detector_info = seeds.detector_info
         self.events_per_seed = events_per_seed
         self.sample_interval = sample_interval
@@ -200,26 +197,6 @@ class PassbySynthesizer():
         self._sample_interval = value
 
     @property
-    def seeds(self) -> SampleSet:
-        """Get or set the SampleSet of non-poisson sampled gamma spectra representing the perfect
-        responses given by a specific detector when observing a an isotope for an "sufficiently
-        large" live time. Each seed generally represents a single source of radiation, such as
-        K40, Th232, Ba133, Y88, etc., however other seeds which incorporate sources + shielding
-        are perfectly valid.
-
-        Raises:
-            ValueError: Raised when a background seed value is not provided.
-        """
-        return self._seeds
-
-    @seeds.setter
-    def seeds(self, ss: SampleSet):
-        labels = ss.get_labels().values
-        if BACKGROUND_LABEL not in labels:
-            raise ValueError(f"A seed with the label '{BACKGROUND_LABEL}' must be provided.")
-        self._seeds = ss
-
-    @property
     def snr_function(self) -> str:
         """Get or set the function used to randomly sample the desired signal-to-noise
         (SNR) ratio space.
@@ -276,19 +253,33 @@ class PassbySynthesizer():
         return 1 / (np.power(samples, 2) + 1)
 
     def _generate_single_passby(self, fwhm: float, snr: float, dwell_time: float,
-                                seed_pdf: np.array, background_pdf: np.array, source: str):
-        """Generates sampleset with a sequence of spectra representative of a single pass-by event.
+                                src_pmf: np.array, bg_pmf: np.array, src_ecal: np.array,
+                                src_sources: pd.Series, bg_sources: pd.Series):
+        """Generates sampleset with a sequence of spectra representative of a single pass-by.
+
+            A source template is scaled up and then back down over the duration of a pass-by.
+            The following illustrates a general shape of pass-by's in terms of total counts.
+                        ********
+                      **        **
+                    **            **
+                   *|---- FWHM ----|*
+                  *                  *
+               ***                    ***
+            ***                          ***
+            Each sample (*) represents some number of total counts obtained over
+            `dwell_time / sample_interval` seconds.
 
         Args:
-            fwhm: Defines the full width at half maximum value to use for calculating the passby.
-            snr: Defines the signal to noise ration to use for calculating the passby.
-            dwell_time: Defines the dwell time for the source to use for calculating the passby.
-            seed_pdf: Defines the gross seed array to use for calculating the passby; the seed_pdf
+            fwhm: full width at half maximum value to use for calculating the passby.
+            snr: signal-to-noise ratio (SNR) used for calculating the passby.
+            dwell_time: dwell time for the source to use for calculating the passby.
+            src_pmf: source template to use for calculating the passby; the src_pmf
                 values are calculated as a percent, e.g. counts_in_channel/total_counts.
-            background_pdf: Defines the background seed array to use for calculating the passby; the
-                background_pdf values are calculated as a percent, e.g.
-                counts_in_channel/total_counts.
-            source: Defines the string name of the source present in the passby.
+            bg_pmf: background template to use for calculating the passby; the
+                bg_pmf values are calculated as a percent, e.g. counts_in_channel / total_counts.
+            src_ecal: The e-cal terms for the provided source PMF.
+            src_sources: underlying ground truth proportions of anomalous sources.
+            bg_sources: underlying ground truth proportions of background sources.
 
         Returns:
             A SampleSet object containing the synthesized passby data.
@@ -297,77 +288,70 @@ class PassbySynthesizer():
             None.
         """
         event_snr_targets = self._calculate_passby_shape(fwhm) * snr
-        n_event_spectra = len(event_snr_targets)
         dwell_targets = np.zeros(int(dwell_time / self.sample_interval))
         snr_targets = np.concatenate((event_snr_targets, dwell_targets))
 
         n_samples = len(snr_targets)
-        live_times = np.ones(n_samples)
+        live_times = np.ones(n_samples) * self.sample_interval
 
         bg_counts_expected = self.background_cps * live_times
-        bg_spectra = np.random.poisson(background_pdf * bg_counts_expected[:, None])
+        bg_spectra_expected = bg_pmf * bg_counts_expected[:, None]
+
+        src_counts_expected = self.background_cps * snr_targets * live_times
+        src_spectra_expected = src_pmf * src_counts_expected[:, None]
+
+        gross_spectra = np.random.poisson(src_spectra_expected + bg_spectra_expected)
+        bg_spectra = np.random.poisson(bg_spectra_expected)
+        src_spectra = gross_spectra - bg_spectra
+
         bg_counts = bg_spectra.sum(axis=1)
-
-        fg_counts_expected = self.background_cps * snr_targets * live_times
-        fg_spectra = np.random.poisson(seed_pdf * fg_counts_expected[:, None])
-        fg_counts = fg_spectra.sum(axis=1)
-        net_spectra = bg_spectra + fg_spectra
-        total_counts = bg_counts + fg_counts
-        excess_from_expected = total_counts - bg_counts_expected
-        snrs = excess_from_expected / np.sqrt(bg_counts_expected)
-
-        source_data = np.hstack(
-            (np.full([n_samples, 1], 1))
-        )
-
-        col_level_idx = SampleSet.SOURCES_MULTI_INDEX_NAMES.index("Isotope")
-        source_columns = pd.MultiIndex.from_tuples(
-            [label_to_index_element(source)],
-            names=SampleSet.SOURCES_MULTI_INDEX_NAMES[:col_level_idx+1]
-        )
-        sources = pd.DataFrame(columns=source_columns, data=source_data)
-        ecal_vals = np.zeros((n_samples), dtype=float)
-
-        info = pd.DataFrame(
-                data=np.vstack((
-                    live_times,
-                    total_counts,
-                    snrs,
-                    ecal_vals,
-                    ecal_vals,
-                    ecal_vals,
-                    ecal_vals,
-                    ecal_vals)
-                ).T,
-                columns=[
-                    "live_time",
-                    "total_counts",
-                    "snr",
-                    *SampleSet.ECAL_INFO_COLUMNS
-                ]
-            )
+        src_counts = src_spectra.sum(axis=1)
+        snrs = src_counts / np.sqrt(bg_counts)
 
         if self.subtract_background:
-            spectra = net_spectra - bg_spectra
+            spectra = src_spectra
+            total_counts = src_counts
+            sources = src_sources
         else:
-            spectra = net_spectra
+            spectra = gross_spectra
+            total_counts = gross_spectra.sum(axis=1)
+
+            src_sources_df = pd.DataFrame(
+                np.tile(src_sources.values, (n_samples, 1)),
+                columns=src_sources.index
+            )
+            src_sources_scaled = src_sources_df * src_counts_expected[:, None]
+            bg_sources_df = pd.DataFrame(
+                np.tile(bg_sources.values, (n_samples, 1)),
+                columns=bg_sources.index
+            )
+            bg_sources_scaled = bg_sources_df * bg_counts_expected[:, None]
+            sources = get_merged_sources_samplewise(
+                src_sources_scaled,
+                bg_sources_scaled
+            )
 
         ss = SampleSet()
-        ss.spectra = pd.DataFrame(spectra)
-
-        info.update(ss.info)
-        ss.info = info
-        ss.sources = sources
-        ss.synthesis_info = {
-            "dwell_time": dwell_time,
-            "event_length": n_event_spectra,
-            "fwhm": fwhm,
-            "snr": snr,
-            "source": source,
-            "total_length": n_samples,
-        }
         ss.detector_info.update(self.detector_info)
         ss.measured_or_synthetic = "synthetic"
+        ss.spectra_state = SpectraState.Counts
+        ss.spectra = pd.DataFrame(spectra)
+        ss.sources = sources
+        ss.info.description = np.full(n_samples, "")
+        ss.info.timestamp = self._synthesis_start_dt
+        ss.info.live_time = live_times
+        ss.info.real_time = live_times
+        ss.info.total_counts = total_counts
+        ss.info.snr = snrs
+        ss.info.ecal_order_0 = src_ecal[0]
+        ss.info.ecal_order_1 = src_ecal[1]
+        ss.info.ecal_order_2 = src_ecal[2]
+        ss.info.ecal_order_3 = src_ecal[3]
+        ss.info.ecal_low_e = src_ecal[4]
+        ss.info.occupancy_flag = 0
+        ss.info.tag = " "
+
+        ss.normalize_sources()
 
         return ss
 
@@ -458,9 +442,15 @@ class PassbySynthesizer():
             n_samples
         )
 
-    def generate(self) -> List[SampleSet]:
+    def generate(self, src_seeds_ss: SampleSet, bg_seeds_ss: SampleSet) -> List[SampleSet]:
         """Generate a list of sample sets where each SampleSets represents a pass-by as a
         sequence of spectra.
+
+        Args:
+            src_seeds_ss: Contains spectra normalized by total counts to be used
+                as the source component(s) of spectra.
+            bg_seeds_ss: Contains spectra normalized by total counts to be used
+                as the background components of gross spectra.
 
         Returns:
             A list of SampleSets where each SampleSet represents a pass-by event.
@@ -472,32 +462,26 @@ class PassbySynthesizer():
             random.seed(self.random_state)
             np.random.seed(self.random_state)
 
-        labels = self.seeds.get_labels()
-        isotope_seeds = self.seeds[labels != BACKGROUND_LABEL]
-        isotope_seeds_labels = isotope_seeds.get_labels()
-        background_seed = self.seeds[labels == BACKGROUND_LABEL]
-        bs_indices = np.full(background_seed.n_samples, False)
-        bs_indices[0] = True
-        background_seed = background_seed[bs_indices]
-        background_spectrum = background_seed.spectra.iloc[0, :].values
-        background_pdf = background_spectrum.clip(0)
-        background_pdf = background_pdf / background_pdf.sum()
+        self._synthesis_start_dt = datetime.utcnow().isoformat(sep=' ', timespec="seconds")
 
-        # Generate samples for each seed
         args = []
-        for i, _ in enumerate(isotope_seeds.spectra.index):
-            seed_spectrum = isotope_seeds.spectra.iloc[i, :].values
-            source = isotope_seeds_labels[i]
-            seed_pdf = seed_spectrum.clip(0)
-            seed_pdf = np.array(seed_pdf) / seed_pdf.sum()
-            n_samples = self.events_per_seed
-            if isinstance(self.events_per_seed, dict):
-                n_samples = self.events_per_seed[source]
-            fwhm_targets = self._get_fwhm_targets(n_samples)
-            snr_targets = self._get_snr_targets(n_samples)
-            dwell_time_targets = self._get_dwell_time_targets(n_samples)
-            for fwhm, snr, dwell in zip(fwhm_targets, snr_targets, dwell_time_targets):
-                args.append((fwhm, snr, dwell, seed_pdf, background_pdf, source))
+        for bg_i in range(bg_seeds_ss.n_samples):
+            bg_pmf = bg_seeds_ss.spectra.iloc[bg_i].values
+            bg_sources = bg_seeds_ss.sources.iloc[bg_i]
 
-        events = [self._generate_single_passby(*a) for a in args]
-        return events
+            fwhm_targets = self._get_fwhm_targets(self.events_per_seed)
+            snr_targets = self._get_snr_targets(self.events_per_seed)
+            dwell_time_targets = self._get_dwell_time_targets(self.events_per_seed)
+
+            for src_i in range(src_seeds_ss.n_samples):
+                src_pmf = src_seeds_ss.spectra.iloc[src_i].values
+                src_sources = src_seeds_ss.sources.iloc[src_i]
+                src_ecal = src_seeds_ss.ecal[src_i]
+
+                for fwhm, snr, dwell in zip(fwhm_targets, snr_targets, dwell_time_targets):
+                    args.append((fwhm, snr, dwell, src_pmf, bg_pmf, src_ecal, src_sources,
+                                 bg_sources))
+
+        passbys = [self._generate_single_passby(*a) for a in args]
+
+        return passbys
