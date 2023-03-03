@@ -108,17 +108,6 @@ class StaticSynthesizer():
         self._background_n_cps = value
 
     @property
-    def subtract_background(self) -> bool:
-        """Get or set the flag for whether or not to include counts from
-        background in the final spectra.
-        """
-        return self._subtract_background
-
-    @subtract_background.setter
-    def subtract_background(self, value: bool):
-        self._subtract_background = value
-
-    @property
     def live_time_function(self) -> str:
         """Get or set the function used to randomly sample the desired live time space.
 
@@ -319,11 +308,11 @@ class StaticSynthesizer():
 
         Args:
             fg_seeds_ss: Contains spectra normalized by total counts to be used
-                as the foreground (source only) component of spectra.
+                as the source component(s) of spectra.
             bg_seeds_ss: Contains spectra normalized by total counts to be used
                 as the background components of gross spectra.
             fixed_bg_ss: Contains a single spectrum to be used as a fixed (or intrinsic)
-                background source, where live time information must be present.
+                background source; live time information must be present.
                 This spectrum is used to represent things like:
                 - cosmic background (which is location-specific);
                 - one or more calibration sources; or
@@ -444,12 +433,12 @@ def get_dummy_seeds(n_channels: int = 512, live_time: float = 1,
     ]
     n_sources = len(sources)
     n_fg_sources = n_sources
-    sources_index = pd.MultiIndex.from_tuples(
+    sources_cols = pd.MultiIndex.from_tuples(
         sources,
         names=SampleSet.SOURCES_MULTI_INDEX_NAMES
     )
     sources_data = np.identity(n_sources)
-    ss.sources = pd.DataFrame(data=sources_data, columns=sources_index)
+    ss.sources = pd.DataFrame(data=sources_data, columns=sources_cols)
 
     histograms = []
     N_FG_COUNTS = int(count_rate * live_time)
