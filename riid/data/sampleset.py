@@ -554,7 +554,7 @@ class SampleSet():
             0
         )
 
-    def downsample_spectra(self, target_bins: int = 128):
+    def downsample_spectra(self, target_bins: int = 128, min_frac=1e-8):
         """Replaces spectra with downsampled version. Uniform binning is assumed.
 
         Args:
@@ -579,7 +579,10 @@ class SampleSet():
         self._spectra = pd.DataFrame(
             data=np.matmul(
                 self._spectra.values,
-                transformation.T))
+                transformation.T
+            )
+        )
+        self._spectra[self._spectra < min_frac] = 0
 
     def drop_sources_columns_with_all_zeros(self):
         """Removes columns from the sources DataFrame that contain only zeros.
