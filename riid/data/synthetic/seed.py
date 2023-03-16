@@ -151,13 +151,14 @@ class SeedSynthesizer():
 
 class SeedMixer():
     def __init__(self, seeds_ss: SampleSet, mixture_size: int = 2, dirichlet_alpha: float = 2.0,
-                 restricted_isotope_pairs: List[Tuple[str, str]] = []):
+                 restricted_isotope_pairs: List[Tuple[str, str]] = [], random_state: int = None):
         assert mixture_size >= 2
 
         self.seeds_ss = seeds_ss
         self.mixture_size = mixture_size
         self.dirichlet_alpha = dirichlet_alpha
         self.restricted_isotope_pairs = restricted_isotope_pairs
+        self.random_state = random_state
 
         self._check_seeds()
 
@@ -228,6 +229,8 @@ class SeedMixer():
                 raise ValueError("Number of Dirichlet alphas does not equal the number of seeds.")
             seed_to_alpha = {s: a for s, a in zip(seeds, self.dirichlet_alpha)}
 
+        rng = np.random.default_rng(self.random_state)
+
         n_samples_produced = 0
         while n_samples_produced < n_samples:
             batch_size = n_samples - n_samples_produced
@@ -240,12 +243,13 @@ class SeedMixer():
                     isotopes.copy(),
                     np.array(isotope_probas.copy()),
                     restricted_isotope_bidict,
-                    self.mixture_size
+                    self.mixture_size,
+                    rng
                 )
                 for _ in range(batch_size)
             ]
             seed_choices = [
-                [isotope_to_seeds[i][np.random.choice(len(isotope_to_seeds[i]))] for i in c]
+                [isotope_to_seeds[i][rng.choice(len(isotope_to_seeds[i]))] for i in c]
                 for c in isotope_choices
             ]
             batch_dirichlet_alphas = np.array([
@@ -253,7 +257,7 @@ class SeedMixer():
                 for s in seed_choices
             ])
             seed_ratios = [
-                np.random.default_rng().dirichlet(
+                rng.dirichlet(
                     alpha=alpha
                 ) for alpha in batch_dirichlet_alphas
             ]
@@ -327,7 +331,7 @@ class bidict(dict):
 
 
 def get_choices(choices_so_far: list, options: list, options_probas: np.array,
-                restricted_pairs: bidict, n_choices_remaining: int):
+                restricted_pairs: bidict, n_choices_remaining: int, rng=None):
     """Makes a random choice from the given options until the desired number of choices
         is reached.
 
@@ -343,6 +347,7 @@ def get_choices(choices_so_far: list, options: list, options_probas: np.array,
         restricted_pairs: a bi-directional hash table allowing us to quickly find restrictions
             regardless of the order in which the pair has been specified
         n_choices_remaining: the number of choices remaining
+        rng: a NumPy random number generator, useful for experiment repeatability
 
     Raises:
         ValueError: if the number of choices desired exceeds the number of options available
@@ -353,7 +358,10 @@ def get_choices(choices_so_far: list, options: list, options_probas: np.array,
     elif len(options) < n_choices_remaining:
         raise ValueError("There are not enough options to achieve the specified number of choices.")
 
-    choice = np.random.choice(a=options, replace=False, p=options_probas)
+    if not rng:
+        rng = np.random.default_rng()
+
+    choice = rng.choice(a=options, replace=False, p=options_probas)
     choices_so_far.append(choice)
 
     # Remove current choice from future options
@@ -379,4 +387,4 @@ def get_choices(choices_so_far: list, options: list, options_probas: np.array,
 
     n_choices_remaining -= 1
     return get_choices(choices_so_far, options, options_probas, restricted_pairs,
-                       n_choices_remaining)
+                       n_choices_remaining, rng)
