@@ -205,7 +205,7 @@ class StaticSynthesizer():
     def _get_fg_and_or_bg_batch(self, fg_seed, fg_sources, bg_seed, bg_sources, ecal,
                                 lt_targets, snr_targets):
         bg_counts_expected = lt_targets * self.background_cps
-        fg_counts_expected = snr_targets * bg_counts_expected
+        fg_counts_expected = snr_targets * np.sqrt(bg_counts_expected)
 
         fg_spectra_expected = get_expected_spectra(fg_seed.values, fg_counts_expected)
         bg_spectra_expected = get_expected_spectra(bg_seed.values, bg_counts_expected)
