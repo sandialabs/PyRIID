@@ -106,7 +106,7 @@ def topcoder_file_to_ss(file_path: str, sample_interval: float, n_bins: int = 10
     )
     # Create new dataframe where: row = time interval, column = channel
     spectra_df = result.unstack(level=-1, fill_value=0)
-    spectra_df = spectra_df['counts']
+    spectra_df = spectra_df["counts"]
     # Add in missing columns as needed
     col_list = np.arange(0, n_bins)
     cols_to_add = np.setdiff1d(col_list, spectra_df.columns)
