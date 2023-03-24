@@ -141,6 +141,7 @@ SEED_TO_ISOTOPE_SPECIAL_CASES = {
     "1kg HEU + 800uCi Cs137": "U235",
     "WGPu + Cs137": "Pu239",
     "HEU": "U235",
+    "HEU + Tc99m": "U235",
     "DU": "U238",
     "WGPu": "Pu239",
     "PuWG": "Pu239",
