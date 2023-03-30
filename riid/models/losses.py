@@ -168,3 +168,24 @@ def reconstruction_error(spectra, lpes, dictionary, diff_func):
     reconstructed_spectra = tf.matmul(lpes, dictionary)
     reconstruction_errors = diff_func(spectra, reconstructed_spectra)
     return reconstruction_errors
+
+
+# class JSDLoss(tf.keras.losses.Loss):
+#     def __init__(self):
+#         super(JSDLoss, self).__init__()
+#         self.kl = tf.keras.losses.KLDivergence(
+#             reduction=tf.keras.losses.Reduction.NONE
+#         )
+
+#     def call(self, y_true, y_pred):
+#         m = 0.5 * (y_true + y_pred)
+#         jsd = 0.5 * self.kl(y_true, m) + 0.5 * self.kl(y_pred, m)
+#         return jsd
+
+def JSDLoss(y_true, y_pred):
+    kl = tf.keras.losses.KLDivergence(
+        reduction=tf.keras.losses.Reduction.SUM_OVER_BATCH_SIZE
+    )
+    m = 0.5 * (y_true + y_pred)
+    jsd = 0.5 * kl(y_true, m) + 0.5 * kl(y_pred, m)
+    return jsd

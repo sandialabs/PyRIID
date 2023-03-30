@@ -23,7 +23,7 @@ from riid.models import ModelInput, TFModelBase
 from riid.models.losses import (build_semisupervised_loss_func,
                                 normal_nll_diff, poisson_nll_diff,
                                 reconstruction_error, sse_diff,
-                                weighted_sse_diff)
+                                weighted_sse_diff, JSDLoss)
 from riid.models.metrics import RunningAverage, multi_f1, single_f1
 
 
@@ -932,39 +932,228 @@ def _get_reordered_spectra(old_spectra_df: pd.DataFrame, old_sources_df: pd.Data
     return reordered_spectra_df
 
 
-def _get_combined_seeds(seeds_ss1: SampleSet, seeds_ss2: SampleSet,
-                        new_sources_columns, target_level) -> SampleSet:
-    sources1 = seeds_ss1.sources
-    sources2 = seeds_ss2.sources
+class ARAD(TFModelBase):
+    """
+    This model is based on the following paper:
+    https://www.sciencedirect.com/science/article/pii/S0952197622000550
+    """
+    def __init__(self, conv_kernels: tuple = (7, 5, 3, 3, 3),
+                 conv_strides: tuple = (1, 1, 1, 1, 1),
+                 conv_filter_size: int = 8,
+                 max_pool_size: int = 2,
+                 use_batch_norm: bool = True,
+                 hidden_activation: Any = tfa.activations.mish,
+                 final_activation: Any = tf.keras.activations.sigmoid,
+                 hidden_initializer: Any = tf.keras.initializers.HeNormal,
+                 final_initializer: Any = tf.keras.initializers.GlorotNormal,
+                 conv_padding: str = "same",
+                 kernel_l2_reg: float = 1e-3,
+                 kernel_l1_reg: float = 1e-3,
+                 bias_l2_reg: float = 1e-3,
+                 latent_space_size: int = 8,
+                 loss: Any = JSDLoss,
+                 optimizer: Any = Adam(
+                    learning_rate=1e-2
+                 ),
+                 metrics: tuple = (JSDLoss,)
+                 ):
+        """Initialize the OOD detector.
 
-    new_spectra_df = pd\
-        .concat([seeds_ss1.spectra, seeds_ss2.spectra])\
-        .reset_index(drop=True)
-    new_sources_shape = (
-        sources1.shape[0] + sources2.shape[0],
-        sources1.shape[1] + sources2.shape[1],
-    )
-    adjusted_sources2_df = sources2.copy()
-    adjusted_sources2_df.index = np.arange(
-        sources1.shape[0],
-        sources1.shape[0] + sources2.shape[0]
-    )
+        The model is implemented as a tf.keras.Sequential object.
 
-    new_sources_df = pd.DataFrame(
-        np.zeros(new_sources_shape),
-        columns=new_sources_columns
-    )
-    new_sources_df[sources1.columns.get_level_values(target_level)] = sources1
-    new_sources_df[sources2.columns.get_level_values(target_level)] = adjusted_sources2_df
-    new_sources_df.fillna(0, inplace=True)
+        Args:
+            hidden_layers: Defines a tuple defining the number and size of dense layers.
+            activation: Defines the activate function to use for each dense layer.
+            loss: Defines the loss function to use for training.
+            optimizer: Defines the tensorflow optimizer or optimizer name to use for training.
+            metrics: Defines a list of metrics to be evaluating during training.
+            l2_alpha: Defines the alpha value for the L2 regularization of each dense layer.
+            activity_regularizer: Defines the regularizer function applied each dense layer output.
+            dropout: Defines the amount of dropout to apply to each dense layer.
+            learning_rate: the learning rate to use for an Adam optimizer.
+        """
+        super().__init__()
 
-    new_ss = SampleSet()
-    new_ss.spectra = _get_reordered_spectra(
-        new_spectra_df,
-        new_sources_df,
-        new_sources_columns,
-        target_level
-    )
-    new_ss.sources = new_sources_df
+        self.conv_kernels = conv_kernels
+        self.conv_strides = conv_strides
+        self.conv_filter_size = conv_filter_size
+        self.max_pool_size = max_pool_size
+        self.use_batch_norm = use_batch_norm
+        self.hidden_activation = hidden_activation
+        self.final_activation = final_activation
+        self.hidden_initializer = hidden_initializer
+        self.final_initializer = final_initializer
+        self.conv_padding = conv_padding
+        self.kernel_l2_reg = kernel_l2_reg
+        self.kernel_l1_reg = kernel_l1_reg
+        self.bias_l2_reg = bias_l2_reg
+        self.latent_space_size = latent_space_size
+        self.loss = loss
+        self.optimizer = optimizer
+        self.metrics = metrics
 
-    return new_ss
+        self.model = None
+
+    def fit(self, ss: SampleSet, validation_split: float = 0.2, batch_size: int = 32,
+            callbacks=None, patience: int = 6, es_monitor: str = "val_loss",
+            es_mode: str = "min", es_delta: float = 1e-4, es_verbose=0,
+            verbose: bool = False, epochs: int = 100):
+        # create dataset
+        spectra = ss.get_samples().astype(float)
+        spectra = spectra/spectra.sum(axis=1)[:, None]  # normalize spectra
+        # dataset = tf.data.Dataset.from_tensor_slices(
+        #     tf.convert_to_tensor(spectra, dtype=tf.float32)
+        # )
+        # dataset.shuffle(buffer_size=ss.n_samples)
+        # n_val_samples = int(validation_split * ss.n_samples)
+
+        # train_dataset = dataset.skip(n_val_samples)
+        # train_dataset = train_dataset.batch(batch_size)
+
+        # val_dataset = dataset.take(n_val_samples)
+        # val_dataset = val_dataset.batch(batch_size)
+
+        # create model
+        if verbose:
+            print('Creating model...')
+        if not self.model:
+            self.model = tf.keras.models.Sequential()
+            self.model.add(tf.keras.Input(shape=(128, 1)))
+            for i in range(len(self.conv_kernels)):
+                self.model.add(tf.keras.layers.Conv1D(
+                    filters=self.conv_filter_size,
+                    kernel_size=self.conv_kernels[i],
+                    strides=self.conv_strides[i],
+                    padding=self.conv_padding,
+                    activation=self.hidden_activation,
+                    kernel_regularizer=tf.keras.regularizers.L1L2(
+                        l1=self.kernel_l1_reg,
+                        l2=self.kernel_l2_reg
+                    ),
+                    bias_regularizer=tf.keras.regularizers.L2(
+                        l2=self.bias_l2_reg
+                    ),
+                    kernel_initializer=self.hidden_initializer
+                ))
+                if self.use_batch_norm:
+                    self.model.add(tf.keras.layers.BatchNormalization())
+                self.model.add(tf.keras.layers.MaxPool1D(pool_size=2))
+                if self.use_batch_norm:
+                    self.model.add(tf.keras.layers.BatchNormalization())
+
+            self.model.add(tf.keras.layers.Flatten())
+            self.model.add(tf.keras.layers.Dense(
+                self.latent_space_size,
+                activation=self.hidden_activation,
+                kernel_regularizer=tf.keras.regularizers.L1L2(
+                    l1=self.kernel_l1_reg,
+                    l2=self.kernel_l2_reg
+                ),
+                bias_regularizer=tf.keras.regularizers.L2(
+                    l2=self.bias_l2_reg
+                ),
+                kernel_initializer=self.hidden_initializer
+            ))
+            # if self.use_batch_norm:
+            #     self.model.add(tf.keras.layers.BatchNormalization())
+            self.model.add(tf.keras.layers.Dense(
+                32,
+                activation=self.hidden_activation,
+                kernel_regularizer=tf.keras.regularizers.L1L2(
+                    l1=self.kernel_l1_reg,
+                    l2=self.kernel_l2_reg
+                ),
+                bias_regularizer=tf.keras.regularizers.L2(
+                    l2=self.bias_l2_reg
+                ),
+                kernel_initializer=self.hidden_initializer
+            ))
+            # if self.use_batch_norm:
+            #     self.model.add(tf.keras.layers.BatchNormalization())
+
+            self.model.add(tf.keras.layers.Reshape((4, 8)))
+
+            for i in range(len(self.conv_kernels)-1):
+                self.model.add(tf.keras.layers.UpSampling1D(self.max_pool_size))
+                if self.use_batch_norm:
+                    self.model.add(tf.keras.layers.BatchNormalization())
+                self.model.add(tf.keras.layers.Conv1DTranspose(
+                    filters=self.conv_filter_size,
+                    kernel_size=self.conv_kernels[-i-1],
+                    strides=self.conv_strides[-i-1],
+                    padding=self.conv_padding,
+                    activation=self.hidden_activation,
+                    kernel_regularizer=tf.keras.regularizers.L1L2(
+                        l1=self.kernel_l1_reg,
+                        l2=self.kernel_l2_reg
+                    ),
+                    bias_regularizer=tf.keras.regularizers.L2(
+                        l2=self.bias_l2_reg
+                    ),
+                    kernel_initializer=self.hidden_initializer
+                ))
+                if self.use_batch_norm:
+                    self.model.add(tf.keras.layers.BatchNormalization())
+
+            self.model.add(tf.keras.layers.UpSampling1D(self.max_pool_size))
+            if self.use_batch_norm:
+                self.model.add(tf.keras.layers.BatchNormalization())
+            self.model.add(tf.keras.layers.Conv1DTranspose(
+                filters=1,
+                kernel_size=self.conv_kernels[-1],
+                strides=self.conv_strides[-1],
+                padding=self.conv_padding,
+                activation=self.final_activation,
+                kernel_initializer=self.final_initializer
+                # kernel_regularizer=tf.keras.regularizers.L1L2(
+                #     l1=self.kernel_l1_reg,
+                #     l2=self.kernel_l2_reg
+                # ),
+                # bias_regularizer=tf.keras.regularizer.L2(
+                #     l2=self.bias_l2_reg
+                # )
+            ))
+
+            # self.model.add(tf.keras.layers.Lambda(_l1_norm))
+            # self.model.add(tf.keras.layers.Lambda(lambda t: tf.linalg.norm(t, ord=1)))
+
+            self.model.add(tf.keras.layers.Softmax())
+
+        self.model.compile(loss=self.loss, optimizer=self.optimizer, metrics=self.metrics)
+
+        es = EarlyStopping(
+            monitor=es_monitor,
+            patience=patience,
+            verbose=es_verbose,
+            restore_best_weights=True,
+            mode=es_mode,
+            min_delta=es_delta,
+        )
+
+        if callbacks:
+            callbacks.append(es)
+        else:
+            callbacks = [es]
+
+        if verbose:
+            print('training model...')
+        history = self.model.fit(
+            spectra,
+            spectra,
+            epochs=epochs,
+            verbose=verbose,
+            validation_split=validation_split,
+            callbacks=callbacks,
+            shuffle=True,
+            batch_size=batch_size,
+        )
+
+        return history
+
+
+
+
+
+
+
+
