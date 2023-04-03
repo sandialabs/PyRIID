@@ -4,15 +4,13 @@
 """This modules contains utilities for synthesizing gamma spectra as static collections."""
 import random
 from collections import Counter
-from datetime import datetime
 from time import time
 from typing import Any, Tuple
 
 import numpy as np
 import pandas as pd
 
-from riid.data import SampleSet
-from riid.data.sampleset import SpectraState
+from riid.data.sampleset import SampleSet, SpectraState, _get_utc_timestamp
 
 
 class StaticSynthesizer():
@@ -350,7 +348,7 @@ class StaticSynthesizer():
             np.random.seed(self.random_state)
 
         self._reset_progress()
-        self._synthesis_start_dt = datetime.utcnow().isoformat(sep=' ', timespec="seconds")
+        self._synthesis_start_dt = _get_utc_timestamp()
         if verbose:
             tstart = time()
 

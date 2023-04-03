@@ -126,17 +126,25 @@ class SampleSet():
         return self.n_samples
 
     def __str__(self):
-        isotopes_present = \
-            ', '.join(np.unique(self.get_labels())) if not self.sources.empty else "Unknown"
-        return (
-            "SampleSet Summary:\n"
-            f"- # of samples:         {self.n_samples}\n"
-            f"- Spectrum channels:    {self.n_channels}\n"
-            f"- Detector:             {self.detector_info if self.detector_info else 'Unknown'}\n"
-            f"- Predictions present?  {'No' if self.prediction_probas.empty else 'Yes'}\n"
-            f"- Sources present:      {isotopes_present}\n"
-            f"- PyRIID version:       {self.pyriid_version if self.pyriid_version else 'Unknown'}"
-        )
+        UNKNOWN_VALUE = "Unknown"
+        detector_info_str = self.detector_info if self.detector_info else UNKNOWN_VALUE
+        sources_present_str = ", ".join(sorted(np.unique(self.get_labels()))) \
+            if not self.sources.empty \
+            else UNKNOWN_VALUE
+        predictions_str = ", ".join(sorted(np.unique(self.get_labels()))) \
+            if not self.prediction_probas.empty \
+            else "None"
+        pyriid_version_str = self.pyriid_version if self.pyriid_version else UNKNOWN_VALUE
+        info_dict = {
+            "# of samples": self.n_samples,
+            "# of channels": self.n_channels,
+            "Detector": detector_info_str,
+            "Present predictions": predictions_str,
+            "Present sources": sources_present_str,
+            "PyRIID version": pyriid_version_str,
+        }
+        summary = "\n".join(_dict_to_bulleted_list(info_dict))
+        return f"SampleSet Summary:\n{summary}"
 
     def __repr__(self):
         return self.__str__()
@@ -371,6 +379,46 @@ class SampleSet():
     def _channels_to_energies(self, fractional_energy_bins,
                               offset: float, gain: float, quadratic: float, cubic: float,
                               low_energy: float) -> np.ndarray:
+        """Converts fractional energy bins to the energy represented by the lower edge of the bin.
+
+        A spectrum represents a range of energy (e.g., 0 keV to 3000 keV).
+        The energy range represented by a spectrum can be inferred from its energy calibration
+        (e-cal for short), if known.  Using the convention in ANSI N42.42-2006, the e-cal is
+        defined using the following terms:
+        - `a_0`: offset (ecal_order_0)
+        - `a_1`: gain (ecal_order_1)
+        - `a_2`: quadratic (ecal_order_2)
+        - `a_3`: cubic (ecal_order_3)
+        - `a_4`: low energy (ecal_low_e)
+
+        The energy represented by the lower edge of channel `i` is then calculated as follows:
+
+        `E_i = a_0 + a_1 * x + a_2 * x^2 + a_3 * a^3 + a_4 / (1 + 60x)`
+
+        where `x` is the fractional energy of the spectral range.
+        Also, under this scheme and ignoring the non-linear terms (e.g., `a_2` through `a_4`),
+        the range of energy represented by a spectrum can be quickly inferred from the e-cal as:
+        - `min_energy = offset`
+        - `max_energy = gain + offset`
+
+        Note: spline interpolation is another way to characterize the energy calibration of a
+        spectrum. In GADRAS, this is accomplished via deviation pairs; PyRIID does not currently
+        support this but may in the future.
+
+        Args:
+            fractional_energy_bins: an array of fractions representing the spacing of
+                the channels.
+            offset: e-cal order 0 term.
+            gain: e-cal order 1 term.
+            quadratic: e-cal order 2 term.
+            cubic: e-cal order 3 term.
+            low_energy: e-cal low energy term.
+
+        Returns:
+            An array containing the energies represented by the lower edge of each channel.
+            Shape depends on the shape of input values.
+
+        """
         channel_energies = \
             offset + \
             fractional_energy_bins * gain + \
@@ -632,24 +680,45 @@ class SampleSet():
         self._info = self._info\
             .append(pd.DataFrame(info), ignore_index=True, sort=True)
 
-    def get_all_channel_energies(self) -> np.ndarray:
+    def get_all_channel_energies(self, fractional_energy_bins=None) -> np.ndarray:
         """Returns an array representing the energy (in keV) represented by the
         lower edge of each channel for all samples.
+
+        See docstring for `_channels_to_energies()` for more details.
+
+        Args:
+            fractional_energy_bins: an array of fractions representing the spacing of
+                the channels. Optional; used for arbitrary channel structures (uncommon).
+
+        Returns:
+            A 2D array of energy values in keV for all samples.
 
         Raises:
             ValueError: raised if any energy calibration terms are missing.
 
         """
-        fractional_energy_bins = np.linspace(0, 1, self.n_channels)
+        if fractional_energy_bins is None:
+            fractional_energy_bins = np.linspace(0, 1, self.n_channels)
+
         all_channel_energies = []
         for i in range(self.n_samples):
             channel_energies = self.get_channel_energies(i, fractional_energy_bins)
             all_channel_energies.append(channel_energies)
         return all_channel_energies
 
-    def get_channel_energies(self, index, fractional_energy_bins=None) -> np.ndarray:
+    def get_channel_energies(self, sample_index, fractional_energy_bins=None) -> np.ndarray:
         """Returns an array representing the energy (in keV) represented by the
-        lower edge of each channel for the sample at the specified index.
+        lower edge of each channel for a single sample and the specified index.
+
+        See docstring for `_channels_to_energies()` for more details.
+
+        Args:
+            sample_index: index of the specific sample for which to obtain energies
+            fractional_energy_bins: an array of fractions representing the spacing of
+                the channels. Optional; used for arbitrary channel structures (uncommon).
+
+        Returns:
+            An array of energy values in keV.
 
         Raises:
             ValueError: raised if any energy calibration terms are missing.
@@ -659,7 +728,7 @@ class SampleSet():
             fractional_energy_bins = np.linspace(0, 1, self.n_channels)
 
         # TODO: raise error if ecal info is missing for any row
-        offset, gain, quadratic, cubic, low_energy = self.ecal[index]
+        offset, gain, quadratic, cubic, low_energy = self.ecal[sample_index]
         channel_energies = self._channels_to_energies(
             fractional_energy_bins,
             offset, gain, quadratic, cubic, low_energy
@@ -723,50 +792,6 @@ class SampleSet():
 
         """
         return self.sources.groupby(axis=1, level=target_level).sum()
-
-    def sources_columns_to_dict(self, target_level="Isotope") -> Union[dict, list]:
-        """Converts the MultiIndex columns of the sources DataFrame to a dictionary.
-
-        Note: depending on `target_level` and sources columns, duplicate values are possible.
-
-        Args:
-            target_level: the level of the MultiIndex at which the dictionary should start.
-                If "Seed" is chosen, then a flat list will be returned.
-
-        Returns:
-            If `target_level` is "Category" or "Isotope," then a dict is returned.
-            If `target_level` is "Seed," then a list is returned.
-
-        Raises:
-            ValueError: if `target_level` is invalid.
-        """
-        self._check_target_level(
-            target_level,
-            levels_allowed=SampleSet.SOURCES_MULTI_INDEX_NAMES
-        )
-
-        d = {}
-        column_tuples = self.sources.columns.to_list()
-        if target_level == "Seed":
-            d = column_tuples
-        elif target_level == "Isotope":
-            for t in column_tuples:
-                _, i, _ = t
-                if i not in d:
-                    d[i] = [t]
-                if t not in d[i]:
-                    d[i].append(t)
-        else:  # target_level == "Category":
-            for t in column_tuples:
-                c, i, _ = t
-                if c not in d:
-                    d[c] = {}
-                if i not in d[c]:
-                    d[c][i] = [t]
-                if t not in d[c][i]:
-                    d[c][i].append(t)
-
-        return d
 
     def normalize(self, p: float = 1, clip_negatives: bool = True):
         """Normalizes spectra by L-p normalization.
@@ -839,6 +864,50 @@ class SampleSet():
         random_mask = np.isin(self.spectra.index, random_indices)
         return self[random_mask]
 
+    def sources_columns_to_dict(self, target_level="Isotope") -> Union[dict, list]:
+        """Converts the MultiIndex columns of the sources DataFrame to a dictionary.
+
+        Note: depending on `target_level` and sources columns, duplicate values are possible.
+
+        Args:
+            target_level: the level of the MultiIndex at which the dictionary should start.
+                If "Seed" is chosen, then a flat list will be returned.
+
+        Returns:
+            If `target_level` is "Category" or "Isotope," then a dict is returned.
+            If `target_level` is "Seed," then a list is returned.
+
+        Raises:
+            ValueError: if `target_level` is invalid.
+        """
+        self._check_target_level(
+            target_level,
+            levels_allowed=SampleSet.SOURCES_MULTI_INDEX_NAMES
+        )
+
+        d = {}
+        column_tuples = self.sources.columns.to_list()
+        if target_level == "Seed":
+            d = column_tuples
+        elif target_level == "Isotope":
+            for t in column_tuples:
+                _, i, _ = t
+                if i not in d:
+                    d[i] = [t]
+                if t not in d[i]:
+                    d[i].append(t)
+        else:  # target_level == "Category":
+            for t in column_tuples:
+                c, i, _ = t
+                if c not in d:
+                    d[c] = {}
+                if i not in d[c]:
+                    d[c][i] = [t]
+                if t not in d[c][i]:
+                    d[c][i].append(t)
+
+        return d
+
     def split_fg_and_bg(self, bg_seed_names: Iterable = DEFAULT_BG_SEED_NAMES) \
             -> Tuple[SampleSet, SampleSet]:
         """Splits the current SampleSet into two new SampleSets, one containing only foreground
@@ -897,7 +966,7 @@ class SampleSet():
 
     def update_timestamp(self):
         """Sets the timestamp for all samples to now (UTC) in a standard format."""
-        self.info.timestamp = datetime.utcnow().isoformat().replace(":", "_")
+        self.info.timestamp = _get_utc_timestamp()
 
     def upsample_spectra(self, target_bins: int = 4096):
         """Replaces spectra with upsampled version. Uniform binning is assumed.
@@ -1047,6 +1116,27 @@ def read_pcf(path: str, verbose: bool = False) -> SampleSet:
         None.
     """
     return _pcf_dict_to_ss(_pcf_to_dict(path, verbose), verbose)
+
+
+def _dict_to_bulleted_list(data_dict: dict, level=0, indent=4, bullet="-") -> str:
+    lines = []
+    level_key_width = max([len(x) for x in data_dict.keys()])
+    for k, v in sorted(data_dict.items()):
+        key = f"{k}:".ljust(level_key_width + 1)
+        line = f"{' ' * (indent * level)}{bullet} {key}"
+        if type(v) is dict:
+            lines.append(line)
+            sub_lines = _dict_to_bulleted_list(v, level + 1, indent, bullet)
+            lines.extend(sub_lines)
+        else:
+            line += f" {v}"
+            lines.append(line)
+    return lines
+
+
+def _get_utc_timestamp():
+    ts = datetime.utcnow().isoformat(sep=" ", timespec="seconds")
+    return ts
 
 
 def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: bool = True,
