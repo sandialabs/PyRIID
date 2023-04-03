@@ -5,14 +5,12 @@
 detector.
 """
 import random
-from datetime import datetime
 from typing import Any, List
 
 import numpy as np
 import pandas as pd
 
-from riid.data import SampleSet
-from riid.data.sampleset import SpectraState
+from riid.data.sampleset import SampleSet, SpectraState, _get_utc_timestamp
 from riid.data.synthetic.static import get_merged_sources_samplewise
 
 
@@ -462,7 +460,7 @@ class PassbySynthesizer():
             random.seed(self.random_state)
             np.random.seed(self.random_state)
 
-        self._synthesis_start_dt = datetime.utcnow().isoformat(sep=' ', timespec="seconds")
+        self._synthesis_start_dt = _get_utc_timestamp()
 
         args = []
         for bg_i in range(bg_seeds_ss.n_samples):

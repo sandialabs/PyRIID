@@ -4,15 +4,13 @@
 """This modules contains utilities for generating synthetic gamma spectrum templates from GADRAS."""
 import os
 from contextlib import contextmanager
-from datetime import datetime
 from typing import Iterator, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import yaml
 
-from riid.data import SampleSet
-from riid.data.sampleset import read_pcf
+from riid.data.sampleset import SampleSet, _get_utc_timestamp, read_pcf
 from riid.gadras.api import (DETECTOR_PARAMS, GADRAS_ASSEMBLY_PATH,
                              INJECT_PARAMS, SourceInjector, get_gadras_api,
                              validate_inject_config)
@@ -100,7 +98,7 @@ class SeedSynthesizer():
             new_detector_parameters = config["gamma_detector"]["parameters"]
             gadras_api.detectorSetCurrent(detector_name)
             original_detector_parameters = self._get_detector_parameters(gadras_api)
-            now = datetime.utcnow().isoformat().replace(":", "_")
+            now = _get_utc_timestamp()
 
             rel_output_path = f"{now}_sources.pcf"
             source_list = []
