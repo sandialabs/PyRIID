@@ -21,6 +21,7 @@ authors = [
     {name="Paul Thelen"},
     {name="Alan Van Omen"},
     {name="Leon Ross"},
+    {name="Alyshia Bustos"},
 ]
 readme = "README.md"
 license = {file = "LICENSE.md"}
