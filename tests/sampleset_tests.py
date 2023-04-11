@@ -805,7 +805,6 @@ class TestSampleSet(unittest.TestCase):
             "live_time_function": "uniform",
             "live_time_function_args": (0.25, 10),
             "apply_poisson_noise": True,
-            "balance_level": "Isotope",
         }
         fg_seeds_ss1, bg_seeds_ss1 = get_dummy_seeds().split_fg_and_bg()
         static_syn1 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)

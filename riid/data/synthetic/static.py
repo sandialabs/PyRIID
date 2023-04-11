@@ -14,13 +14,27 @@ from riid.data.sampleset import SampleSet, SpectraState, _get_utc_timestamp
 
 
 class StaticSynthesizer():
-    """Creates a set of synthetic gamma spectra."""
+    """Creates a set of synthetic gamma spectra from seed templates.
+
+    The "seed" templates are count-normalized spectra representing signature shapes of interest.
+    The static synthesizer takes the seeds you have chosen and scales them up in terms of three
+    components:
+    - live time (the amount of time over which the spectrum was collected/integrated)
+    - signal-to-noise ratio (SNR) (source counts divided by the square root of background counts,
+      i.e., the number of standard deviations above background)
+    - a fixed background rate (as a reference point)
+
+    The static synthesizer is meant to capture various count rates from sources in a statically
+    placed detector scenario where the background can be characterized (and usually subtracted).
+    Effects related to pile-up, scattering, or other shape-changing outcomes must be represented
+    in the seeds.
+    """
     _supported_functions = ["uniform", "log10", "discrete", "list"]
 
     def __init__(self, samples_per_seed: int = 100, background_cps: float = 300.0,
                  live_time_function: str = "uniform", live_time_function_args=(0.25, 8.0),
                  snr_function: str = "uniform", snr_function_args=(0.01, 100.0),
-                 apply_poisson_noise: bool = True, balance_level: bool = "Seed",
+                 apply_poisson_noise: bool = True,
                  random_state: int = None) -> None:
         """Constructs a synthetic gamma spectra generator.
 
