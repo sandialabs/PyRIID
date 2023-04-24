@@ -1172,7 +1172,10 @@ def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: b
             values = df.groupby(axis=1, level=target_level).mean()
             labels = values.idxmax(axis=1)
         else:
-            levels_to_drop = [x for x in SampleSet.SOURCES_MULTI_INDEX_NAMES if x != target_level]
+            levels_to_drop = [
+                x for x in SampleSet.SOURCES_MULTI_INDEX_NAMES
+                if x != target_level and x in df.columns.names
+            ]
             values = df.droplevel(levels_to_drop, axis=1)
             labels = values.idxmax(axis=1)
         if include_value:
