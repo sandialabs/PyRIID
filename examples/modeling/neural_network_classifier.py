@@ -2,11 +2,12 @@
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
 """This example demonstrates how to use the MLP classifier."""
-from riid.models.neural_nets import MLPClassifier
-from riid.data.synthetic.static import StaticSynthesizer
+from sklearn.metrics import f1_score
+
 from riid.data.synthetic import get_dummy_seeds
 from riid.data.synthetic.seed import SeedMixer
-from sklearn.metrics import f1_score
+from riid.data.synthetic.static import StaticSynthesizer
+from riid.models.neural_nets import MLPClassifier
 
 # Generate some training data
 fg_seeds_ss, bg_seeds_ss = get_dummy_seeds().split_fg_and_bg()
