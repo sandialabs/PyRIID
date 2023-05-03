@@ -111,18 +111,17 @@ class Synthesizer():
                                       timestamps=self._synthesis_start_dt)
             self._n_samples_synthesized += bg_ss.n_samples
         if self.return_gross:
-            gross_sources = get_merged_sources_samplewise(
-                _tile_sources_and_scale(
-                    fg_sources,
-                    gross_spectra.shape[0],
-                    fg_counts,
-                ),
-                _tile_sources_and_scale(
-                    bg_sources,
-                    gross_spectra.shape[0],
-                    bg_counts,
-                ),
+            tiled_fg_sources = _tile_sources_and_scale(
+                fg_sources,
+                gross_spectra.shape[0],
+                fg_counts,
             )
+            tiled_bg_sources = _tile_sources_and_scale(
+                bg_sources,
+                gross_spectra.shape[0],
+                bg_counts,
+            )
+            gross_sources = get_merged_sources_samplewise(tiled_fg_sources, tiled_bg_sources)
             gross_counts = gross_spectra.sum(axis=1)
             snrs = fg_counts / np.sqrt(bg_counts.clip(1))
             gross_ss = get_gross_sample_set(gross_spectra, gross_sources, ecal,

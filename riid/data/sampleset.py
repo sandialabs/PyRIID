@@ -908,6 +908,26 @@ class SampleSet():
 
         return d
 
+    def shuffle(self, inplace: bool = True, random_state: int = None) -> SampleSet:
+        """Randomly reorders all dataframes in-place."""
+        new_row_ordering = np.arange(self.n_samples)
+        np.random.default_rng(random_state).shuffle(new_row_ordering)
+
+        new_ss = self if inplace else self[:]
+
+        new_ss.spectra = self.spectra.iloc[new_row_ordering]\
+            .reset_index(drop=True)
+        new_ss.sources = self.sources.iloc[new_row_ordering]\
+            .reset_index(drop=True)
+        new_ss.info = self.info.iloc[new_row_ordering]\
+            .reset_index(drop=True)
+        if not new_ss.prediction_probas.empty:
+            new_ss.prediction_probas = self.prediction_probas.iloc[new_row_ordering]\
+                .reset_index(drop=True)
+
+        if not inplace:
+            return new_ss
+
     def split_fg_and_bg(self, bg_seed_names: Iterable = DEFAULT_BG_SEED_NAMES) \
             -> Tuple[SampleSet, SampleSet]:
         """Splits the current SampleSet into two new SampleSets, one containing only foreground
