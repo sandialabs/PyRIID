@@ -1,4 +1,4 @@
-name: Run unit tests
+name: Run examples
 on: [push]
 jobs:
   build:
@@ -20,8 +20,9 @@ jobs:
           cache-dependency-path: "**/pyproject.toml"
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install ".[dev]"
-      - name: Run unit tests
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r examples/requirements.txt
+          pip install -e ".[dev]"
+      - name: Run examples
         run: |
-          sh run_tests.sh
+          python examples/run_examples.py

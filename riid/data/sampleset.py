@@ -579,7 +579,7 @@ class SampleSet():
         """
         if not ss_list:
             return
-        if not isinstance(ss_list, list):
+        if not isinstance(ss_list, list) and not isinstance(ss_list, tuple):
             ss_list = [ss_list]
 
         self._spectra = pd.concat(
@@ -827,9 +827,9 @@ class SampleSet():
 
     def normalize_sources(self):
         """Converts sources to a valid probability mass function (PMF)."""
-        self._sources = self._sources.divide(
-            self._sources.sum(axis=1),
-            axis=0
+        self._sources = self._sources.clip(0).divide(
+            self._sources.sum(axis=1).clip(1),
+            axis=0,
         )
 
     def replace_nan(self, replace_value: float = 0):

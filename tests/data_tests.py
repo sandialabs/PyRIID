@@ -9,7 +9,7 @@ import unittest
 from riid import SAMPLESET_FILE_EXTENSION
 from riid.data.labeling import label_to_index_element
 from riid.data.sampleset import SampleSet, _write_hdf, read_hdf
-from riid.data.synthetic.static import get_dummy_seeds
+from riid.data.synthetic import get_dummy_seeds
 
 
 class TestData(unittest.TestCase):

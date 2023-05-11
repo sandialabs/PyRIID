@@ -12,7 +12,8 @@ from riid.data.sampleset import (ChannelCountMismatchError,
                                  InvalidSampleCountError, SampleSet,
                                  SpectraState, SpectraStateMismatchError,
                                  _get_row_labels)
-from riid.data.synthetic.static import StaticSynthesizer, get_dummy_seeds
+from riid.data.synthetic.static import StaticSynthesizer
+from riid.data.synthetic import get_dummy_seeds
 
 
 class TestSampleSet(unittest.TestCase):
@@ -799,12 +800,14 @@ class TestSampleSet(unittest.TestCase):
     def test_compare_to(self):
         SYNTHETIC_DATA_CONFIG = {
             "samples_per_seed": 10,
-            "background_cps": 10,
+            "bg_cps": 10,
             "snr_function": "uniform",
             "snr_function_args": (1, 100),
             "live_time_function": "uniform",
             "live_time_function_args": (0.25, 10),
             "apply_poisson_noise": True,
+            "return_fg": False,
+            "return_gross": True,
         }
         fg_seeds_ss1, bg_seeds_ss1 = get_dummy_seeds().split_fg_and_bg()
         static_syn1 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)

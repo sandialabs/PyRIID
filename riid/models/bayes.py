@@ -122,7 +122,7 @@ class PoissonBayesClassifier(TFModelBase):
         self._create_model(self.seeds_ss)
 
     def predict(self, gross_ss: SampleSet = None, bg_ss: SampleSet = None,
-                normalize_scores: bool = False, verbose = False):
+                normalize_scores: bool = False, verbose: bool = False):
         """Uses the Poisson-Bayes model to output prediction
         probabilities for every spectra in gross_ss SampleSet
         (and optional background Sample Set)
