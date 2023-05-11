@@ -7,11 +7,10 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from riid.data.synthetic.static import (InvalidSeedError, get_dummy_seeds,
-                                        get_expected_spectra,
-                                        get_merged_sources_samplewise,
-                                        get_samples_per_seed,
-                                        StaticSynthesizer)
+from riid.data.synthetic import (InvalidSeedError, get_dummy_seeds,
+                                 get_expected_spectra, get_merged_sources_samplewise,
+                                 get_samples_per_seed)
+from riid.data.synthetic.static import StaticSynthesizer
 from riid.data.synthetic.seed import SeedMixer
 
 
@@ -24,23 +23,23 @@ class TestStaticSynthesis(unittest.TestCase):
 
         static_syn = StaticSynthesizer(
             samples_per_seed=2,
-            # log10 sampling samples lower SNR values more frequently.
-            # This makes the SampleSet overall "harder" to classify.
             snr_function="log10",
-            random_state=1
+            rng=np.random.default_rng(1),
+            return_bg=True,
+            return_gross=True,
         )
         fg_1, bg_1, gross_1 = static_syn.generate(
             fg_seeds_ss=fg_seeds_ss,
             bg_seeds_ss=mixed_bg_seeds_ss,
-            verbose=False
+            verbose=False,
         )
 
         static_syn = StaticSynthesizer(
             samples_per_seed=2,
-            # log10 sampling samples lower SNR values more frequently.
-            # This makes the SampleSet overall "harder" to classify.
             snr_function="log10",
-            random_state=1
+            return_bg=True,
+            return_gross=True,
+            rng=np.random.default_rng(1),
         )
 
         fg_2, bg_2, gross_2 = static_syn.generate(
@@ -51,10 +50,10 @@ class TestStaticSynthesis(unittest.TestCase):
 
         static_syn = StaticSynthesizer(
             samples_per_seed=2,
-            # log10 sampling samples lower SNR values more frequently.
-            # This makes the SampleSet overall "harder" to classify.
             snr_function="log10",
-            random_state=2
+            return_bg=True,
+            return_gross=True,
+            rng=np.random.default_rng(2),
         )
 
         fg_3, bg_3, gross_3 = static_syn.generate(

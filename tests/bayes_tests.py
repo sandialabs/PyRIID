@@ -8,7 +8,8 @@ import numpy as np
 import pandas as pd
 from riid.data import SampleSet
 from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import StaticSynthesizer, get_dummy_seeds
+from riid.data.synthetic.static import StaticSynthesizer
+from riid.data.synthetic import get_dummy_seeds
 from riid.models.bayes import (NegativeSpectrumError, PoissonBayesClassifier,
                                ZeroTotalCountsError)
 
@@ -64,7 +65,10 @@ class TestPoissonBayesClassifier(unittest.TestCase):
             samples_per_seed=1,
             live_time_function_args=(4, 4),
             snr_function_args=(10, 10),
-            random_state=42
+            rng=np.random.default_rng(42),
+            return_fg=False,
+            return_bg=True,
+            return_gross=True,
         )
         _, test_bg_ss, test_ss = gss.generate(fg_seeds_ss, bg_seeds_ss, verbose=False)
 

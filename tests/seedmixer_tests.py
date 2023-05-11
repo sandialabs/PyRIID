@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 
 from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import get_dummy_seeds
+from riid.data.synthetic import get_dummy_seeds
 
 
 class TestSeedMixer(unittest.TestCase):

@@ -9,7 +9,7 @@ import numpy as np
 from riid.anomaly import PoissonNChannelEventDetector
 from riid.data.synthetic.passby import PassbySynthesizer
 from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import get_dummy_seeds
+from riid.data.synthetic import get_dummy_seeds
 
 
 class TestAnomaly(unittest.TestCase):
@@ -27,15 +27,19 @@ class TestAnomaly(unittest.TestCase):
         fg_seeds_ss, bg_seeds_ss = seeds_ss.split_fg_and_bg()
         mixed_bg_seeds_ss = SeedMixer(bg_seeds_ss, mixture_size=3)\
             .generate(1)
-        passbys = PassbySynthesizer(seeds_ss,
-                                    events_per_seed=1,
-                                    sample_interval=SAMPLE_INTERVAL,
-                                    subtract_background=False,
-                                    background_cps=BG_RATE,
-                                    fwhm_function_args=(5,),
-                                    dwell_time_function_args=(20, ),
-                                    snr_function_args=(1,))\
+        events = PassbySynthesizer(events_per_seed=1,
+                                   sample_interval=SAMPLE_INTERVAL,
+                                   bg_cps=BG_RATE,
+                                   fwhm_function_args=(5,),
+                                   dwell_time_function_args=(20, 20),
+                                   snr_function_args=(20, 20),
+                                   return_gross=True,
+                                   rng=np.random.default_rng(42))\
             .generate(fg_seeds_ss, mixed_bg_seeds_ss)
+
+        _, _, gross_events = list(zip(*events))
+        passby_ss = gross_events[0]
+
         expected_bg_counts = SAMPLE_INTERVAL * BG_RATE
         expected_bg_measurement = mixed_bg_seeds_ss.spectra.iloc[0] * expected_bg_counts
         ed = PoissonNChannelEventDetector(
@@ -62,7 +66,6 @@ class TestAnomaly(unittest.TestCase):
             measurement_id += 1
 
         # Create event using a synthesized passby
-        passby_ss = passbys[0]
         for i in range(passby_ss.n_samples):
             gross_spectrum = passby_ss.spectra.iloc[i].values
             cps_history.append(gross_spectrum.sum() / SAMPLE_INTERVAL)
