@@ -98,7 +98,7 @@ class SeedSynthesizer():
             new_detector_parameters = config["gamma_detector"]["parameters"]
             gadras_api.detectorSetCurrent(detector_name)
             original_detector_parameters = self._get_detector_parameters(gadras_api)
-            now = _get_utc_timestamp()
+            now = _get_utc_timestamp().replace(":", "_")  # replace() prevents error on Windows
 
             rel_output_path = f"{now}_sources.pcf"
             source_list = []
