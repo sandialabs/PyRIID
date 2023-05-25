@@ -5,24 +5,35 @@
 [![Python](https://img.shields.io/pypi/pyversions/riid)](https://badge.fury.io/py/riid)
 [![PyPI](https://badge.fury.io/py/riid.svg)](https://badge.fury.io/py/riid)
 
-This repository contains the PyRIID package (as well as tests and examples) which is intended to provide utilities that support machine learning-based research and solutions to radioisotope identification.
+This repository contains the PyRIID package (as well as tests and examples) which provides utilities that support machine learning-based research and solutions to radioisotope identification.
 
 ## Installation
 
-These instructions assume you have an up-to-date and stable Python installation; a virtual environment is recommended.
+These instructions assume you meet the following requirements:
 
-To use the latest version on PyPI (note: changes are slower to appear here), run:
+- Python version: 3.7+
+- Operating systems: Windows, Mac, or Ubuntu
+
+A virtual environment is recommended.
+
+Tests and examples are ran via Actions on many combinations of Python version and operating system.
+You can verify support for your platform by checking the workflow files.
+
+### For Use
+
+To use the latest version on PyPI (note: changes are currently slower to appear here), run:
 
 ```
 pip install riid
 ```
 
-For the latest features, run:
+**For the latest features, run:**
 
 ```
 pip install git+https://github.com/sandialabs/pyriid.git@main
 ```
 
+### For Development
 
 If you are developing PyRIID, clone this repository and run:
 
@@ -30,13 +41,19 @@ If you are developing PyRIID, clone this repository and run:
 pip install -e ".[dev]"
 ```
 
-If you have trouble with Pylance resolving imports for an editable install, try this:
+**If you have trouble with Pylance resolving imports for an editable install, try this:**
 
 ```
 pip install -e ".[dev]" --config-settings editable_mode=compat
 ```
 
+## Examples
+
+Examples for how to use this package can be found [here](https://github.com/sandialabs/PyRIID/blob/main/examples).
+
 ## Tests
+
+Unit tests for this package can be found [here](https://github.com/sandialabs/PyRIID/blob/main/tests).
 
 Run all unit tests with the following command:
 
@@ -59,10 +76,7 @@ Maintainers and authors can be found [here](https://github.com/sandialabs/PyRIID
 
 ## Copyright
 
-Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
-Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
-
-This source code is licensed under the BSD-style license found [here](https://github.com/sandialabs/PyRIID/blob/main/LICENSE.md).
+Full copyright details are outlined [here](https://github.com/sandialabs/PyRIID/blob/main/NOTICE.md)
 
 ## Acknowlegements
 

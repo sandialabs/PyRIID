@@ -61,6 +61,7 @@ dependencies = [
     "tensorflow-io                  ~=0.27",
     "tensorflow-model-optimization  ~=0.7",
     "tensorflow-probability         ==0.18.*",  # this package is currently limiting the Python version to 3.9
+    "typeguard                      >=2.7,<3.0.0",
     "scikit-learn                   >=1.1;      python_version >= '3.10'",
     "scikit-learn                   ~=1.0;      python_version < '3.10'",
     "seaborn                        ~=0.12",

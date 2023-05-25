@@ -16,7 +16,6 @@ from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.regularizers import l1, l2
-from tf2onnx import logging
 from tqdm import tqdm
 
 from riid.data import SampleSet
@@ -24,17 +23,11 @@ from riid.models import ModelInput, TFModelBase
 from riid.models.losses import (build_semisupervised_loss_func,
                                 normal_nll_diff, poisson_nll_diff,
                                 reconstruction_error, sse_diff,
-                                weighted_sse_diff, sparsemax,
-                                SparsemaxLoss)
+                                weighted_sse_diff)
+from riid.models.losses.sparsemax import SparsemaxLoss, sparsemax
 from riid.models.metrics import RunningAverage, multi_f1, single_f1
 
-logging.basicConfig(level=logging.WARNING)
-
-
-def _l1_norm(x):
-    sums = tf.reduce_sum(x, axis=-1)
-    l1_norm = x / tf.reshape(sums, (-1, 1))
-    return l1_norm
+tf2onnx.logging.basicConfig(level=tf2onnx.logging.WARNING)
 
 
 def _get_reordered_spectra(old_spectra_df: pd.DataFrame, old_sources_df: pd.DataFrame,
@@ -57,7 +50,7 @@ class MLPClassifier(TFModelBase):
                  optimizer: Any = Adam(learning_rate=0.01, clipnorm=0.001),
                  metrics: tuple = ("accuracy", "categorical_crossentropy", multi_f1, single_f1),
                  l2_alpha: float = 1e-4, activity_regularizer=l1(0), dropout: float = 0.0,
-                 learning_rate: float = 0.01):
+                 learning_rate: float = 0.01, final_activation: str = "softmax"):
         """Initializes the classifier.
 
         The model is implemented as a tf.keras.Sequential object.
@@ -77,6 +70,7 @@ class MLPClassifier(TFModelBase):
 
         self.hidden_layers = hidden_layers
         self.activation = activation
+        self.final_activation = final_activation
         self.loss = loss
         if optimizer == "adam":
             self.optimizer = Adam(learning_rate=learning_rate)
@@ -194,7 +188,7 @@ class MLPClassifier(TFModelBase):
                 if self.dropout > 0:
                     x = Dropout(self.dropout)(x)
 
-            output = Dense(y_train.shape[1], activation="softmax")(x)
+            output = Dense(y_train.shape[1], activation=self.final_activation)(x)
             self.model = tf.keras.models.Model(inputs, output)
             self.model.compile(loss=self.loss, optimizer=self.optimizer, metrics=self.metrics)
 
@@ -616,6 +610,12 @@ class LabelProportionEstimator(TFModelBase):
 
     def _initialize_model(self, input_size, output_size):
         spectra_input = tf.keras.layers.Input(input_size, name="input_spectrum")
+
+        def _l1_norm(x):
+            sums = tf.reduce_sum(x, axis=-1)
+            l1_norm = x / tf.reshape(sums, (-1, 1))
+            return l1_norm
+
         spectra_norm = tf.keras.layers.Lambda(_l1_norm, name="normalized_input_spectrum")(
             spectra_input
         )
@@ -914,9 +914,16 @@ class LabelProportionEstimator(TFModelBase):
             logits = self.model(spectra, training=False)
             lpes = self.activation(logits)
 
+        self.model_outputs = ss.get_source_contributions(target_level=self.target_level)\
+            .columns.values
+
+        col_level_idx = SampleSet.SOURCES_MULTI_INDEX_NAMES.index(self.target_level)
+        col_level_subset = SampleSet.SOURCES_MULTI_INDEX_NAMES[:col_level_idx+1]
         ss.prediction_probas = pd.DataFrame(
             data=lpes,
-            columns=self.sources_columns
+            columns=pd.MultiIndex.from_tuples(
+               self.model_outputs, names=col_level_subset
+            )
         )
 
         # Fill in unsupervised losses
