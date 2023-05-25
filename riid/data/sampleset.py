@@ -1406,6 +1406,17 @@ def _ss_to_pcf_dict(ss: SampleSet):
 def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
     """Converts pcf dictionary into a SampleSet.
 
+    PCF file contains energy calibration terms which are defined as:
+    E_i = a0 + a1*x + a2*x^2 + a3*x^3 + a4 / (1 + 60*x)
+    where:
+        a0 = order_0
+        a1 = order_1
+        a2 = order_2
+        a3 = order_3
+        a4 = low_E
+        x = channel number
+        E_i = Energy value of i-th channel
+
     Args:
         pcf_dict: Defines the dictionary of pcf values.
         verbose: Whether to display output from attempting the conversion.
@@ -1462,17 +1473,6 @@ def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
         else:
             ad = None
 
-        # PCF file contains energy calibration terms which are defined as:
-        # E_i = a0 + a1*x + a2*x^2 + a3*x^3 + a4 / (1 + 60*x)
-        # where:
-        #   a0 = order_0
-        #   a1 = order_1
-        #   a2 = order_2
-        #   a3 = order_3
-        #   a4 = low_E
-        #   x = channel number
-        #   E_i = Energy value of i"th channel
-
         order_0 = float(spectrum["header"]["Energy_Calibration_Offset"])
         order_1 = float(spectrum["header"]["Energy_Calibration_Gain"])
         order_2 = float(spectrum["header"]["Energy_Calibration_Quadratic"])
@@ -1484,9 +1484,6 @@ def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
             "timestamp": spectrum["header"]["Date-time_VAX"],
             "live_time": spectrum["header"]["Live_Time"],
             "real_time": spectrum["header"]["Total_time_per_real_time"],
-            # The following commented out fields are PyRIID-only, which can't be stored in PCF.
-            # They are shown here to explicitly communicate what would be lost in translation.
-            #   - SNR
             "total_counts": sum(spectrum["spectrum"]),
             "total_neutron_counts": spectrum["header"]["Total_Neutron_Counts"],
             "distance_cm": distance,
