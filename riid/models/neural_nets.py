@@ -680,7 +680,8 @@ class MLPClassifierWithGeneration(TFModelBase):
                 number_of_samples_to_get = batch_size
                 total_samples_left_to_run -= batch_size
             else:
-                static_syn.samples_per_seed = math.ceil(total_samples_left_to_run / seed_num_samples)
+                static_syn.samples_per_seed = math.ceil(
+                    total_samples_left_to_run / seed_num_samples)
                 number_of_samples_to_get = total_samples_left_to_run
                 total_samples_left_to_run -= total_samples_left_to_run
 
