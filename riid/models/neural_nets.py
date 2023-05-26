@@ -18,7 +18,9 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.regularizers import l1, l2
 from tf2onnx import logging
 from tqdm import tqdm
+import math
 
+from riid.data.synthetic.static import StaticSynthesizer
 from riid.data import SampleSet
 from riid.models import ModelInput, TFModelBase
 from riid.models.losses import (build_semisupervised_loss_func,
@@ -461,7 +463,8 @@ class MultiEventClassifier(TFModelBase):
             )
         )
         return results_df
-    
+
+
 class MLPClassifierWithGeneration(TFModelBase):
     def __init__(self, hidden_layers: tuple = (512,), activation: str = "relu",
                  loss: str = "categorical_crossentropy",
@@ -659,7 +662,7 @@ class MLPClassifierWithGeneration(TFModelBase):
         original_samples_per_seed = static_syn.samples_per_seed
         total_samples = static_syn.samples_per_seed * fg_seeds_ss.n_samples * bg_seeds_ss.n_samples
         seed_num_samples = fg_seeds_ss.n_samples * bg_seeds_ss.n_samples
-        num_batches = math.ceil(total_samples/batch_size)
+        num_batches = math.ceil(total_samples / batch_size)
         if verbose:
             print(f"number_of_batches: {num_batches}")
 
@@ -677,7 +680,7 @@ class MLPClassifierWithGeneration(TFModelBase):
                 number_of_samples_to_get = batch_size
                 total_samples_left_to_run -= batch_size
             else:
-                static_syn.samples_per_seed = math.ceil(total_samples_left_to_run/seed_num_samples)
+                static_syn.samples_per_seed = math.ceil(total_samples_left_to_run / seed_num_samples)
                 number_of_samples_to_get = total_samples_left_to_run
                 total_samples_left_to_run -= total_samples_left_to_run
 
@@ -718,11 +721,11 @@ class MLPClassifierWithGeneration(TFModelBase):
         results = self.model.predict(X)  # output size will be n_samples by n_labels
 
         col_level_idx = SampleSet.SOURCES_MULTI_INDEX_NAMES.index(self.target_level)
-        col_level_subset = SampleSet.SOURCES_MULTI_INDEX_NAMES[:col_level_idx+1]
+        col_level_subset = SampleSet.SOURCES_MULTI_INDEX_NAMES[: col_level_idx + 1]
         ss.prediction_probas = pd.DataFrame(
             data=results,
             columns=pd.MultiIndex.from_tuples(
-               self.model_outputs, names=col_level_subset
+                self.model_outputs, names=col_level_subset
             )
         )
 
