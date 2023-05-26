@@ -15,7 +15,7 @@ from numpy.random import Generator
 from riid.data.sampleset import SampleSet, _get_utc_timestamp, read_pcf
 from riid.gadras.api import (DETECTOR_PARAMS, GADRAS_ASSEMBLY_PATH,
                              INJECT_PARAMS, SourceInjector, get_gadras_api,
-                             validate_inject_config)
+                             get_inject_setups, validate_inject_config)
 
 
 class SeedSynthesizer():
@@ -65,7 +65,7 @@ class SeedSynthesizer():
 
     def generate(self, config: Union[str, dict],
                  normalize_spectra: bool = True, normalize_sources: bool = True,
-                 dry_run=False, verbose: bool = False) -> SampleSet:
+                 verbose: bool = False) -> SampleSet:
         """Produce a `SampleSet` containing foreground and/or background seeds using GADRAS based
         on the given inject configuration.
 
@@ -75,8 +75,6 @@ class SeedSynthesizer():
                 file which deserialized as a dictionary
             normalize_spectra: whether to divide each row of `SampleSet.spectra` by each row's sum
             normalize_sources: whether to divide each row of `SampleSet.sources` by each row's sum
-            dry_run: when False, actually perform inject(s), otherwise simply report info about
-                what would hypothetically happen
             verbose: whether to show detailed output
 
         Returns:
@@ -95,57 +93,41 @@ class SeedSynthesizer():
 
         validate_inject_config(config)
 
+        setups = get_inject_setups(config)
         with self._cwd(GADRAS_ASSEMBLY_PATH):
             gadras_api = get_gadras_api()
             detector_name = config["gamma_detector"]["name"]
-            new_detector_parameters = config["gamma_detector"]["parameters"]
             gadras_api.detectorSetCurrent(detector_name)
             original_detector_parameters = self._get_detector_parameters(gadras_api)
-            now = _get_utc_timestamp().replace(":", "_")  # replace() prevents error on Windows
+            if verbose:
+                print(f"Obtaining sources for '{detector_name}'")
 
-            rel_output_path = f"{now}_sources.pcf"
             source_list = []
-            detector_setups = [new_detector_parameters]  # TODO: generate all detector_setups
-            source_injector = SourceInjector(gadras_api)
-            try:
-                for d in detector_setups:
-                    self._set_detector_parameters(gadras_api, d, verbose, dry_run)
-
-                    if dry_run:
-                        continue
-
+            for s in setups:
+                source_injector = SourceInjector(gadras_api)
+                new_detector_parameters = s["gamma_detector"]["parameters"]
+                now = _get_utc_timestamp().replace(":", "_")  # replace() prevents error on Windows
+                rel_output_path = f"{now}_sources.pcf"
+                try:
+                    self._set_detector_parameters(gadras_api, new_detector_parameters, verbose)
                     # TODO: propagate dry_run to injectors
-
                     # Source injects
-                    if verbose:
-                        print(f"Obtaining sources for '{detector_name}'")
-                    pcf_abs_path = source_injector.generate(
-                        config,
-                        rel_output_path,
-                        verbose=verbose
-                    )
+                    pcf_abs_path = source_injector.generate(s, rel_output_path, verbose=verbose)
                     seeds_ss = read_pcf(pcf_abs_path)
+                    # Manually set distance_cm so it works with expanded configs
+                    seeds_ss.info["distance_cm"] = s["gamma_detector"]["parameters"]["distance_cm"]
                     if not normalize_sources:
                         seeds_ss.sources *= seeds_ss.spectra.sum(axis=1).values
                     if normalize_spectra:
                         seeds_ss.normalize()
                     source_list.append(seeds_ss)
-
-                    if verbose:
-                        print()
-
-                if dry_run:
-                    return None
-
-            except Exception as e:
-                # Try to restore .dat file to original state even when an error occurs
-                if not dry_run:
+                except Exception as e:
+                    # Try to restore .dat file to original state even when an error occurs
                     self._set_detector_parameters(gadras_api, original_detector_parameters)
-                raise e
+                    raise e
 
             # Restore .dat file to original state
-            if not dry_run:
-                self._set_detector_parameters(gadras_api, original_detector_parameters)
+            self._set_detector_parameters(gadras_api, original_detector_parameters)
 
         ss = SampleSet()
         ss.concat(source_list)

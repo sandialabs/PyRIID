@@ -5,11 +5,17 @@
 import json
 import os
 import sys
+import numpy as np
+from numpy.random import Generator
+from typing import List
+import copy
+import itertools
 
 import tqdm
 from jsonschema import validate
 
 from riid.data.sampleset import SampleSet, read_pcf
+from riid.data.synthetic import get_distribution_values
 
 GADRAS_API_SEEMINGLY_AVAILABLE = False
 GADRAS_DIR_ENV_VAR_KEY = "GADRAS_DIR"
@@ -387,7 +393,192 @@ def get_source_cps(gadras_api, detector, worker, source):
 
 
 def validate_inject_config(config: dict):
-    validate(instance=config, schema=GADRAS_API_SCHEMA)
+    return validate(instance=config, schema=GADRAS_API_SCHEMA)
+
+
+def _get_samples_from_dict(
+    parameters: dict, rng: Generator = np.random.default_rng()
+) -> list:
+    keys = list(parameters.keys())
+    if keys == ["mean", "std", "num_samples"]:
+        return rng.normal(
+            parameters["mean"], parameters["std"], parameters["num_samples"]
+        ).tolist()
+    elif keys == ["min", "max", "dist", "num_samples"]:
+        if parameters["dist"] == "uniform":
+            return get_distribution_values(
+                "uniform",
+                (parameters["min"], parameters["max"]),
+                n_values=parameters["num_samples"],
+                rng=rng,
+            ).tolist()
+        elif parameters["dist"] == "log10":
+            return get_distribution_values(
+                "log10",
+                (parameters["min"], parameters["max"]),
+                n_values=parameters["num_samples"],
+                rng=rng,
+            ).tolist()
+
+
+def _compile_single_source_config(
+    name: str = "",
+    activity=None,
+    activity_units: str = "",
+    shielding_atomic_number=None,
+    shielding_aerial_density=None,
+    rng: Generator = np.random.default_rng(),
+):
+    if isinstance(activity, dict):
+        activity = _get_samples_from_dict(activity)
+    if isinstance(shielding_atomic_number, dict):
+        shielding_atomic_number = _get_samples_from_dict(shielding_atomic_number)
+    if isinstance(shielding_aerial_density, dict):
+        shielding_aerial_density = _get_samples_from_dict(shielding_aerial_density)
+
+    config_string = f"{name},{float(activity)}{activity_units}"
+    if shielding_aerial_density is not None and shielding_atomic_number is not None:
+        config_string += f"{{ad={float(shielding_aerial_density)},"
+        config_string += f"an={float(shielding_atomic_number)}}}"
+    else:
+        if shielding_aerial_density is not None:
+            config_string += f"{{ad={float(shielding_aerial_density)}}}"
+        if shielding_atomic_number is not None:
+            config_string += f"{{an={float(shielding_atomic_number)}}}"
+
+    # TODO: check if config string is valid
+    return config_string
+
+
+def _compile_source_configs(
+    name: str = "",
+    activity=None,
+    activity_units: str = "",
+    shielding_atomic_number=None,
+    shielding_aerial_density=None,
+    rng: Generator = np.random.default_rng(),
+):
+    # check to see if we need to have multiple configurations
+    if type(activity) is dict:
+        activity = _get_samples_from_dict(activity, rng)
+    if type(activity) is not list:
+        activity = [activity]
+    if type(shielding_atomic_number) is dict:
+        shielding_atomic_number = _get_samples_from_dict(shielding_atomic_number, rng)
+    if type(shielding_atomic_number) is not list:
+        shielding_atomic_number = [shielding_atomic_number]
+    if type(shielding_aerial_density) is dict:
+        shielding_aerial_density = _get_samples_from_dict(shielding_aerial_density, rng)
+    if type(shielding_aerial_density) is not list:
+        shielding_aerial_density = [shielding_aerial_density]
+
+    configs = []
+    for single_activity in activity:
+        for single_an in shielding_atomic_number:
+            for single_ad in shielding_aerial_density:
+                config_string = _compile_single_source_config(
+                    name,
+                    single_activity,
+                    activity_units,
+                    single_an,
+                    single_ad,
+                    rng,
+                )
+                configs.append(config_string)
+
+    return configs
+
+
+def get_expanded_config(config: dict) -> dict:
+    """Expands sampling objects within the given config into value lists
+    and returns a new, equivalent config dictionary.
+    """
+    expanded_config = copy.deepcopy(config)
+
+    random_seed = config["random_seed"] if "random_seed" in config else None
+    rng = np.random.default_rng(random_seed)
+
+    # detector configs
+    for parameter in config["gamma_detector"]["parameters"]:
+        parameter_list = []
+        parameter_type = type(config["gamma_detector"]["parameters"][parameter])
+        parameter_value = config["gamma_detector"]["parameters"][parameter]
+        if parameter_type != list:
+            if parameter_type == int or parameter_type == float:
+                parameter_list.append(parameter_value)
+            if parameter_type == dict:
+                parameter_list.extend(_get_samples_from_dict(parameter_value, rng))
+        else:  # its a list, pull out all items and convert to one list
+            for item in parameter_value:
+                item_type = type(item)
+                if item_type == int or item_type == float:
+                    parameter_list.append(item)
+                if item_type == dict:
+                    parameter_list.extend(_get_samples_from_dict(item, rng))
+
+        # Save distance_cm as a list
+        expanded_config["gamma_detector"]["parameters"][parameter] = parameter_list
+
+    # sources configs
+    for i, isotope in enumerate(config["sources"]):
+        config_list = []
+        for config in isotope["configurations"]:
+            config_type = type(config)
+            if config_type == str:
+                config_list.append(config)
+            elif config_type == dict:
+                configs = _compile_source_configs(**config, rng=rng)
+                for config in configs:
+                    config_list.append(config)
+        expanded_config["sources"][i]["configurations"] = config_list
+
+    return expanded_config
+
+
+def get_detector_setups(expanded_config: dict) -> list:
+    """Permutate the lists of values in the expanded config to
+    generate a list of detector setups.
+
+    Args:
+        expanded_config: a dictionary representing an expanded seed synthesis configuration
+
+    Returns:
+        A list of detector setups
+    """
+    detector_params = expanded_config["gamma_detector"]["parameters"]
+    list_of_parameters_values = [x for x in detector_params.values()]
+    parameter_permutations = list(itertools.product(*list_of_parameters_values))
+    detector_setups = []
+    for perm in parameter_permutations:
+        setup = copy.deepcopy(expanded_config["gamma_detector"])
+        for i, p in enumerate(detector_params):
+            setup["parameters"][p] = perm[i]
+        detector_setups.append(setup)
+
+    return detector_setups
+
+
+def get_inject_setups(config: dict) -> list:
+    """Get a list of fully expanded synthesis configurations from an initial,
+    collapsed configuration.
+
+    Args:
+        config: a dictionary representing a collapsed seed synthesis configuration
+
+    Returns:
+        A list of expanded configurations
+    """
+    expanded_config = get_expanded_config(config)
+    detector_setups = get_detector_setups(expanded_config)
+    inject_setups = []
+    for detector_setup in detector_setups:
+        inject_setup = {
+            "gamma_detector": detector_setup,
+            "sources": expanded_config["sources"]
+        }
+        inject_setups.append(inject_setup)
+
+    return inject_setups
 
 
 class GadrasNotInstalledError(Exception):
