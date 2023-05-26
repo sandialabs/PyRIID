@@ -7,69 +7,15 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from riid.data.synthetic import (InvalidSeedError, Synthesizer,
-                                 get_dummy_seeds, get_expected_spectra,
-                                 get_merged_sources_samplewise,
-                                 get_samples_per_seed)
-from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import StaticSynthesizer
+from riid.data.synthetic.static import (InvalidSeedError, get_dummy_seeds,
+                                        get_expected_spectra,
+                                        get_merged_sources_samplewise,
+                                        get_samples_per_seed)
 
 
 class TestStaticSynthesis(unittest.TestCase):
     """Test class for static synthesis.
     """
-    def test_random_state_output(self):
-        fg_seeds_ss, bg_seeds_ss = get_dummy_seeds().split_fg_and_bg()
-        mixed_bg_seeds_ss = SeedMixer(bg_seeds_ss, mixture_size=3).generate(10)
-
-        static_syn = StaticSynthesizer(
-            samples_per_seed=2,
-            snr_function="log10",
-            rng=np.random.default_rng(1),
-            return_bg=True,
-            return_gross=True,
-        )
-        fg_1, bg_1, gross_1 = static_syn.generate(
-            fg_seeds_ss=fg_seeds_ss,
-            bg_seeds_ss=mixed_bg_seeds_ss,
-            verbose=False,
-        )
-
-        static_syn = StaticSynthesizer(
-            samples_per_seed=2,
-            snr_function="log10",
-            return_bg=True,
-            return_gross=True,
-            rng=np.random.default_rng(1),
-        )
-
-        fg_2, bg_2, gross_2 = static_syn.generate(
-            fg_seeds_ss=fg_seeds_ss,
-            bg_seeds_ss=mixed_bg_seeds_ss,
-            verbose=False
-        )
-
-        static_syn = StaticSynthesizer(
-            samples_per_seed=2,
-            snr_function="log10",
-            return_bg=True,
-            return_gross=True,
-            rng=np.random.default_rng(2),
-        )
-
-        fg_3, bg_3, gross_3 = static_syn.generate(
-            fg_seeds_ss=fg_seeds_ss,
-            bg_seeds_ss=mixed_bg_seeds_ss,
-            verbose=False
-        )
-
-        self.assertEqual(fg_1, fg_2)  # used the same random_state
-        self.assertEqual(bg_1, bg_2)  # used the same random_state
-        self.assertEqual(gross_1, gross_2)  # used the same random_state
-
-        self.assertNotEqual(fg_3, fg_2)  # used different random_state
-        self.assertNotEqual(bg_3, bg_2)  # used different random_state
-        self.assertNotEqual(gross_3, gross_2)  # used different random_state
 
     def test_get_expected_spectra(self):
         """Tests batch processing of seeds to expected counts.
@@ -201,93 +147,3 @@ class TestStaticSynthesis(unittest.TestCase):
         self.assertEqual(seed_level_results["NORM"], 1)         # 4 samples
         self.assertEqual(seed_level_results["SNM"], 1)          # 4 samples
         self.assertEqual(12, n_samples_expected)
-
-    def test_get_batch(self):
-        """Test batch ground truth."""
-        synth = Synthesizer(
-            bg_cps=300,
-            apply_poisson_noise=False,
-            return_fg=True,
-            return_bg=True,
-            return_gross=True,
-        )
-        fg_seed = pd.Series([0.0, 0.0, 0.0, 0.2, 0.8])
-        fg_sources = pd.Series(
-            [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            index=["A", "B", "C", "D", "E", "F", "G"]
-        )
-        bg_seed = pd.Series([0.2, 0.2, 0.6, 0.0, 0.0])
-        bg_sources = pd.Series(
-            [0.3, 0.4, 0.3],
-            index=["X", "Y", "Z"]
-        )
-        ecal = (0, 3000, 100, 0, 0)
-        lts = np.array([4.2]).astype(float)
-        snrs = np.array([63.2]).astype(float)
-
-        fg_ss, bg_ss, gross_ss = synth._get_batch(
-            fg_seed=fg_seed,
-            fg_sources=fg_sources,
-            bg_seed=bg_seed,
-            bg_sources=bg_sources,
-            ecal=ecal,
-            lt_targets=lts,
-            snr_targets=snrs,
-        )
-
-        self.assertTrue(np.allclose(
-            gross_ss.sources.loc[:, fg_sources.index].sum(axis=1)
-            / np.sqrt(gross_ss.sources.loc[:, bg_sources.index].sum(axis=1)),
-            snrs,
-        ))
-        self.assertTrue(np.allclose(
-            gross_ss.sources.loc[:, bg_sources.index].sum(axis=1) / synth.bg_cps,
-            lts,
-        ))
-
-        self.assertTrue(np.allclose(
-            gross_ss.sources.loc[:, fg_sources.index],
-            fg_ss.sources.loc[:, fg_sources.index],
-        ))
-        self.assertTrue(np.allclose(
-            fg_ss.spectra.sum(axis=1),
-            fg_ss.sources.loc[:, fg_sources.index].sum(axis=1),
-        ))
-
-        self.assertTrue(np.allclose(
-            gross_ss.sources.loc[:, bg_sources.index],
-            bg_ss.sources.loc[:, bg_sources.index],
-        ))
-        self.assertTrue(np.allclose(
-            bg_ss.spectra.sum(axis=1),
-            bg_ss.sources.loc[:, bg_sources.index].sum(axis=1),
-        ))
-
-    def test_source_proportions(self):
-        """Test that SNR equals fg/bg source cumulative source proportions."""
-        fg_seeds_ss, bg_seeds_ss = get_dummy_seeds().split_fg_and_bg()
-        mixed_bg_seeds_ss = SeedMixer(bg_seeds_ss, mixture_size=3).generate(2)
-
-        static_syn = StaticSynthesizer(
-            samples_per_seed=1,
-            snr_function="log10",
-            rng=np.random.default_rng(1),
-            return_fg=False,
-            return_bg=False,
-            return_gross=True,
-            apply_poisson_noise=False,
-        )
-        _, _, gross_ss = static_syn.generate(
-            fg_seeds_ss=fg_seeds_ss,
-            bg_seeds_ss=mixed_bg_seeds_ss,
-            verbose=False,
-        )
-
-        fg_counts = gross_ss.sources.loc[:, fg_seeds_ss.sources.columns].sum(axis=1)\
-            * gross_ss.info.total_counts
-        bg_counts = gross_ss.sources.loc[:, bg_seeds_ss.sources.columns].sum(axis=1)\
-            * gross_ss.info.total_counts
-        self.assertTrue(np.allclose(
-            fg_counts / np.sqrt(bg_counts),
-            gross_ss.info.snr
-        ))

@@ -7,7 +7,6 @@ from __future__ import \
 
 import copy
 import logging
-import operator
 import os
 import random
 import re
@@ -20,7 +19,6 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from scipy.interpolate import interp1d
-from scipy.spatial import distance
 
 import riid
 from riid.data.labeling import (NO_CATEGORY, NO_ISOTOPE, NO_SEED,
@@ -58,9 +56,17 @@ class SampleSet():
         "timestamp",
         "live_time",
         "real_time",
-        "total_counts",
-        "snr",
+        "bg_counts",
+        "bg_counts_expected",
+        "fg_counts",
+        "fg_counts_expected",
+        "gross_counts",
+        "gross_counts_expected",
         "neutron_counts",
+        "snr",
+        "snr_expected",
+        "sigma",
+        "sigma_expected",
         "distance_cm",
         *ECAL_INFO_COLUMNS,
         "areal_density",
@@ -73,16 +79,6 @@ class SampleSet():
         "PotassiumInSoil",
         "UraniumInSoil",
         "ThoriumInSoil",
-    )
-    SUPPORTED_STATES_FOR_ARITHMETIC = (
-        SpectraState.Counts.value,
-        SpectraState.L1Normalized.value
-    )
-    DEFAULT_EXCLUSIONS_FROM_COMPARISON = (
-        "timestamp",
-        "description",
-        "occupancy_flag",
-        "tag",
     )
 
     def __init__(self):
@@ -126,80 +122,20 @@ class SampleSet():
         return self.n_samples
 
     def __str__(self):
-        UNKNOWN_VALUE = "Unknown"
-        detector_info_str = self.detector_info if self.detector_info else UNKNOWN_VALUE
-        sources_present_str = ", ".join(sorted(np.unique(self.get_labels()))) \
-            if not self.sources.empty \
-            else UNKNOWN_VALUE
-        predictions_str = ", ".join(sorted(np.unique(self.get_labels()))) \
-            if not self.prediction_probas.empty \
-            else "None"
-        pyriid_version_str = self.pyriid_version if self.pyriid_version else UNKNOWN_VALUE
-        info_dict = {
-            "# of samples": self.n_samples,
-            "# of channels": self.n_channels,
-            "Detector": detector_info_str,
-            "Present predictions": predictions_str,
-            "Present sources": sources_present_str,
-            "PyRIID version": pyriid_version_str,
-        }
-        summary = "\n".join(_dict_to_bulleted_list(info_dict))
-        return f"SampleSet Summary:\n{summary}"
+        isotopes_present = \
+            ', '.join(np.unique(self.get_labels())) if not self.sources.empty else "Unknown"
+        return (
+            "SampleSet Summary:\n"
+            f"- # of samples:         {self.n_samples}\n"
+            f"- Spectrum channels:    {self.n_channels}\n"
+            f"- Detector:             {self.detector_info if self.detector_info else 'Unknown'}\n"
+            f"- Predictions present?  {'No' if self.prediction_probas.empty else 'Yes'}\n"
+            f"- Sources present:      {isotopes_present}\n"
+            f"- PyRIID version:       {self.pyriid_version if self.pyriid_version else 'Unknown'}"
+        )
 
     def __repr__(self):
         return self.__str__()
-
-    def __eq__(self, ss: SampleSet):
-        return np.allclose(self._spectra.values, ss._spectra.values)
-
-    def _check_arithmetic_supported(self, ss2: SampleSet):
-        if ss2.n_samples != 1:
-            raise InvalidSampleCountError("Only one background spectrum may be provided!")
-        if self.n_channels != ss2.n_channels:
-            channel_str = f"({self.n_channels} != {ss2.n_channels})"
-            raise ChannelCountMismatchError(f"Mismatched spectra channels {channel_str}!")
-        if self.spectra_state != ss2.spectra_state:
-            state_str = f"({self.spectra_state} != {ss2.spectra_state})"
-            raise SpectraStateMismatchError(f"Mismatched spectra states {state_str}!")
-        if self.spectra_state.value not in self.SUPPORTED_STATES_FOR_ARITHMETIC:
-            raise ValueError(f"{self.spectra_state} spectra state not supported for arithmetic!")
-            # Don't need to check spectra state of ss2 since they passed the prior equality check
-
-    def _get_scaled_bg_spectra(self, bg_ss: SampleSet) -> np.ndarray:
-        bg_spectrum_in_counts = bg_ss.spectra.iloc[0].values.copy()
-        if bg_ss.spectra_state == SpectraState.L1Normalized:
-            bg_spectrum_in_counts *= bg_ss.info.iloc[0].total_counts
-        bg_live_time = bg_ss.info.iloc[0].live_time
-        bg_spectrum_in_cps = bg_spectrum_in_counts / bg_live_time
-        scaled_bg_spectra = np.concatenate(
-            bg_spectrum_in_cps * self.info.live_time.values[:, np.newaxis, np.newaxis]
-        )
-        return scaled_bg_spectra
-
-    def _get_arithmetic_result(self, bg_ss: SampleSet, op) -> SampleSet:
-        self._check_arithmetic_supported(bg_ss)
-
-        scaled_bg_spectra = self._get_scaled_bg_spectra(bg_ss)
-        new_ss = self[:]
-
-        is_l1_normalized = new_ss.spectra_state == SpectraState.L1Normalized
-        if new_ss.spectra_state == SpectraState.L1Normalized:
-            new_ss.spectra *= new_ss.info.iloc[0].total_counts
-        new_ss.spectra = op(new_ss.spectra, scaled_bg_spectra)
-        if is_l1_normalized:
-            new_ss.normalize()
-
-        return new_ss
-
-    def __add__(self, bg_ss: SampleSet) -> SampleSet:
-        """Adds a single given background spectrum to the spectra of the current SampleSet.
-        """
-        return self._get_arithmetic_result(bg_ss, operator.add)
-
-    def __sub__(self, bg_ss: SampleSet) -> SampleSet:
-        """Subtracts a single given background spectrum from the spectra of the current SampleSet.
-        """
-        return self._get_arithmetic_result(bg_ss, operator.sub)
 
     # region Properties
 
@@ -238,7 +174,7 @@ class SampleSet():
         scale of 0 to 1, where 0 is easiest and 1 is hardest.
 
         The difficulty of a SampleSet is the mean of the individual sample difficulties.
-        Each sample's difficulty is determined by where its signal strength (SNR)
+        Each sample's difficulty is determined by where its signal strength (sigma)
         falls on the survival function (AKA reliability function, or 1 - CDF) for a
         logistic distribution.
         The decision to use this distribution is based on empirical data showing that
@@ -264,15 +200,15 @@ class SampleSet():
         choosing the mean and standard deviation easier/automated based on more of our findings.
 
         Arguments:
-            mean: the SNR value representing the mean of the logistic distribution
+            mean: the sigma value representing the mean of the logistic distribution
             std: the standard deviation of the logistic distribution
 
         Returns:
-            The mean of all SNR values passed through a logistic survival function.
+            The mean of all sigma values passed through a logistic survival function.
 
         """
-        snrs: np.ndarray = self.info.snr.clip(1e-6)
-        score = float(stats.logistic.sf(snrs, loc=mean, scale=std).mean())
+        sigmas: np.ndarray = self.info.sigma.clip(1e-6)
+        score = float(stats.logistic.sf(sigmas, loc=mean, scale=std).mean())
 
         return score
 
@@ -379,46 +315,6 @@ class SampleSet():
     def _channels_to_energies(self, fractional_energy_bins,
                               offset: float, gain: float, quadratic: float, cubic: float,
                               low_energy: float) -> np.ndarray:
-        """Converts fractional energy bins to the energy represented by the lower edge of the bin.
-
-        A spectrum represents a range of energy (e.g., 0 keV to 3000 keV).
-        The energy range represented by a spectrum can be inferred from its energy calibration
-        (e-cal for short), if known.  Using the convention in ANSI N42.42-2006, the e-cal is
-        defined using the following terms:
-        - `a_0`: offset (ecal_order_0)
-        - `a_1`: gain (ecal_order_1)
-        - `a_2`: quadratic (ecal_order_2)
-        - `a_3`: cubic (ecal_order_3)
-        - `a_4`: low energy (ecal_low_e)
-
-        The energy represented by the lower edge of channel `i` is then calculated as follows:
-
-        `E_i = a_0 + a_1 * x + a_2 * x^2 + a_3 * a^3 + a_4 / (1 + 60x)`
-
-        where `x` is the fractional energy of the spectral range.
-        Also, under this scheme and ignoring the non-linear terms (e.g., `a_2` through `a_4`),
-        the range of energy represented by a spectrum can be quickly inferred from the e-cal as:
-        - `min_energy = offset`
-        - `max_energy = gain + offset`
-
-        Note: spline interpolation is another way to characterize the energy calibration of a
-        spectrum. In GADRAS, this is accomplished via deviation pairs; PyRIID does not currently
-        support this but may in the future.
-
-        Args:
-            fractional_energy_bins: an array of fractions representing the spacing of
-                the channels.
-            offset: e-cal order 0 term.
-            gain: e-cal order 1 term.
-            quadratic: e-cal order 2 term.
-            cubic: e-cal order 3 term.
-            low_energy: e-cal low energy term.
-
-        Returns:
-            An array containing the energies represented by the lower edge of each channel.
-            Shape depends on the shape of input values.
-
-        """
         channel_energies = \
             offset + \
             fractional_energy_bins * gain + \
@@ -498,7 +394,7 @@ class SampleSet():
         # Update spectra and info DataFrames
         new_ss = self[:]
         new_ss.spectra = pd.DataFrame(new_spectra)
-        new_ss.info.total_counts = new_ss.spectra.sum(axis=1)
+        new_ss.info["gross_counts"] = new_ss.spectra.sum(axis=1)
         new_ss.info[ecal_cols] = new_ecal
         return new_ss
 
@@ -523,10 +419,24 @@ class SampleSet():
             flat_info.live_time = self.info.live_time.sum()
         if "real_time" in flat_info:
             flat_info.real_time = self.info.real_time.sum()
-        if "total_counts" in flat_info:
-            flat_info.total_counts = self.info.total_counts.sum()
+        if "snr_target" in flat_info:
+            flat_info.snr_target = self.info.snr_target.sum()
         if "snr" in flat_info:
             flat_info.snr = self.info.snr.sum()
+        if "sigma" in flat_info:
+            flat_info.sigma = self.info.sigma.sum()
+        if "bg_counts" in flat_info:
+            flat_info.bg_counts = self.info.bg_counts.sum()
+        if "fg_counts" in flat_info:
+            flat_info.fg_counts = self.info.fg_counts.sum()
+        if "bg_counts_expected" in flat_info:
+            flat_info.bg_counts_expected = self.info.bg_counts_expected.sum()
+        if "fg_counts_expected" in flat_info:
+            flat_info.fg_counts_expected = self.info.fg_counts_expected.sum()
+        if "gross_counts" in flat_info:
+            flat_info.gross_counts = self.info.gross_counts.sum()
+        if "gross_counts_expected" in flat_info:
+            flat_info.gross_counts_expected = self.info.gross_counts_expected.sum()
 
         # Create a new SampleSet with the flattened data
         flat_ss = SampleSet()
@@ -579,7 +489,7 @@ class SampleSet():
         """
         if not ss_list:
             return
-        if not isinstance(ss_list, list) and not isinstance(ss_list, tuple):
+        if not isinstance(ss_list, list):
             ss_list = [ss_list]
 
         self._spectra = pd.concat(
@@ -609,7 +519,7 @@ class SampleSet():
             0
         )
 
-    def downsample_spectra(self, target_bins: int = 128, min_frac=1e-8):
+    def downsample_spectra(self, target_bins: int = 128):
         """Replaces spectra with downsampled version. Uniform binning is assumed.
 
         Args:
@@ -634,10 +544,7 @@ class SampleSet():
         self._spectra = pd.DataFrame(
             data=np.matmul(
                 self._spectra.values,
-                transformation.T
-            )
-        )
-        self._spectra[self._spectra < min_frac] = 0
+                transformation.T))
 
     def drop_sources_columns_with_all_zeros(self):
         """Removes columns from the sources DataFrame that contain only zeros.
@@ -680,45 +587,24 @@ class SampleSet():
         self._info = self._info\
             .append(pd.DataFrame(info), ignore_index=True, sort=True)
 
-    def get_all_channel_energies(self, fractional_energy_bins=None) -> np.ndarray:
+    def get_all_channel_energies(self) -> np.ndarray:
         """Returns an array representing the energy (in keV) represented by the
         lower edge of each channel for all samples.
-
-        See docstring for `_channels_to_energies()` for more details.
-
-        Args:
-            fractional_energy_bins: an array of fractions representing the spacing of
-                the channels. Optional; used for arbitrary channel structures (uncommon).
-
-        Returns:
-            A 2D array of energy values in keV for all samples.
 
         Raises:
             ValueError: raised if any energy calibration terms are missing.
 
         """
-        if fractional_energy_bins is None:
-            fractional_energy_bins = np.linspace(0, 1, self.n_channels)
-
+        fractional_energy_bins = np.linspace(0, 1, self.n_channels)
         all_channel_energies = []
         for i in range(self.n_samples):
             channel_energies = self.get_channel_energies(i, fractional_energy_bins)
             all_channel_energies.append(channel_energies)
         return all_channel_energies
 
-    def get_channel_energies(self, sample_index, fractional_energy_bins=None) -> np.ndarray:
+    def get_channel_energies(self, index, fractional_energy_bins=None) -> np.ndarray:
         """Returns an array representing the energy (in keV) represented by the
-        lower edge of each channel for a single sample and the specified index.
-
-        See docstring for `_channels_to_energies()` for more details.
-
-        Args:
-            sample_index: index of the specific sample for which to obtain energies
-            fractional_energy_bins: an array of fractions representing the spacing of
-                the channels. Optional; used for arbitrary channel structures (uncommon).
-
-        Returns:
-            An array of energy values in keV.
+        lower edge of each channel for the sample at the specified index.
 
         Raises:
             ValueError: raised if any energy calibration terms are missing.
@@ -728,7 +614,7 @@ class SampleSet():
             fractional_energy_bins = np.linspace(0, 1, self.n_channels)
 
         # TODO: raise error if ecal info is missing for any row
-        offset, gain, quadratic, cubic, low_energy = self.ecal[sample_index]
+        offset, gain, quadratic, cubic, low_energy = self.ecal[index]
         channel_energies = self._channels_to_energies(
             fractional_energy_bins,
             offset, gain, quadratic, cubic, low_energy
@@ -793,77 +679,6 @@ class SampleSet():
         """
         return self.sources.groupby(axis=1, level=target_level).sum()
 
-    def normalize(self, p: float = 1, clip_negatives: bool = True):
-        """Normalizes spectra by L-p normalization.
-
-        Default is L1 norm (p=1) can be interpreted as a forming a probability mass function (PMF).
-        L2 norm (p=2) is unit energy (sum of squares == 1).
-
-        Ref: "https://en.wikipedia.org/wiki/Parseval's_theorem"
-
-        Args:
-            p: Defines the exponent to which the spectra values are raised.
-            clip_negatives: Determines whether or not negative values will
-                be removed from the spectra and replaced with 0.
-
-        """
-        if clip_negatives:
-            self.clip_negatives()
-        elif (self._spectra.values < 0).sum():
-            logging.warning(
-                "You are performing a normalization operation on spectra which contain negative " +
-                "values.  Consider applying `clip_negatives`."
-            )
-
-        energy = (self._spectra.values ** p).sum(axis=1)[:, np.newaxis]
-        energy[energy == 0] = 1
-        self._spectra = pd.DataFrame(data=self._spectra.values / energy ** (1/p))
-        if p == 1:
-            self.spectra_state = SpectraState.L1Normalized
-        elif p == 2:
-            self.spectra_state = SpectraState.L2Normalized
-        else:
-            self.spectra_state = SpectraState.Unknown
-
-    def normalize_sources(self):
-        """Converts sources to a valid probability mass function (PMF)."""
-        self._sources = self._sources.clip(0).divide(
-            self._sources.sum(axis=1).clip(1),
-            axis=0,
-        )
-
-    def replace_nan(self, replace_value: float = 0):
-        """Replaces np.nan() values with replace_value.
-
-        Args:
-            replace_value: The value with which NaN will be replaced.
-
-        """
-        self._spectra.replace(np.nan, replace_value)
-        self._sources.replace(np.nan, replace_value)
-        self._info.replace(np.nan, replace_value)
-
-    def sample(self, n_samples: int, random_seed: int = None) -> SampleSet:
-        """Randomly samples the SampleSet.
-
-        Args:
-            n_samples: the number of random samples to be returned.
-            random_seed: the seed value for random number generation.
-
-        Returns:
-            A sampleset of `n_samples` randomly selected measurements.
-
-        """
-        if random_seed:
-            random.seed(random_seed)
-
-        if n_samples > self.n_samples:
-            n_samples = self.n_samples
-
-        random_indices = random.sample(self.spectra.index.values.tolist(), n_samples)
-        random_mask = np.isin(self.spectra.index, random_indices)
-        return self[random_mask]
-
     def sources_columns_to_dict(self, target_level="Isotope") -> Union[dict, list]:
         """Converts the MultiIndex columns of the sources DataFrame to a dictionary.
 
@@ -908,25 +723,76 @@ class SampleSet():
 
         return d
 
-    def shuffle(self, inplace: bool = True, random_state: int = None) -> SampleSet:
-        """Randomly reorders all dataframes in-place."""
-        new_row_ordering = np.arange(self.n_samples)
-        np.random.default_rng(random_state).shuffle(new_row_ordering)
+    def normalize(self, p: float = 1, clip_negatives: bool = True):
+        """Normalizes spectra by L-p normalization.
 
-        new_ss = self if inplace else self[:]
+        Default is L1 norm (p=1) can be interpreted as a forming a probability mass function (PMF).
+        L2 norm (p=2) is unit energy (sum of squares == 1).
 
-        new_ss.spectra = self.spectra.iloc[new_row_ordering]\
-            .reset_index(drop=True)
-        new_ss.sources = self.sources.iloc[new_row_ordering]\
-            .reset_index(drop=True)
-        new_ss.info = self.info.iloc[new_row_ordering]\
-            .reset_index(drop=True)
-        if not new_ss.prediction_probas.empty:
-            new_ss.prediction_probas = self.prediction_probas.iloc[new_row_ordering]\
-                .reset_index(drop=True)
+        Ref: "https://en.wikipedia.org/wiki/Parseval's_theorem"
 
-        if not inplace:
-            return new_ss
+        Args:
+            p: Defines the exponent to which the spectra values are raised.
+            clip_negatives: Determines whether or not negative values will
+                be removed from the spectra and replaced with 0.
+
+        """
+        if clip_negatives:
+            self.clip_negatives()
+        elif (self._spectra.values < 0).sum():
+            logging.warning(
+                "You are performing a normalization operation on spectra which contain negative " +
+                "values.  Consider applying `clip_negatives`."
+            )
+
+        energy = (self._spectra.values ** p).sum(axis=1)[:, np.newaxis]
+        energy[energy == 0] = 1
+        self._spectra = pd.DataFrame(data=self._spectra.values / energy ** (1/p))
+        if p == 1:
+            self.spectra_state = SpectraState.L1Normalized
+        elif p == 2:
+            self.spectra_state = SpectraState.L2Normalized
+        else:
+            self.spectra_state = SpectraState.Unknown
+
+    def normalize_sources(self):
+        """Converts sources to a valid probability mass function (PMF)."""
+        self._sources = self._sources.divide(
+            self._sources.sum(axis=1),
+            axis=0
+        )
+
+    def replace_nan(self, replace_value: float = 0):
+        """Replaces np.nan() values with replace_value.
+
+        Args:
+            replace_value: The value with which NaN will be replaced.
+
+        """
+        self._spectra.replace(np.nan, replace_value)
+        self._sources.replace(np.nan, replace_value)
+        self._info.replace(np.nan, replace_value)
+
+    def sample(self, n_samples: int, random_seed: int = None) -> SampleSet:
+        """Randomly samples the SampleSet.
+
+        Args:
+            n_samples: the number of random samples to be returned.
+            random_seed: the seed value for random number generation.
+
+        Returns:
+            A sampleset of `n_samples` randomly selected measurements.
+
+        """
+        if random_seed:
+            random.seed(random_seed)
+
+        if n_samples > self.n_samples:
+            n_samples = self.n_samples
+
+        random_indices = random.sample(self.spectra.index.values.tolist(), n_samples)
+        random_mask = np.isin(self.spectra.index, random_indices)
+        return self[random_mask]
 
     def split_fg_and_bg(self, bg_seed_names: Iterable = DEFAULT_BG_SEED_NAMES) \
             -> Tuple[SampleSet, SampleSet]:
@@ -986,7 +852,7 @@ class SampleSet():
 
     def update_timestamp(self):
         """Sets the timestamp for all samples to now (UTC) in a standard format."""
-        self.info.timestamp = _get_utc_timestamp()
+        self.info.timestamp = datetime.utcnow().isoformat().replace(":", "_")
 
     def upsample_spectra(self, target_bins: int = 4096):
         """Replaces spectra with upsampled version. Uniform binning is assumed.
@@ -1011,92 +877,6 @@ class SampleSet():
             data=np.matmul(
                 self._spectra.values,
                 transformation.T))
-
-    def compare_to(self, ss: SampleSet, n_bins: int = 20, density: bool = False) \
-            -> Tuple[dict, dict, dict]:
-        """Compares the current sample set to another.
-
-        The function only compares the selected, mutual information of
-        each sampleset by computing the Jensen-Shannon distance between
-        histograms of that information. The distance value can be interpreted
-        as follows: closer to 0 means more similar and closer to 1 means
-        more dissimilar.
-
-        Args:
-            ss: The sample set we will compare to.
-            n_bins: The number of bins we will sort both sample sets by.
-            density: whether histograms should be in counts or density
-
-        Returns:
-            ss1_stats: dict of stats for the first sampleset.
-            ss2_stats: dict of stats for the second sampleset.
-            col_comparisons: dict of distance values comparing each column.
-        """
-        TARGET_SUMMARY_STATS = ['min', 'max', 'median', 'mean', 'std']
-        STAT_PRECISION = 3
-
-        # Get info columns we want to compare
-        info_columns = [x for x in list(self.DEFAULT_INFO_COLUMNS)
-                        if x not in list(self.DEFAULT_EXCLUSIONS_FROM_COMPARISON)]
-
-        # Get both sample sets comparable columns of data
-        info_df1 = self.info[info_columns]
-        info_df2 = ss.info[info_columns]
-
-        # Check valid columns in each sample set (cannot have None or 0)
-        ss1_valid_cols = [
-            c for c in info_df1.columns
-            if pd.to_numeric(info_df1[c], errors='coerce').notnull().all() and any(info_df1[c])
-        ]
-        ss2_valid_cols = [
-            c for c in info_df2.columns
-            if pd.to_numeric(info_df2[c], errors='coerce').notnull().all() and any(info_df2[c])
-        ]
-
-        # Remove non shared column lists
-        for i in ss1_valid_cols:
-            if i not in ss2_valid_cols:
-                ss1_valid_cols.remove(i)
-        for i in ss2_valid_cols:
-            if i not in ss1_valid_cols:
-                ss2_valid_cols.remove(i)
-
-        # Remove non shared column data
-        info_df1 = info_df1[ss1_valid_cols]
-        info_df2 = info_df2[ss2_valid_cols]
-
-        # Bin the data
-        ss1_stats = {}
-        ss2_stats = {}
-        col_comparisons = {}
-        for i in ss1_valid_cols:
-            ss1_stats[i] = {}
-            ss2_stats[i] = {}
-            hist_range = (
-                min(min(info_df1[i]), min(info_df2[i])),
-                max(max(info_df1[i]), max(info_df2[i]))
-            )
-            # Get data in bins and get counts for each bin
-            hist1, bins1 = np.histogram(info_df1[i], bins=n_bins, range=hist_range, density=density)
-            hist2, bins2 = np.histogram(info_df2[i], bins=n_bins, range=hist_range, density=density)
-            ss1_stats[i]["density"] = density
-            ss2_stats[i]["density"] = density
-            ss1_stats[i]["hist"] = hist1
-            ss2_stats[i]["hist"] = hist2
-            ss1_stats[i]["bins"] = bins1
-            ss2_stats[i]["bins"] = bins2
-            ss1_stats[i]["range"] = hist_range
-            ss2_stats[i]["range"] = hist_range
-
-            summary_stats_df1 = info_df1[i].agg(TARGET_SUMMARY_STATS).round(decimals=STAT_PRECISION)
-            ss1_stats[i].update(summary_stats_df1.to_dict())
-            summary_stats_df2 = info_df2[i].agg(TARGET_SUMMARY_STATS).round(decimals=STAT_PRECISION)
-            ss2_stats[i].update(summary_stats_df2.to_dict())
-
-            js_dist = distance.jensenshannon(hist1, hist2, axis=0)
-            col_comparisons[i] = js_dist
-
-        return ss1_stats, ss2_stats, col_comparisons
 
 
 def read_hdf(path: str) -> SampleSet:
@@ -1138,27 +918,6 @@ def read_pcf(path: str, verbose: bool = False) -> SampleSet:
     return _pcf_dict_to_ss(_pcf_to_dict(path, verbose), verbose)
 
 
-def _dict_to_bulleted_list(data_dict: dict, level=0, indent=4, bullet="-") -> str:
-    lines = []
-    level_key_width = max([len(x) for x in data_dict.keys()])
-    for k, v in sorted(data_dict.items()):
-        key = f"{k}:".ljust(level_key_width + 1)
-        line = f"{' ' * (indent * level)}{bullet} {key}"
-        if type(v) is dict:
-            lines.append(line)
-            sub_lines = _dict_to_bulleted_list(v, level + 1, indent, bullet)
-            lines.extend(sub_lines)
-        else:
-            line += f" {v}"
-            lines.append(line)
-    return lines
-
-
-def _get_utc_timestamp():
-    ts = datetime.utcnow().isoformat(sep=" ", timespec="seconds")
-    return ts
-
-
 def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: bool = True,
                     include_value: bool = False, min_value: float = 0.01,
                     level_aggregation: str = "sum") -> pd.Series:
@@ -1192,10 +951,7 @@ def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: b
             values = df.groupby(axis=1, level=target_level).mean()
             labels = values.idxmax(axis=1)
         else:
-            levels_to_drop = [
-                x for x in SampleSet.SOURCES_MULTI_INDEX_NAMES
-                if x != target_level and x in df.columns.names
-            ]
+            levels_to_drop = [x for x in SampleSet.SOURCES_MULTI_INDEX_NAMES if x != target_level]
             values = df.droplevel(levels_to_drop, axis=1)
             labels = values.idxmax(axis=1)
         if include_value:
@@ -1486,7 +1242,13 @@ def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
             "real_time": spectrum["header"]["Total_time_per_real_time"],
             # The following commented out fields are PyRIID-only, which can't be stored in PCF.
             # They are shown here to explicitly communicate what would be lost in translation.
-            #   - SNR
+            #   - snr_target
+            #   - snr_estimate
+            #   - sigma
+            #   - bg_counts
+            #   - fg_counts
+            #   - bg_counts_expected
+            #   - fg_counts
             "total_counts": sum(spectrum["spectrum"]),
             "total_neutron_counts": spectrum["header"]["Total_Neutron_Counts"],
             "distance_cm": distance,
@@ -1523,30 +1285,14 @@ def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
 
 
 class RebinningCalculationError(Exception):
-    """An exception indicateing an issue when rebinning a sample or collection of samples.
+    """An exception that indicates an issue when rebinning
+    (up-binning or down-binning) a sample or collection of samples.
     """
     pass
 
 
 class InvalidSampleSetFileError(Exception):
-    """An exception indicating missing or invalid keys in a file being parsed into a SampleSet.
-    """
-    pass
-
-
-class InvalidSampleCountError(Exception):
-    """An exception indicating the wrong number of samples were encountered for some operation.
-    """
-    pass
-
-
-class SpectraStateMismatchError(Exception):
-    """An exception indicating two SampleSets have different SpectraState values.
-    """
-    pass
-
-
-class ChannelCountMismatchError(Exception):
-    """An exception indicating two SampleSets have different SpectraState values.
+    """An exception that indicates missing or invalid keys
+    in a file being parsed into a SampleSet.
     """
     pass

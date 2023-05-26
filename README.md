@@ -36,6 +36,11 @@ If you have trouble with Pylance resolving imports for an editable install, try 
 pip install -e ".[dev]" --config-settings editable_mode=compat
 ```
 
+
+## Examples
+
+Examples have been moved to a dedicated repo [here](https://github.com/sandialabs/PyRIID-Examples).
+
 ## Tests
 
 Run all unit tests with the following command:

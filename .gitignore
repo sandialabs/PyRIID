@@ -167,3 +167,5 @@ venv_*/
 
 # files being used for development only
 sandbox.py
+
+/notebooks/algo_outputs/

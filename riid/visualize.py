@@ -132,7 +132,7 @@ def confusion_matrix(ss: SampleSet, as_percentage: bool = False, cmap: str = "bi
 def plot_live_time_vs_snr(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float = 0.5,
                           xscale: str = "linear", yscale: str = "log",
                           xlim: tuple = None, ylim: tuple = None,
-                          title: str = "Live Time vs. SNR", snr_line_value: float = None,
+                          title: str = "Live Time vs. SNR", sigma_line_value: float = None,
                           figsize=(6.4, 4.8)):
     """Plots SNR against live time for all samples in a SampleSet.
 
@@ -148,7 +148,8 @@ def plot_live_time_vs_snr(ss: SampleSet, overlay_ss: SampleSet = None, alpha: fl
         xlim: Defines a tuple containing the X-axis min and max values.
         ylim: Defines a tuple containing the Y-axis min and max values.
         title: Defines the plot title.
-        snr_line_value: Plots a vertical line for contextualizing data to threshold
+        sigma_line_value: Plots a sigma line representing the `value` number of
+            standard deviations from background.
         figsize: Width, height of figure in inches.
 
     Returns:
@@ -163,36 +164,38 @@ def plot_live_time_vs_snr(ss: SampleSet, overlay_ss: SampleSet = None, alpha: fl
         xlim = (ss.info.live_time.min(), ss.info.live_time.max())
     if not ylim:
         if yscale == "log":
-            ylim = (ss.info.snr.clip(1e-3).min(), ss.info.snr.max())
+            ylim = (ss.info.snr_expected.clip(1e-3).min(), ss.info.snr_expected.max())
         else:
-            ylim = (ss.info.snr.clip(0).min(), ss.info.snr.max())
+            ylim = (ss.info.snr_expected.clip(0).min(), ss.info.snr_expected.max())
 
     fig, ax = plt.subplots(figsize=figsize)
     ax.scatter(
         correct_ss.info.live_time,
-        correct_ss.info.snr,
+        correct_ss.info.snr_expected,
         c="blue", alpha=alpha, marker=MARKER, label="Correct"
     )
     ax.scatter(
         incorrect_ss.info.live_time,
-        incorrect_ss.info.snr,
+        incorrect_ss.info.snr_expected,
         c="red", alpha=alpha, marker=MARKER, label="Incorrect"
     )
     if overlay_ss:
         plt.scatter(
             overlay_ss.info.live_time,
-            overlay_ss.info.snr,
+            overlay_ss.info.snr_expected,
             c="black", marker="+", label="Event" + ("" if overlay_ss.n_samples == 1 else "s"),
             s=75
         )
-    if snr_line_value:
+    if sigma_line_value:
         live_times = np.linspace(xlim[0], xlim[1])
+        background_cps = ss.info.bg_counts_expected[0] / ss.info.live_time[0]
+        snrs = sigma_line_value / np.sqrt(live_times * background_cps)
         plt.plot(
             live_times,
-            snr_line_value,
+            snrs,
             c="black",
             alpha=alpha,
-            label=f"SNR={snr_line_value}",
+            label="{}-sigma".format(sigma_line_value),
             ls="dashed"
         )
 
@@ -204,6 +207,99 @@ def plot_live_time_vs_snr(ss: SampleSet, overlay_ss: SampleSet = None, alpha: fl
     ax.set_ylabel("Signal-to-Noise Ratio (SNR)")
     ax.set_title(title)
     ax.legend(loc="lower right")
+
+    return fig, ax
+
+
+@save_or_show_plot
+def plot_strength_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float = 0.5,
+                           marker_size=75, xscale: str = "log", yscale: str = "linear",
+                           xlim: tuple = (None, None), ylim: tuple = (0, 1.05),
+                           title: str = "Signal Strength vs. Score",
+                           sigma_line_value: float = None, figsize=(6.4, 4.8)):
+    """Plots strength against prediction score for all samples in a SampleSet.
+
+    Prediction and label information is used to distinguish between correct and incorrect
+    classifications using color (green for correct, red for incorrect).
+
+    Args:
+        ss: Defines a SampleSet of events to plot.
+        overlay_ss: Defines another SampleSet to color as blue (correct) and/or black (incorrect).
+        alpha: Defines the degree of opacity (not applied to overlay_ss scatterplot if used).
+        xscale: Defines the X-axis scale.
+        yscale: Defines the Y-axis scale.
+        xlim: Defines a tuple containing the X-axis min and max values.
+        ylim: Defines a tuple containing the Y-axis min and max values.
+        title: Defines the plot title.
+        sigma_line_value: Plots a sigma line representing the `value` number of
+            standard deviations from background.
+        figsize: Width, height of figure in inches.
+
+    Returns:
+        A tuple (Figure, Axes) of matplotlib objects.
+
+    """
+    labels = ss.get_labels()
+    predictions = ss.get_predictions()
+    correct_ss = ss[labels == predictions]
+    incorrect_ss = ss[labels != predictions]
+    if not xlim:
+        if xscale == "log":
+            xlim = (ss.info.sigma.clip(1e-3).min(), ss.info.sigma.max())
+        else:
+            xlim = (ss.info.sigma.clip(0).min(), ss.info.sigma.max())
+
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.scatter(
+        correct_ss.info.sigma,
+        correct_ss.prediction_probas.max(axis=1),
+        c="blue", alpha=alpha, marker=MARKER, label="Correct", s=marker_size
+    )
+    ax.scatter(
+        incorrect_ss.info.sigma,
+        incorrect_ss.prediction_probas.max(axis=1),
+        c="red", alpha=alpha, marker=MARKER, label="Incorrect", s=marker_size
+    )
+    if overlay_ss:
+        overlay_labels = overlay_ss.get_labels()
+        overlay_predictions = overlay_ss.get_predictions()
+        overlay_correct_ss = overlay_ss[overlay_labels == overlay_predictions]
+        overlay_incorrect_ss = overlay_ss[overlay_labels != overlay_predictions]
+        ax.scatter(
+            overlay_correct_ss.info.sigma,
+            overlay_correct_ss.prediction_probas.max(axis=1),
+            c="blue",
+            marker="*",
+            label="Correct Event" + ("" if overlay_incorrect_ss.n_samples == 1 else "s"),
+            s=marker_size*1.25
+        )
+        ax.scatter(
+            overlay_incorrect_ss.info.sigma,
+            overlay_incorrect_ss.prediction_probas.max(axis=1),
+            c="black",
+            marker="+",
+            label="Incorrect Event" + ("" if overlay_incorrect_ss.n_samples == 1 else "s"),
+            s=marker_size*1.25
+        )
+    if sigma_line_value:
+        ax.vlines(
+            sigma_line_value,
+            0,
+            1,
+            colors="blue",
+            alpha=alpha,
+            label="{}-sigma".format(sigma_line_value),
+            linestyles="dashed"
+        )
+
+    ax.set_xscale(xscale)
+    ax.set_yscale(yscale)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_xlabel("Sigma (net / sqrt(background))")
+    ax.set_ylabel("Score")
+    ax.set_title(title)
+    ax.legend()
 
     return fig, ax
 
@@ -240,18 +336,18 @@ def plot_snr_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float 
     incorrect_ss = ss[labels != predictions]
     if not xlim:
         if xscale == "log":
-            xlim = (ss.info.snr.clip(1e-3).min(), ss.info.snr.max())
+            xlim = (ss.info.snr_expected.clip(1e-3).min(), ss.info.snr_expected.max())
         else:
-            xlim = (ss.info.snr.clip(0).min(), ss.info.snr.max())
+            xlim = (ss.info.snr_expected.clip(0).min(), ss.info.snr_expected.max())
 
     fig, ax = plt.subplots(figsize=figsize)
     ax.scatter(
-        correct_ss.info.snr,
+        correct_ss.info.snr_expected,
         correct_ss.prediction_probas.max(axis=1),
         c="green", alpha=alpha, marker=MARKER, label="Correct", s=marker_size
     )
     ax.scatter(
-        incorrect_ss.info.snr,
+        incorrect_ss.info.snr_expected,
         incorrect_ss.prediction_probas.max(axis=1),
         c="red", alpha=alpha, marker=MARKER, label="Incorrect", s=marker_size
     )
@@ -261,7 +357,7 @@ def plot_snr_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float 
         overlay_correct_ss = overlay_ss[overlay_labels == overlay_predictions]
         overlay_incorrect_ss = overlay_ss[overlay_labels != overlay_predictions]
         ax.scatter(
-            overlay_correct_ss.info.snr,
+            overlay_correct_ss.info.snr_expected,
             overlay_correct_ss.prediction_probas.max(axis=1),
             c="blue",
             marker="*",
@@ -269,7 +365,7 @@ def plot_snr_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float 
             s=marker_size*1.25
         )
         ax.scatter(
-            overlay_incorrect_ss.info.snr,
+            overlay_incorrect_ss.info.snr_expected,
             overlay_incorrect_ss.prediction_probas.max(axis=1),
             c="black",
             marker="+",
@@ -522,14 +618,14 @@ def plot_score_histogram(ss: SampleSet, yscale="log", ylim=(1e-1, None),
     """
     fig, ax = plt.subplots(figsize=figsize)
 
-    indices1 = ss.info.index[ss.info.snr <= 5]
+    indices1 = ss.info.index[ss.info.sigma <= 5]
     values1 = ss.prediction_probas.loc[indices1].values.flatten()
     values1 = np.where(values1 > 0.0, values1, values1)
-    indices2 = ss.info.index[(ss.info.snr > 5) &
-                             (ss.info.snr <= 50)]
+    indices2 = ss.info.index[(ss.info.sigma > 5) &
+                             (ss.info.sigma <= 50)]
     values2 = ss.prediction_probas.loc[indices2].values.flatten()
     values2 = np.where(values2 > 0.0, values2, values2)
-    indices3 = ss.info.index[ss.info.snr > 50]
+    indices3 = ss.info.index[ss.info.sigma > 50]
     values3 = ss.prediction_probas.loc[indices3].values.flatten()
     values3 = np.where(values3 > 0.0, values3, values3)
 
@@ -742,56 +838,6 @@ def plot_precision_recall(precision, recall, marker="D", lw=2, show_legend=True,
     ax.set_title(f"{title} (mAP: {mAP:.3f})")
     if show_legend:
         ax.legend(loc="lower left", prop=dict(size=8))
-
-    return fig, ax
-
-
-@save_or_show_plot
-def plot_ss_comparison(info_stats1: dict, info_stats2: dict, col_comparisons: dict,
-                       target_col: str = None, title: str = None, x_label: str = None,
-                       distance_precision: int = 3):
-    """Creates a plot for output from SampleSet.compare_to().
-    Args:
-        info_stats1: stats for first SampleSet
-        info_stats2: stats for second SampleSet
-        col_comparisons: Jensen-Shannon distance for each info column histogram
-        target_col: the SampleSet.info column that will be plotted
-        title: the plot title
-        distance_precision: number of decimals to include for distance metric value
-
-    Returns:
-        A tuple (Figure, Axes) of matplotlib objects.
-    """
-    fig, ax = plt.subplots()
-
-    if info_stats1[target_col]["density"]:
-        ax.set_ylabel('Density')
-    else:
-        ax.set_ylabel('Count')
-
-    if x_label:
-        ax.set_xlabel(x_label)
-        xlbl = x_label
-    else:
-        ax.set_xlabel(target_col)
-        xlbl = target_col
-
-    dist_value = col_comparisons[target_col]
-    if title:
-        ax.set_title(f'{title}\nJ-S Distance: {round(dist_value, distance_precision)}')
-    else:
-        ax.set_title(f'Histogram of {xlbl} Occurrences'
-                     f'\nJ-S Distance: {round(dist_value, distance_precision)}')
-
-    stats1 = info_stats1[target_col]
-    bin_width = stats1["bins"][1] - stats1["bins"][0]
-    ax.bar(stats1["bins"][:-1], stats1["hist"], label="hist. 1", width=bin_width)
-
-    stats2 = info_stats2[target_col]
-    bin_width = stats2["bins"][1] - stats2["bins"][0]
-    ax.bar(stats2["bins"][:-1], stats2["hist"], label="hist. 2", width=bin_width)
-
-    ax.legend()
 
     return fig, ax
 

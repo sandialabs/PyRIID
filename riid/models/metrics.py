@@ -123,10 +123,10 @@ def precision_recall_curve(ss: SampleSet, smooth: bool = True, multiclass: bool 
            https://jonathan-hui.medium.com/map-mean-average-precision-for-object-detection-45c121a31173)
 
     """
-    y_true = ss.sources.groupby(axis=1, level=target_level).sum()
+    y_true = ss.sources.sum(level=target_level, axis=1)
     if minimum_contribution is not None:
         y_true = (y_true > minimum_contribution).astype(int)
-    y_pred = ss.prediction_probas.groupby(axis=1, level=target_level).sum()
+    y_pred = ss.prediction_probas
 
     # switch from pandas to numpy
     labels = y_true.columns
@@ -245,28 +245,3 @@ def _pr_curve(y_true, y_pred, multiclass, smooth):
         thresholds = thresholds[1:]
 
     return precision, recall, thresholds
-
-
-class RunningAverage(object):
-    """Helper for calculating average in a rolling fashion."""
-
-    def __init__(self):
-        self.N = 0
-        self.old_sum = 0
-        self.average = 0
-
-    @property
-    def is_empty(self):
-        return self.N == 0
-
-    def add_sample(self, new_value):
-        """Updates the average.
-
-        Args:
-            new_value: the new value
-
-        """
-        self.N += 1
-        new_sum = self.old_sum + new_value
-        self.average = new_sum / self.N
-        self.old_sum = new_sum

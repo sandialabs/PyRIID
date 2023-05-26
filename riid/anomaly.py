@@ -254,7 +254,7 @@ class PoissonNChannelEventDetector():
         self._reset_stats()
 
     def add_measurement(self, measurement_id: int, measurement: Union[np.array, int],
-                        duration: float, verbose=True):
+                        duration: float):
         """Adds the next measurement to the event detector.
 
         Args:
@@ -263,7 +263,6 @@ class PoissonNChannelEventDetector():
                 channels of measured data.
             duration: a float representing the length of time over which the
                 measurement was taken.
-            verbose: whether to print log messages.
 
         Returns:
             if adding a spectrum concludes an event, a tuple is returned containing:
@@ -276,8 +275,7 @@ class PoissonNChannelEventDetector():
 
         """
         if self._measurement_duration != duration:
-            if verbose:
-                logging.debug("Measurement duration changed")
+            logging.debug("Measurement duration changed")
             self.clear_background()
             self._measurement_duration = duration
             self._n_measurement_channels = len(measurement)
@@ -315,6 +313,7 @@ class PoissonNChannelEventDetector():
                 # modeled with a skewed normal distribution, however the number of measurements
                 # required to accurately obtain the skew term is infeasible so we use a
                 # gaussian for now.
+                # logging.debug(f"Updating anomaly thresholds (@ {measurement_id}).")
                 self._anomaly_thresholds = norm.ppf(
                     self._sigma_deviation,
                     self._long_term_proba_stats.average,
@@ -333,8 +332,7 @@ class PoissonNChannelEventDetector():
             # Now determine if signficant measurements meet on_time / off_time requirements
             if measurement_is_anomalous:
                 if not self._event_in_progress:
-                    if verbose:
-                        logging.debug(f"Event started @ {measurement_id}")
+                    logging.debug(f"Event started @ {measurement_id}")
                     self._event_in_progress = True
                     self._nonanomalous_count = 0
                 # event duration = anomalous count * measurement duration
@@ -347,8 +345,7 @@ class PoissonNChannelEventDetector():
                 event_reached_max_duration = event_duration >= self.max_event_duration
                 event_over = anomaly_gone or event_reached_max_duration
                 if event_over:
-                    if verbose:
-                        logging.debug(f"Event ended @ {measurement_id}")
+                    logging.debug(f"Event ended @ {measurement_id}")
                     self._event_in_progress = False
                     # Build the event tuple
                     event_measurement_ids, event_measurements = zip(
@@ -363,7 +360,7 @@ class PoissonNChannelEventDetector():
                     fg_counts = gross_counts - bg_counts
                     snr = fg_counts / bg_counts
                     is_positive_snr_event = snr > 0
-                    if not is_positive_snr_event and verbose:
+                    if not is_positive_snr_event:
                         logging.debug(f"Event ending @ {measurement_id} had a SNR <= 0 ({snr:.2f})")
                     event_result = (
                         event_measurement,
