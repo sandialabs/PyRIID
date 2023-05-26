@@ -8,6 +8,10 @@
         "sources"
     ],
     "properties": {
+        "random_seed": {
+            "description": "The numpy random seed.",
+            "type": "integer"
+        },
         "gamma_detector": {
             "title": "Gamma Detector",
             "description": "The information about your detector.",
@@ -22,28 +26,28 @@
                     "additionalProperties": true,
                     "properties": {
                         "distance_cm": {
-                            "description": "Distance between detector and sources, in centimeters",
-                            "type": "number"
+                            "description": "Distance between detector and sourcecentimeters",
+                            "$ref": "#/$defs/detector_properties_types"
                         },
                         "height_cm": {
                             "description": "Detector height off ground, in centimeters",
-                            "type": "number"
+                            "$ref": "#/$defs/detector_properties_types"
                         },
                         "dead_time_per_pulse": {
                             "description": "Detector dead time, in microseconds",
-                            "type": "number"
+                            "$ref": "#/$defs/detector_properties_types"
                         },
                         "latitude_deg": {
                             "description": "Latitude, in degrees",
-                            "type": "number"
+                            "$ref": "#/$defs/detector_properties_types"
                         },
                         "longitude_deg": {
                             "description": "Longitude, in degrees",
-                            "type": "number"
+                            "$ref": "#/$defs/detector_properties_types"
                         },
                         "elevation_m": {
                             "description": "Elevation, in meters",
-                            "type": "number"
+                            "$ref": "#/$defs/detector_properties_types"
                         }
                     },
                     "required": [
@@ -64,13 +68,69 @@
         "sources": {
             "title": "Sources",
             "description": "The list of sources to obtain via inject(s).",
-            "type": "array"
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "isotope": {
+                        "type": "string"
+                    },
+                    "configurations": {
+                        "type": "array",
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "$ref": "#/$defs/source_config_type"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "additionalProperties": false
+            }
         }
     },
     "$defs": {
+        "detector_properties_types": {
+            "anyOf": [
+                {
+                    "type": "number"
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "anyOf": [
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "$ref": "#/$defs/sample_range"
+                            },
+                            {
+                                "$ref": "#/$defs/sample_norm"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "$ref": "#/$defs/sample_range"
+                },
+                {
+                    "$ref": "#/$defs/sample_norm"
+                }
+            ]
+        },
         "sample_range": {
             "type": "object",
-            "required": [ "min", "max", "dist" ],
+            "required": [
+                "min",
+                "max",
+                "dist",
+                "num_samples"
+            ],
             "properties": {
                 "min": {
                     "type": "number",
@@ -87,12 +147,21 @@
                         "uniform",
                         "log10"
                     ]
+                },
+                "num_samples": {
+                    "type": "number",
+                    "description": "Number of samples to draw"
                 }
-            }
+            },
+            "additionalProperties": false
         },
         "sample_norm": {
             "type": "object",
-            "required": [ "mean", "std" ],
+            "required": [
+                "mean",
+                "std",
+                "num_samples"
+            ],
             "properties": {
                 "mean": {
                     "type": "number",
@@ -101,8 +170,90 @@
                 "std": {
                     "type": "number",
                     "description": "Standard deviation of the normal distribution from which to draw samples."
+                },
+                "num_samples": {
+                    "type": "number",
+                    "description": "Number of samples to draw"
                 }
-            }
+            },
+            "additionalProperties": false
+        },
+        "source_config_type": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "activity": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            }
+                        },
+                        {
+                            "$ref": "#/$defs/sample_range"
+                        },
+                        {
+                            "$ref": "#/$defs/sample_norm"
+                        }
+                    ]
+                },
+                "activity_units": {
+                    "type": "string",
+                    "enum": [
+                        "Ci",
+                        "uCi",
+                        "Bq"
+                    ]
+                },
+                "shielding_atomic_number": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            }
+                        },
+                        {
+                            "$ref": "#/$defs/sample_range"
+                        },
+                        {
+                            "$ref": "#/$defs/sample_norm"
+                        }
+                    ]
+                },
+                "shielding_aerial_density": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            }
+                        },
+                        {
+                            "$ref": "#/$defs/sample_range"
+                        },
+                        {
+                            "$ref": "#/$defs/sample_norm"
+                        }
+                    ]
+                }
+            },
+            "additionalProperties": false
         }
     }
 }
