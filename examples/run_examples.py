@@ -6,8 +6,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from subprocess import DEVNULL
-
 import pandas as pd
 from tabulate import tabulate
 
@@ -17,7 +15,6 @@ RESULT_KEY = "Result"
 SUCCESS_STR = "Success"
 FAILURE_STR = "Fail"
 
-original_wdir = os.getcwd()
 example_dir = Path(__file__).parent
 os.chdir(example_dir)
 
@@ -31,16 +28,23 @@ results = {}
 n_tests = len(files_to_run)
 for i, f in enumerate(files_to_run, start=1):
     print(f"Running example {i}/{n_tests}")
-    proc = subprocess.Popen(f"python {f} hide",
-                            stderr=DEVNULL,
-                            stdout=DEVNULL,
-                            shell=True)
-    _, _ = proc.communicate()
+    return_code = 0
+    output = None
+    try:
+        output = subprocess.check_output(f"python {f} hide",
+                                         stderr=subprocess.STDOUT,
+                                         shell=True)
+
+    except subprocess.CalledProcessError as e:
+        if (bytes('Error', 'utf-8')) in e.output:
+            print(e.output.decode())
+            return_code = e.returncode
+
     results[i] = {
-        FILENAME_KEY: f,
-        RESULT_KEY: SUCCESS_STR if not proc.returncode else FAILURE_STR
+        FILENAME_KEY: os.path.relpath(f, example_dir),
+        RESULT_KEY: SUCCESS_STR if not return_code else FAILURE_STR
     }
-os.chdir(original_wdir)
+os.chdir(example_dir)
 
 df = pd.DataFrame.from_dict(results, orient="index")
 tabulated_df = tabulate(df, headers="keys", tablefmt="psql")
