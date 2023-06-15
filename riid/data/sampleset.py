@@ -827,8 +827,10 @@ class SampleSet():
 
     def normalize_sources(self):
         """Converts sources to a valid probability mass function (PMF)."""
+        row_sums = self._sources.sum(axis=1)
+        row_sums[row_sums == 0] = 1
         self._sources = self._sources.clip(0).divide(
-            self._sources.sum(axis=1).clip(1),
+            row_sums,
             axis=0,
         )
 
@@ -927,6 +929,24 @@ class SampleSet():
 
         if not inplace:
             return new_ss
+
+    def drop_sources(self, col_names: Iterable = DEFAULT_BG_SEED_NAMES,
+                     normalize_sources: bool = True,
+                     target_level: str = "Seed"):
+        """Drops columns from the sources DataFrame.
+
+        Args:
+            col_names: the names of the sources columns to be dropped.
+                The names of background seeds are used by default as removing the
+                ground truth for background sources when dealing with synthetic,
+                gross spectra is a common operation.
+            normalize_sources: whether to normalize the sources DataFrame after dropping
+                the column(s).
+            target_level: the multi-index level to which the column name(s) correspond.
+        """
+        self.sources.drop(col_names, axis=1, inplace=True, level=target_level)
+        if normalize_sources:
+            self.normalize_sources()
 
     def split_fg_and_bg(self, bg_seed_names: Iterable = DEFAULT_BG_SEED_NAMES) \
             -> Tuple[SampleSet, SampleSet]:
