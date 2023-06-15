@@ -76,12 +76,12 @@ class PoissonBayesClassifier(TFModelBase):
         )
         max_value = tf.math.reduce_max(expected_fg_spectrum)
         expected_fg_spectrum = tf.clip_by_value(expected_fg_spectrum, 1e-8, max_value)
-        expected_gross_spectum = tf.add(
+        expected_gross_spectrum = tf.add(
             expected_fg_spectrum,
             tf.expand_dims(expected_bg_spectrum, axis=1)
         )
 
-        poisson_dist = tfp.distributions.Poisson(expected_gross_spectum)
+        poisson_dist = tfp.distributions.Poisson(expected_gross_spectrum)
         all_probas = poisson_dist.log_prob(
             tf.expand_dims(gross_spectrum_input, axis=1)
         )
