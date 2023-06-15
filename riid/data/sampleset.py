@@ -502,14 +502,14 @@ class SampleSet():
         new_ss.info[ecal_cols] = new_ecal
         return new_ss
 
-    def as_squashed(self) -> SampleSet:
-        """Produces a 1-sample SampleSet from the given SampleSet's data.
+    def squash(self) -> SampleSet:
+        """Produces a 1-sample SampleSet from the given SampleSet's data by summing vertically.
 
         All data suited for summing is summed, otherwise the info from the first
         sample is used.
 
         Returns:
-            flat_ss: A flattened SampleSet.
+            A flattened SampleSet.
 
         """
         flat_spectra = self.spectra.sum(axis=0).to_frame().T
