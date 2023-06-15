@@ -48,11 +48,11 @@ class TestSampleSet(unittest.TestCase):
                 "Transform to bins outside measured range should result in 0 for all channels."
             )
 
-    def test_as_squashed(self):
+    def test_squash(self):
         """Tests that sampleset squashing sums data as expected."""
         ss = get_dummy_seeds()
         ss.info["snr_target"] = 0
-        flat_ss = ss.as_squashed()
+        flat_ss = ss.squash()
 
         self.assertEqual(flat_ss.n_samples, 1)
         self.assertEqual(ss.n_channels, flat_ss.n_channels)
@@ -785,7 +785,7 @@ class TestSampleSet(unittest.TestCase):
         self._assert_row_labels("Isotope", actual_isotopes, expected_isotopes)
         self._assert_row_labels("Seed", actual_seeds, expected_seeds)
 
-    def test_normalize_source(self):
+    def test_normalize_sources(self):
         """Tests normalizing source matrix to valid probability distribution.
         """
         import sys
