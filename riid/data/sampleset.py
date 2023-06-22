@@ -150,7 +150,7 @@ class SampleSet():
         return self.__str__()
 
     def __eq__(self, ss: SampleSet):
-        return np.allclose(self._spectra.values, ss._spectra.values)
+        return np.allclose(self._spectra.values, ss._spectra.values, atol=1e-3)
 
     def _check_arithmetic_supported(self, ss2: SampleSet):
         if ss2.n_samples != 1:
@@ -183,9 +183,11 @@ class SampleSet():
         new_ss = self[:]
 
         is_l1_normalized = new_ss.spectra_state == SpectraState.L1Normalized
-        if new_ss.spectra_state == SpectraState.L1Normalized:
-            new_ss.spectra *= new_ss.info.iloc[0].total_counts
+        if is_l1_normalized:
+            new_ss.spectra = new_ss.spectra.multiply(new_ss.info.total_counts, axis=0)
+
         new_ss.spectra = op(new_ss.spectra, scaled_bg_spectra)
+
         if is_l1_normalized:
             new_ss.normalize()
 
@@ -290,7 +292,7 @@ class SampleSet():
         self.info.loc[:, self.ECAL_INFO_COLUMNS[1]] = value[1]
         self.info.loc[:, self.ECAL_INFO_COLUMNS[2]] = value[2]
         self.info.loc[:, self.ECAL_INFO_COLUMNS[3]] = value[3]
-        self.info.loc[:, self.ECAL_INFO_COLUMNS[3]] = value[4]
+        self.info.loc[:, self.ECAL_INFO_COLUMNS[4]] = value[4]
 
     @property
     def info(self):
@@ -735,6 +737,47 @@ class SampleSet():
         )
 
         return channel_energies
+
+    def _get_spectral_distances(self, distance_func=distance.jensenshannon) -> np.array:
+        n_samples = self.n_samples
+        spectra = self.spectra.values.copy()
+        spectrum_pairs = [
+            (spectra[i], spectra[j])
+            for i in range(n_samples)
+            for j in range(i, n_samples)
+        ]
+        left_spectrum, right_spectrum = zip(*spectrum_pairs)
+        distance_values = distance_func(left_spectrum, right_spectrum, axis=1)
+
+        return distance_values
+
+    def get_spectral_distance_matrix(self, distance_func=distance.jensenshannon,
+                                     target_level="Seed") -> pd.DataFrame:
+        """Computes the distance between all pairs of spectra.
+
+        This method is intended for use on seed spectra (i.e., templates).
+        Calling this method on large samplesets, such as those produced by the static
+        synthesizer, is not recommended.
+        This method only computes the upper triangle and diagonal of the matrix since the lower
+        triangle would be a copy of the upper triangle.
+        The diagonal is computed, for when Poisson noise is present, for two main reasons:
+            - the distance between the same source will effectively never be zero.
+            - there is sometimes research interest in comparing the diagonal to the upper triangle.
+
+        Args:
+            distance_func: the specific distance function to use. Default is Jensen-Shannon.
+            target_level: the sources column level to use for the DataFrame labels.
+
+        Returns:
+            A 2-D array of distance values.
+
+        """
+        distance_values = self._get_spectral_distances(distance_func)
+        row_labels = self.get_labels(target_level=target_level)
+        col_labels = self.sources.columns.get_level_values(level=target_level)
+        distance_df = _get_distance_df_from_values(distance_values, row_labels, col_labels)
+
+        return distance_df
 
     def get_labels(self, target_level="Isotope", max_only=True,
                    include_value=False, min_value=0.01,
@@ -1305,6 +1348,8 @@ def _read_hdf(file_name: str) -> SampleSet:
     ss.sources = sources
     ss.info = info
     ss.prediction_probas = prediction_probas
+    if "spectra_state" in other_info:
+        ss.spectra_state = other_info["spectra_state"].iloc[0]
     if "measured_or_synthetic" in other_info:
         ss.measured_or_synthetic = other_info["measured_or_synthetic"].iloc[0]
     if "detector_info" in other_info:
@@ -1336,10 +1381,11 @@ def _write_hdf(ss: SampleSet, output_path: str):
         store.put("prediction_probas", ss.prediction_probas)
 
         other_info = {
+            "spectra_state": ss.spectra_state,
             "measured_or_synthetic": ss.measured_or_synthetic,
             "detector_info": ss.detector_info,
             "synthesis_info": ss.synthesis_info,
-            "classified_by": ss.classified_by
+            "classified_by": ss.classified_by,
         }
         store.put("other_info", pd.DataFrame(data=[other_info]))
         store.close()
@@ -1537,6 +1583,30 @@ def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
     ss.detector_info["pcf_metadata"] = pcf_dict["header"]
 
     return ss
+
+
+def _get_distance_df_from_values(distance_values: np.ndarray,
+                                 row_labels: pd.Series, col_labels: pd.Series) -> pd.DataFrame:
+    n_rows = row_labels.shape[0]
+    n_cols = col_labels.shape[0]
+    distance_df = pd.DataFrame(
+        np.zeros((n_rows, n_cols)),
+        index=row_labels,
+        columns=col_labels,
+    )
+    n_values = len(distance_values)
+    label_pairs = [
+        (row_labels[i], col_labels[j])
+        for i in range(n_rows)
+        for j in range(i, n_cols)
+    ]
+
+    for i in range(n_values):
+        value = distance_values[i]
+        r, c = label_pairs[i]
+        distance_df.at[r, c] = value
+
+    return distance_df
 
 
 class RebinningCalculationError(Exception):

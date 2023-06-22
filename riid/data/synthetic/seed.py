@@ -9,6 +9,7 @@ from typing import Iterator, List, Tuple, Union
 import numpy as np
 import pandas as pd
 import yaml
+from numpy.random import Generator
 
 from riid.data.sampleset import SampleSet, _get_utc_timestamp, read_pcf
 from riid.gadras.api import (DETECTOR_PARAMS, GADRAS_ASSEMBLY_PATH,
@@ -329,7 +330,7 @@ class bidict(dict):
 
 
 def get_choices(choices_so_far: list, options: list, options_probas: np.array,
-                restricted_pairs: bidict, n_choices_remaining: int, rng=None):
+                restricted_pairs: bidict, n_choices_remaining: int, rng: Generator = None):
     """Makes a random choice from the given options until the desired number of choices
         is reached.
 
