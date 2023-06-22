@@ -19,6 +19,17 @@ from riid.data.synthetic import get_dummy_seeds
 class TestSampleSet(unittest.TestCase):
     """Test class for SampleSet.
     """
+
+    def test__repr__(self):
+        rng = np.random.default_rng(1)
+        fg_seeds_ss, bg_seeds_ss = get_dummy_seeds(rng=rng)\
+            .split_fg_and_bg()
+        fg_ss, bg_ss, gross_ss = StaticSynthesizer(rng=rng)\
+            .generate(fg_seeds_ss, bg_seeds_ss, verbose=False)
+        fg_ss.__repr__()
+        bg_ss.__repr__()
+        gross_ss.__repr__()
+
     def test__eq__(self):
         """Tests equality of two SampleSets"""
         ss1 = get_dummy_seeds(live_time=1, normalize=False)
@@ -139,17 +150,18 @@ class TestSampleSet(unittest.TestCase):
             )
 
     def test_addition_and_subtraction_with_counts(self):
-        default_fg_spectra = np.ones((5, 10))
-        default_bg_spectra = np.ones((1, 10))
+        rng = np.random.default_rng(42)
+        default_fg_spectra = rng.integers(3, size=(10, 32))
+        default_bg_spectra = rng.integers(3, size=(1, 32))
         ss1 = SampleSet()
         ss1.spectra_state = SpectraState.Counts
         ss1.spectra = pd.DataFrame(default_fg_spectra)
-        ss1.info["total_counts"] = ss1.spectra.sum(axis=1)
+        ss1.info.total_counts = ss1.spectra.sum(axis=1)
         ss1.info.live_time = 1
         ss2 = SampleSet()
         ss2.spectra_state = SpectraState.Counts
         ss2.spectra = pd.DataFrame(default_bg_spectra)
-        ss2.info["total_counts"] = ss1.spectra.sum(axis=1)
+        ss2.info.total_counts = ss1.spectra.sum(axis=1)
         ss2.info.live_time = 1
 
         ss3 = ss1 + ss2
@@ -158,17 +170,18 @@ class TestSampleSet(unittest.TestCase):
         self.assertTrue(ss1 == ss4)
 
     def test_addition_and_subtraction_with_l1_norm(self):
-        default_fg_spectra = np.ones((5, 10))
-        default_bg_spectra = np.ones((1, 10))
+        rng = np.random.default_rng(42)
+        default_fg_spectra = rng.integers(3, size=(10, 32))
+        default_bg_spectra = rng.integers(3, size=(1, 32))
         ss1 = SampleSet()
         ss1.spectra = pd.DataFrame(default_fg_spectra)
-        ss1.info["total_counts"] = ss1.spectra.sum(axis=1)
+        ss1.info.total_counts = ss1.spectra.sum(axis=1)
         ss1.info.live_time = 1
         ss1.normalize()
         ss2 = SampleSet()
         ss2.spectra = pd.DataFrame(default_bg_spectra)
-        ss2.info["total_counts"] = ss1.spectra.sum(axis=1)
-        ss2.info.live_time = 10
+        ss2.info.total_counts = ss1.spectra.sum(axis=1)
+        ss2.info.live_time = 4
         ss2.normalize()
 
         ss3 = ss1 + ss2
