@@ -4,8 +4,8 @@
 """This modules contains utilities for synthesizing gamma spectra as static collections."""
 from time import time
 from typing import Tuple
-import numpy as np
 
+import numpy as np
 from numpy.random import Generator
 
 from riid.data.sampleset import SampleSet

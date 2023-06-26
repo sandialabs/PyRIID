@@ -12,10 +12,10 @@ import onnxruntime
 import pandas as pd
 import tensorflow as tf
 import tf2onnx
-from tensorflow.keras.callbacks import EarlyStopping
-from tensorflow.keras.layers import Dense, Dropout
-from tensorflow.keras.optimizers.legacy import Adam
-from tensorflow.keras.regularizers import l1, l2
+from keras.callbacks import EarlyStopping
+from keras.layers import Dense, Dropout
+from keras.optimizers import Adam
+from keras.regularizers import l1, l2
 from tqdm import tqdm
 
 from riid.data import SampleSet

@@ -19,7 +19,7 @@ def multi_f1(y_true: np.ndarray, y_pred: np.ndarray):
         The custom loss score for two tensors.
 
     """
-    from tensorflow.keras import backend as K
+    from keras import backend as K
 
     diff = y_true - y_pred
     negs = K.clip(diff, -1.0, 0.0)
@@ -42,7 +42,7 @@ def single_f1(y_true: np.ndarray, y_pred: np.ndarray):
 
     """
     import tensorflow as tf
-    from tensorflow.keras import backend as K
+    from keras import backend as K
 
     a = tf.dtypes.cast(y_true == K.max(y_true, axis=1)[:, None], tf.float32)
     b = tf.dtypes.cast(y_pred == K.max(y_pred, axis=1)[:, None], tf.float32)
