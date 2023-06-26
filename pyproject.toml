@@ -39,40 +39,39 @@ classifiers = [
     'Topic :: Software Development :: Libraries :: Python Modules',
     'Programming Language :: Python :: 3',
     'Programming Language :: Python :: 3 :: Only',
-    'Programming Language :: Python :: 3.7',
     'Programming Language :: Python :: 3.8',
     'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3.10',
 ]
 keywords = ["pyriid", "riid", "machine learning", "radioisotope identification", "gamma spectrum"]
 
-requires-python = ">=3.7"
+requires-python = ">=3.8,<3.11"
 dependencies = [
-    "jsonschema                     ==4.*",
-    "matplotlib                     >=3.6;      python_version >= '3.8'",
-    "matplotlib                     ~=3.5;      python_version < '3.8'",
-    "onnxruntime",
-    "pandas                         >=1.4;      python_version >= '3.9'",
-    "pandas                         ~=1.3;      python_version < '3.9'",
-    "pythonnet                      ==3.*;      platform_system == 'Windows'",
-    "pyyaml                         ==6.*",
-    "tables                         ~=3.7",
-    "tensorflow                     ==2.10.*",
-    "tensorflow-io                  ~=0.27",
-    "tensorflow-model-optimization  ~=0.7",
-    "tensorflow-probability         ==0.18.*",  # this package is currently limiting the Python version to 3.9
-    "typeguard                      >=2.7,<3.0.0",
-    "scikit-learn                   >=1.1;      python_version >= '3.10'",
-    "scikit-learn                   ~=1.0;      python_version < '3.10'",
-    "seaborn                        ~=0.12",
-    "tf2onnx",
-    "tqdm",
+    "jsonschema                     ==4.17.*",
+    "matplotlib                     ==3.7.*",
+    "pyyaml                         ==6.0.*",
+    "seaborn                        ==0.12.*",
+    "tf2onnx                        ==1.14.*",
+    "tqdm                           ==4.65.*",
+    "numpy                          ==1.23.*",
+    "onnxruntime                    ==1.15.*",
+    "pandas                         ==2.0.*",
+    "pythonnet                      ==3.0.*; platform_system == 'Windows'",
+    "tables                         ==3.8.*",
+    "tensorflow                     ==2.12.*",
+    "tensorflow-io                  ==0.27.*",
+    "tensorflow-model-optimization  ==0.7.*",
+    "tensorflow-probability         ==0.20.*",
+    "typeguard                      ==2.7.*",
+    "scikit-learn                   ==1.2.*",
 ]
 
 [project.optional-dependencies]
 dev = [
     "flake8",
     "coverage",
+    "ipykernel",
+    "tabulate",
 ]
 
 [project.urls]

@@ -14,7 +14,7 @@ import tensorflow as tf
 import tf2onnx
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.layers import Dense, Dropout
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers.legacy import Adam
 from tensorflow.keras.regularizers import l1, l2
 from tqdm import tqdm
 
