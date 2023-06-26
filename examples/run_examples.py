@@ -15,6 +15,7 @@ RESULT_KEY = "Result"
 SUCCESS_STR = "Success"
 FAILURE_STR = "Fail"
 
+original_wdir = os.getcwd()
 example_dir = Path(__file__).parent
 os.chdir(example_dir)
 
@@ -44,7 +45,7 @@ for i, f in enumerate(files_to_run, start=1):
         FILENAME_KEY: os.path.relpath(f, example_dir),
         RESULT_KEY: SUCCESS_STR if not return_code else FAILURE_STR
     }
-os.chdir(example_dir)
+os.chdir(original_wdir)
 
 df = pd.DataFrame.from_dict(results, orient="index")
 tabulated_df = tabulate(df, headers="keys", tablefmt="psql")

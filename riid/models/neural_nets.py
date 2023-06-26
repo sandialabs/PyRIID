@@ -233,7 +233,7 @@ class MLPClassifier(TFModelBase):
 
         return history
 
-    def predict(self, ss: SampleSet, bg_ss: SampleSet = None):
+    def predict(self, ss: SampleSet, bg_ss: SampleSet = None, verbose=False):
         """Classifies the spectra in the provided SampleSet(s).
 
         Results are stored inside the first SampleSet's prediction-related properties.
@@ -249,7 +249,7 @@ class MLPClassifier(TFModelBase):
             X = [x_test, bg_ss.get_samples().astype(float)]
         else:
             X = x_test
-        results = self.model.predict(X)  # output size will be n_samples by n_labels
+        results = self.model.predict(X, verbose=verbose)
 
         col_level_idx = SampleSet.SOURCES_MULTI_INDEX_NAMES.index(self.target_level)
         col_level_subset = SampleSet.SOURCES_MULTI_INDEX_NAMES[:col_level_idx+1]
