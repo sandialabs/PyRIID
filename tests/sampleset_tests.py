@@ -843,6 +843,31 @@ class TestSampleSet(unittest.TestCase):
                 f"Key '{k}' failed to be zero when comparing SampleSet to itself."
             )
 
+    def test_spectral_distance(self):
+        seeds_ss = get_dummy_seeds()
+        distance_df = seeds_ss.get_spectral_distance_matrix()
+        upper_indices = np.triu_indices(
+            n=distance_df.shape[0],
+            k=1,
+            m=distance_df.shape[1],
+        )
+        lower_indices = np.tril_indices(
+            n=distance_df.shape[0],
+            k=-1,
+            m=distance_df.shape[1],
+        )
+        diagonal_indices = np.diag_indices(
+            distance_df.values.shape[0]
+        )
+
+        diagonal_values = distance_df.values[diagonal_indices]
+        upper_triangle_values = distance_df.values[upper_indices]
+        lower_triangle_values = distance_df.values[lower_indices]
+
+        self.assertTrue(all(diagonal_values == 0.0))
+        self.assertTrue(all(lower_triangle_values == 0.0))
+        self.assertTrue(all(upper_triangle_values > 0.0))
+
     def _assert_row_labels(self, level, actual, expected):
         for i, (a, e) in enumerate(zip(actual, expected)):
             self.assertEqual(
