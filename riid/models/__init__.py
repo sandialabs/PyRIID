@@ -8,8 +8,9 @@ import warnings
 from enum import Enum
 
 import pandas as pd
-import riid
 import tensorflow as tf
+
+import riid
 from riid.data import SampleSet
 from riid.data.labeling import label_to_index_element
 from riid.data.sampleset import SpectraState
