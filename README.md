@@ -11,7 +11,7 @@ This repository contains the PyRIID package (as well as tests and examples) whic
 
 These instructions assume you meet the following requirements:
 
-- Python version: 3.7+
+- Python version: 3.8 to 3.10
 - Operating systems: Windows, Mac, or Ubuntu
 
 A virtual environment is recommended.
