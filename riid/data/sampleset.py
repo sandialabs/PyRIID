@@ -18,6 +18,7 @@ from typing import Iterable, Tuple, Union
 
 import numpy as np
 import pandas as pd
+import tqdm
 from scipy import stats
 from scipy.interpolate import interp1d
 from scipy.spatial import distance
@@ -1032,7 +1033,7 @@ class SampleSet():
         if verbose:
             logging.info(f"Saved SampleSet to '{path}'")
 
-    def to_pcf(self, path: str, verbose=False):
+    def to_pcf(self, path: str, verbose=True):
         """Writes the sampleset to disk as a PCF at the given path.
 
         Args:
@@ -1042,7 +1043,7 @@ class SampleSet():
         if not path.lower().endswith(riid.PCF_FILE_EXTENSION):
             logging.warning(f"Path does not end in {riid.PCF_FILE_EXTENSION}")
 
-        _dict_to_pcf(_ss_to_pcf_dict(self), path)
+        _dict_to_pcf(_ss_to_pcf_dict(self, verbose), path, verbose)
 
         if verbose:
             logging.info(f"Saved SampleSet to '{path}'")
@@ -1391,11 +1392,12 @@ def _write_hdf(ss: SampleSet, output_path: str):
         store.close()
 
 
-def _ss_to_pcf_dict(ss: SampleSet):
+def _ss_to_pcf_dict(ss: SampleSet, verbose=False):
     """Converts a Sampleset to a dictionary of values.
 
     Args:
-        ss: Defines a Sampleset object to be converted.
+        ss: SampleSet object to be converted.
+        verbose: displays detailed output when True.
 
     Returns:
         A dictionary containing the values from the Sampleset.
@@ -1403,7 +1405,7 @@ def _ss_to_pcf_dict(ss: SampleSet):
     Raises:
         None.
     """
-    n_channels = ss.n_channels
+    n_channels = int(ss.n_channels)
     n_records_per_spectrum = int((n_channels / 64) + 1)
 
     if "pcf_metadata" in ss.detector_info and ss.detector_info["pcf_metadata"]:
@@ -1442,7 +1444,17 @@ def _ss_to_pcf_dict(ss: SampleSet):
         if seed_level_names in ss.sources.columns.names:
             seeds = ss.get_labels(target_level=seed_level_names)
 
-    for i in range(ss.n_samples):
+    sample_range = range(ss.n_samples)
+    if verbose:
+        sample_range = tqdm.tqdm(
+            sample_range,
+            desc="Converting sample set"
+        )
+
+    info_timestamps = ss.info.timestamp.fillna("")
+    info_tags = ss.info.tag.fillna("")
+    info_zero_fill = ss.info.fillna(0)
+    for i in sample_range:
         title = isotopes[i] if not isotopes.empty else NO_ISOTOPE
         description = ss.info.description.fillna("").iloc[i]
         source = seeds[i] if not seeds.empty else NO_SEED
@@ -1450,21 +1462,21 @@ def _ss_to_pcf_dict(ss: SampleSet):
 
         header = {
             "Compressed_Text_Buffer": compressed_text_buffer,
-            "Energy_Calibration_Low_Energy": ss.info.ecal_low_e.fillna(0).iloc[i],
-            "Energy_Calibration_Offset": ss.info.ecal_order_0.fillna(0).iloc[i],
-            "Energy_Calibration_Gain": ss.info.ecal_order_1.fillna(0).iloc[i],
-            "Energy_Calibration_Quadratic": ss.info.ecal_order_2.fillna(0).iloc[i],
-            "Energy_Calibration_Cubic": ss.info.ecal_order_3.fillna(0).iloc[i],
-            "Live_Time": ss.info.live_time.fillna(0).iloc[i],
-            "Total_time_per_real_time": ss.info.real_time.fillna(0).iloc[i],
-            "Number_of_Channels": int(n_channels),
-            "Date-time_VAX": ss.info.timestamp.fillna("").iloc[i],
-            "Occupancy_Flag": ss.info.occupancy_flag.fillna(0).iloc[i],
-            "Tag": ss.info.tag.fillna("").iloc[i],
-            "Total_Neutron_Counts": ss.info.neutron_counts.fillna(0).iloc[i],
+            "Energy_Calibration_Offset": info_zero_fill.ecal_order_0.iloc[i],
+            "Energy_Calibration_Gain": info_zero_fill.ecal_order_1.iloc[i],
+            "Energy_Calibration_Quadratic": info_zero_fill.ecal_order_2.iloc[i],
+            "Energy_Calibration_Cubic": info_zero_fill.ecal_order_3.iloc[i],
+            "Energy_Calibration_Low_Energy": info_zero_fill.ecal_low_e.iloc[i],
+            "Live_Time": info_zero_fill.live_time.iloc[i],
+            "Total_time_per_real_time": info_zero_fill.real_time.iloc[i],
+            "Number_of_Channels": n_channels,
+            "Date-time_VAX": info_timestamps.iloc[i],
+            "Occupancy_Flag": info_zero_fill.occupancy_flag.iloc[i],
+            "Tag": info_tags.iloc[i],
+            "Total_Neutron_Counts": info_zero_fill.neutron_counts.iloc[i],
         }
 
-        spectrum = ss.spectra.values[i, :]
+        spectrum = ss.spectra.iloc[i, :].values
         spectra.append({"header": header, "spectrum": spectrum})
     return {"header": pcf_header, "spectra": spectra}
 

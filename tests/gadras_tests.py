@@ -71,23 +71,23 @@ class TestGadras(unittest.TestCase):
 
         # With all levels
         ss = get_dummy_seeds()
-        ss.to_pcf(TEMP_PCF_PATH)
+        ss.to_pcf(TEMP_PCF_PATH, verbose=False)
 
         # Without seed level (only category and isotope)
         ss = get_dummy_seeds()
         ss.sources.columns.droplevel("Seed")
-        ss.to_pcf(TEMP_PCF_PATH)
+        ss.to_pcf(TEMP_PCF_PATH, verbose=False)
 
         # Without seed and isotope levels (only category)
         ss = get_dummy_seeds()
         ss.sources.columns.droplevel("Seed")
         ss.sources.columns.droplevel("Isotope")
-        ss.to_pcf(TEMP_PCF_PATH)
+        ss.to_pcf(TEMP_PCF_PATH, verbose=False)
 
         # With no sources
         ss = get_dummy_seeds()
         ss.sources = pd.DataFrame()
-        ss.to_pcf(TEMP_PCF_PATH)
+        ss.to_pcf(TEMP_PCF_PATH, verbose=False)
 
 
 if __name__ == '__main__':

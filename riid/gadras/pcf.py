@@ -6,6 +6,7 @@ import struct
 from collections import defaultdict
 
 import numpy as np
+import tqdm
 
 HEADER_DEFINITIONS = defaultdict(lambda: {
     "fields": (
@@ -272,23 +273,7 @@ def _spectrum_byte_offset(spectrum_index: int,
     return 256 * (spec_rec_start_index + n_records_per_spectrum * (spectrum_index - 1) - 1)
 
 
-def _spectrum_to_bytes(spectrum: list):
-    """Converts spectrum to bytes.
-
-    Args:
-        spectrum: Defines an array of floats.
-
-    Returns:
-        The bytes object representing the spectrum.
-
-    Raises:
-        None.
-    """
-    n_channels = len(spectrum)
-    return struct.pack("{}f".format(n_channels), *spectrum)
-
-
-def _dict_to_pcf(pcf_dict: dict, save_path: str):
+def _dict_to_pcf(pcf_dict: dict, save_path: str, verbose=False):
     """Converts dictionary of pcf information into pcf file.
 
     Args:
@@ -312,17 +297,27 @@ def _dict_to_pcf(pcf_dict: dict, save_path: str):
     file_bytes += bytes((" " * n_pad).encode("utf-8"))
     n_pad = loc_first_spectra - len(file_bytes)
     file_bytes += bytes(n_pad)
-
-    # Add the spectra to file
-    for i in range(n_spectra):
-        spectrum_dict = pcf_dict["spectra"][i]
-        spectrum_header_dict = spectrum_dict["header"]
-        spectrum_header_bytes = _convert_header(spectrum_header_dict, SPECTRUM_DEFINITION)
-        spectrum_bytes = _spectrum_to_bytes(spectrum_dict["spectrum"])
-        file_bytes += spectrum_header_bytes + spectrum_bytes
     # save binary file
     with open(save_path, "wb") as fout:
         fout.write(file_bytes)
+
+    # Add the spectra to file
+    sample_range = range(n_spectra)
+    if verbose:
+        sample_range = tqdm.tqdm(
+            sample_range,
+            desc="Writing to file"
+        )
+
+    with open(save_path, "ab") as fout:
+        for i in sample_range:
+            spectrum_dict = pcf_dict["spectra"][i]
+            spectrum_header_dict = spectrum_dict["header"]
+            spectrum_header_bytes = _convert_header(spectrum_header_dict, SPECTRUM_DEFINITION)
+            n_channels = len(spectrum_dict["spectrum"])
+            spectrum_bytes = struct.pack("{}f".format(n_channels), *spectrum_dict["spectrum"])
+            file_bytes = spectrum_header_bytes + spectrum_bytes
+            fout.write(file_bytes)
 
 
 def _unpack_compressed_text_buffer(ctb, field_len=60):
