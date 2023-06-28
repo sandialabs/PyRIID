@@ -49,14 +49,33 @@ def negative_f1(y_true, y_pred):
     return -K.mean(true_positive)
 
 
-def build_semisupervised_loss_func(supervised_loss_func, unsupervised_loss_func,
-                                   dictionary, beta):
-    def _semisupervised_loss_func(spectra, y_true, y_logits, y_lpes):
-        sup_losses = supervised_loss_func(y_true, y_logits)
-        unsup_losses = reconstruction_error(spectra, y_lpes, dictionary,
+def build_keras_semisupervised_loss_func(supervised_loss_func,
+                                         unsupervised_loss_func,
+                                         dictionary, beta,
+                                         activation, n_labels,
+                                         normalize: bool = False,
+                                         normalize_scaler: float = 1.0,
+                                         normalize_func=tf.math.tanh):
+    def _semisupervised_loss_func(data, y_pred):
+        """
+        Args:
+            data: Contains true labels and input features (spectra).
+            y_pred: Model output (unactivated logits).
+        """
+        y_true = data[:, :n_labels]
+        spectra = data[:, n_labels:]
+        logits = y_pred
+        lpes = activation(y_pred)
+
+        sup_losses = supervised_loss_func(y_true, logits)
+        unsup_losses = reconstruction_error(spectra, lpes, dictionary,
                                             unsupervised_loss_func)
-        semisup_losses = sup_losses + beta * unsup_losses
-        return sup_losses, unsup_losses, semisup_losses
+        if normalize:
+            sup_losses = normalize_func(normalize_scaler * sup_losses)
+
+        semisup_losses = (1 - beta) * sup_losses + beta * unsup_losses
+
+        return semisup_losses
 
     return _semisupervised_loss_func
 
@@ -166,3 +185,14 @@ def reconstruction_error(spectra, lpes, dictionary, diff_func):
     reconstructed_spectra = tf.matmul(lpes, dictionary)
     reconstruction_errors = diff_func(spectra, reconstructed_spectra)
     return reconstruction_errors
+
+
+def mish(x):
+    return x * tf.math.tanh(tf.math.softplus(x))
+
+
+def jsd_loss(y_true, y_pred):
+    kld = tf.keras.losses.KLDivergence(reduction=tf.keras.losses.Reduction.NONE)
+    M = 0.5 * (y_true + y_pred)
+    jsd = 0.5 * kld(y_true, M) + 0.5 * kld(y_pred, M)
+    return jsd

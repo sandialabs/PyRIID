@@ -109,17 +109,20 @@ class SampleSet():
     def __bool__(self):
         return bool(len(self))
 
-    def __getitem__(self, key: Union[slice, int]):
+    def __getitem__(self, key: Union[slice, int, list]):
         selection = key
         if isinstance(key, int):
             selection = slice(key, key+1)
+        elif isinstance(key, pd.Series) and key.dtype == bool:
+            selection = self.spectra.index[key]
 
         sub_ss = copy.copy(self)
-        sub_ss.spectra = sub_ss.spectra[selection].reset_index(drop=True)
-        sub_ss.sources = sub_ss.sources[selection].reset_index(drop=True)
-        sub_ss.info = sub_ss.info[selection].reset_index(drop=True)
+        sub_ss.spectra = sub_ss.spectra.iloc[selection].reset_index(drop=True)
+        sub_ss.sources = sub_ss.sources.iloc[selection].reset_index(drop=True)
+        sub_ss.info = sub_ss.info.iloc[selection].reset_index(drop=True)
         if not sub_ss.prediction_probas.empty:
-            sub_ss.prediction_probas = sub_ss.prediction_probas[selection].reset_index(drop=True)
+            sub_ss.prediction_probas = sub_ss.prediction_probas.iloc[selection] \
+                .reset_index(drop=True)
 
         return sub_ss
 
@@ -649,6 +652,17 @@ class SampleSet():
 
         """
         self.sources = self.sources.loc[:, (self.sources != 0).any(axis=0)]
+
+    def drop_spectra_with_no_contributors(self):
+        """Removes spectra (from spectra, sources, and info dfs) which have no positive
+        sources.
+
+        Modification are made in-place.
+        """
+        zero_contrib_inds = np.where(self.sources.values.sum(axis=1) == 0)[0]
+        self.spectra = self.spectra.drop(zero_contrib_inds).reset_index(drop=True)
+        self.sources = self.sources.drop(zero_contrib_inds).reset_index(drop=True)
+        self.info = self.info.drop(zero_contrib_inds).reset_index(drop=True)
 
     def extend(self, spectra: Union[dict, list, np.array, pd.DataFrame],
                sources: pd.DataFrame, info: Union[list, pd.DataFrame]):

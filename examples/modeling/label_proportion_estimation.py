@@ -25,7 +25,8 @@ static_syn = StaticSynthesizer(
     return_bg=True,
 )
 
-_, bg_ss, _ = static_syn.generate(fg_seeds_ss[0], mixed_bg_seeds_ss)
+_, bg_ss = static_syn.generate(fg_seeds_ss[0], mixed_bg_seeds_ss)
+bg_ss.drop_sources_columns_with_all_zeros()
 bg_ss.normalize(p=1)
 
 # Create the model
@@ -41,28 +42,28 @@ model = LabelProportionEstimator(
     # and unsup losses.
     beta=1e-4,
     optimizer="adam",
-    learning_rate=1e-3,
-    metrics=("mae",),
+    learning_rate=1e-2,
     hidden_layer_activation="relu",
     l2_alpha=1e-4,
-    activity_regularizer=None,
     dropout=0.05,
 )
 
 # Train the model.
 model.fit(
-    seeds_ss=bg_seeds_ss,
-    ss=bg_ss,
+    bg_seeds_ss,
+    bg_ss,
     batch_size=10,
     epochs=10,
     validation_split=0.2,
-    verbose=True
+    verbose=True,
+    bg_cps=300
 )
 
 # Generate some test data.
 static_syn.samples_per_seed = 50
 _, test_bg_ss, _ = static_syn.generate(fg_seeds_ss[0], mixed_bg_seeds_ss)
 test_bg_ss.normalize(p=1)
+test_bg_ss.drop_sources_columns_with_all_zeros()
 
 model.predict(test_bg_ss)
 
