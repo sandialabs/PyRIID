@@ -47,6 +47,8 @@ CATEGORY_ISOTOPES = {
             "Ba140",
             "Bi207",
             "Cf249",
+            "Cf250",
+            "Cf251",
             "Cf252",
             "Cm244",
             "Co57",
