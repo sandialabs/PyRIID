@@ -5,9 +5,11 @@
 import unittest
 
 import numpy as np
+from scipy.spatial.distance import jensenshannon
+from riid.data.sampleset import SampleSet
 
-from riid.data.synthetic.seed import SeedMixer
 from riid.data.synthetic import get_dummy_seeds
+from riid.data.synthetic.seed import SeedMixer
 
 
 class TestSeedMixer(unittest.TestCase):
@@ -68,21 +70,45 @@ class TestSeedMixer(unittest.TestCase):
         for sample in range(self.three_mix_seeds_ss.n_samples):
             self.assertAlmostEqual(self.three_mix_seeds_ss.spectra.values[sample, :].sum(), 1.0)
 
-    def test_mixture_columns(self):
-        # check that all mixtures are created as expected
-        mix_ss = SeedMixer(self.ss, mixture_size=3).generate(n_samples=100)
-        recon_spectra = np.dot(
-            self.ss.spectra.values.T,
-            mix_ss.sources.values.T
-        ).T
-        test_recon_spectra = np.zeros_like(recon_spectra)
-        for row, each in enumerate(mix_ss.sources.values):
-            source_inds = np.nonzero(each)[0]
-            source_ratios = each[source_inds]
-            for idx, ratio in enumerate(source_ratios):
-                test_recon_spectra[row, :] += self.ss.spectra.loc[source_inds[idx], :] * ratio
+    def test_spectrum_construction_3seeds_2mix(self):
+        _, bg_seeds_ss = get_dummy_seeds(n_channels=16).split_fg_and_bg()
+        mixed_bg_ss = SeedMixer(bg_seeds_ss, mixture_size=2).generate(100)
+        spectral_distances = _get_spectral_distances(bg_seeds_ss, mixed_bg_ss)
+        self.assertTrue(all(spectral_distances == 0))
 
-        np.allclose(recon_spectra, test_recon_spectra)
+    def test_spectrum_construction_3seeds_3mix(self):
+        _, bg_seeds_ss = get_dummy_seeds(n_channels=16).split_fg_and_bg()
+        mixed_bg_ss = SeedMixer(bg_seeds_ss, mixture_size=3).generate(100)
+        spectral_distances = _get_spectral_distances(bg_seeds_ss, mixed_bg_ss)
+        self.assertTrue(all(spectral_distances == 0))
+
+    def test_spectrum_construction_2seeds_2mix(self):
+        _, bg_seeds_ss = get_dummy_seeds(n_channels=16).split_fg_and_bg(
+            bg_seed_names=SampleSet.DEFAULT_BG_SEED_NAMES[1:3]
+        )
+        mixed_bg_ss = SeedMixer(bg_seeds_ss, mixture_size=2).generate(100)
+        spectral_distances = _get_spectral_distances(bg_seeds_ss, mixed_bg_ss)
+        self.assertTrue(all(spectral_distances == 0))
+
+    def test_spectrum_construction_2seeds_2mix_error(self):
+        _, bg_seeds_ss = get_dummy_seeds(n_channels=16).split_fg_and_bg(
+            bg_seed_names=SampleSet.DEFAULT_BG_SEED_NAMES[1:3]
+        )
+        mixer = SeedMixer(bg_seeds_ss, mixture_size=3)
+        self.assertRaises(ValueError, mixer.generate, 100)
+
+
+def _get_spectral_distances(seeds_ss, mixed_ss):
+    recon_spectra = np.dot(
+        seeds_ss.spectra.values.T,
+        mixed_ss.sources.values.T
+    ).T
+    spectral_distances = jensenshannon(
+        recon_spectra.astype(np.float32),
+        mixed_ss.spectra.values.astype(np.float32),
+        axis=1
+    )
+    return spectral_distances
 
 
 if __name__ == '__main__':

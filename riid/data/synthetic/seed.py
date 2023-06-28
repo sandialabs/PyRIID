@@ -218,6 +218,8 @@ class SeedMixer():
         isotope_probas = list([len(isotope_to_seeds[i]) / n_seeds for i in isotopes])
         spectra_row_labels = self.seeds_ss.sources.idxmax(axis=1)
         restricted_isotope_bidict = bidict({k: v for k, v in self.restricted_isotope_pairs})
+        seed_spectra_df = self.seeds_ss.spectra.copy()
+        seed_spectra_df.index = spectra_row_labels
 
         try:
             _ = iter(self.dirichlet_alpha)
@@ -260,12 +262,11 @@ class SeedMixer():
                     alpha=alpha
                 ) for alpha in batch_dirichlet_alphas
             ]
-            spectra_mask = np.array([spectra_row_labels.isin(c) for c in seed_choices])
 
             # Compute the spectra
             spectra = np.array([
-                (seed_ratios[i] * self.seeds_ss.spectra.values[m].T).sum(axis=1)
-                for i, m in enumerate(spectra_mask)
+                (seed_ratios[i] * seed_spectra_df.loc[m].T).sum(axis=1)
+                for i, m in enumerate(seed_choices)
             ])
 
             # Build SampleSet
