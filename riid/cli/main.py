@@ -1,5 +1,7 @@
 import click
 
+@click.option('--verbose', is_flag=True, help="Show detailed output.")
+
 @click.group(help="CLI tool for PyRIID")
 def cli():
     pass
@@ -15,7 +17,7 @@ def train():
 def identify(model_path, data_path):
     pass
 
-@cli.command(short_help="Detect events within a series of gamm spectra based on a background measurement")
+@cli.command(short_help="Detect events within a series of gamma spectra based on a background measurement")
 def detect():
     pass
 
