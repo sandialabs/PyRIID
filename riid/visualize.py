@@ -365,6 +365,12 @@ def plot_spectra(ss: SampleSet, in_energy: bool = False,
 
 
 @save_or_show_plot
+def plot_fg_and_bg_spectra(fg_ss, bg_ss):
+    """Plots the first foreground spectrum alongside the first background spectrum and shows the error bars per channel for the background spectrum."""
+    pass
+
+
+@save_or_show_plot
 def plot_learning_curve(train_loss: list, validation_loss: list,
                         xscale: str = "linear", yscale: str = "linear",
                         xlim: tuple = (0, None), ylim: tuple = (0, None),
