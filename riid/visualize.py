@@ -365,9 +365,62 @@ def plot_spectra(ss: SampleSet, in_energy: bool = False,
 
 
 @save_or_show_plot
-def plot_fg_and_bg_spectra(fg_ss, bg_ss):
-    """Plots the first foreground spectrum alongside the first background spectrum and shows the error bars per channel for the background spectrum."""
-    pass
+def plot_fg_and_bg_spectra(fg_ss, bg_ss, index=0,
+                           figsize: tuple = (12.8, 7.2),
+                           xscale: str = "linear", yscale: str = "log",
+                           xlim: tuple = (None, None), ylim: tuple = (None, None),
+                           ylabel: str = None, title: str = None, legend_loc: str = None):
+    """Plots the first foreground spectrum alongside the first background spectrum and shows the
+       error bars per channel for the background spectrum.
+    """
+
+    labels = []
+    colors = ['grey', 'steelblue']
+    bg = bg_ss.spectra.iloc[index]
+    labels.append("BG")
+    fg = fg_ss.spectra.iloc[index]
+    labels.append("FG")
+
+    bins = fg_ss.get_channel_energies(index)
+
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.grid()
+    y, bin_edges, _ = ax.hist([bg, fg], bins, label=labels, color=colors,
+                              stacked=True, density=False)
+    y_bg = y[0]
+    bin_centers = .5 * (bin_edges[1:] + bin_edges[:-1])
+    ax.errorbar(bin_centers, y_bg, yerr=np.sqrt(y_bg), ecolor='black',
+                elinewidth=.5, fmt="k,", label="BG STD")
+
+    ax.set_xscale(xscale)
+    ax.set_yscale(yscale)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+    if xscale == "log":
+        ax.set_xlabel("log(Energy (keV))")
+    else:
+        ax.set_xlabel("Energy (keV)")
+    ax.tick_params(axis="x", rotation=45)
+
+    if ylabel:
+        ax.set_ylabel(ylabel)
+    elif yscale == "log":
+        ax.set_ylabel("log(Counts)")
+    else:
+        ax.set_ylabel("Counts")
+
+    if title:
+        ax.set_title(title)
+    else:
+        ax.set_title("FG/BG Counts")
+
+    if legend_loc:
+        ax.legend(loc=legend_loc)
+    else:
+        ax.legend()
+
+    return fig, ax
 
 
 @save_or_show_plot
