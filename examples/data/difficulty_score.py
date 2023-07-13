@@ -14,13 +14,13 @@ static_synth = StaticSynthesizer(
     samples_per_seed=500,
     snr_function="uniform",
 )
-easy_ss, _, _ = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss)
+easy_ss, _ = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss)
 
 static_synth.snr_function = "log10"
-medium_ss, _, _ = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss)
+medium_ss, _ = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss)
 
 static_synth.snr_function_args = (.00001, .1)
-hard_ss, _, _ = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss)
+hard_ss, _ = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss)
 
 easy_score = easy_ss.difficulty_score
 print(f"Difficulty score for Uniform:           {easy_score:.5f}")

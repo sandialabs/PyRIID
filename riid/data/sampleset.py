@@ -157,8 +157,15 @@ class SampleSet():
         return np.allclose(self._spectra.values, ss._spectra.values, atol=1e-3)
 
     def _check_arithmetic_supported(self, ss2: SampleSet):
-        if ss2.n_samples != 1:
-            raise InvalidSampleCountError("Only one background spectrum may be provided!")
+        if ss2.n_samples != 1 and ss2.n_samples != self.n_samples:
+            n_sample_str = (
+                "You can only add/subtract SampleSet objects "
+                "when the second SampleSet has only one spectrum "
+                "(the spectrum will be scaled to match each sample of the first SampleSet) or"
+                "when the second SampleSet has the same number of samples as the first "
+                "(no rescaling will occur)."
+            )
+            raise InvalidSampleCountError(n_sample_str)
         if self.n_channels != ss2.n_channels:
             channel_str = f"({self.n_channels} != {ss2.n_channels})"
             raise ChannelCountMismatchError(f"Mismatched spectra channels {channel_str}!")
@@ -183,7 +190,10 @@ class SampleSet():
     def _get_arithmetic_result(self, bg_ss: SampleSet, op) -> SampleSet:
         self._check_arithmetic_supported(bg_ss)
 
-        scaled_bg_spectra = self._get_scaled_bg_spectra(bg_ss)
+        if bg_ss.n_samples == 1:
+            scaled_bg_spectra = self._get_scaled_bg_spectra(bg_ss)
+        else:
+            scaled_bg_spectra = bg_ss.spectra.values  # Assumed to already be scaled
         new_ss = self[:]
 
         is_l1_normalized = new_ss.spectra_state == SpectraState.L1Normalized
@@ -198,12 +208,12 @@ class SampleSet():
         return new_ss
 
     def __add__(self, bg_ss: SampleSet) -> SampleSet:
-        """Adds a single given background spectrum to the spectra of the current SampleSet.
+        """Adds the given background spectr(um|a) to the spectra of the current SampleSet.
         """
         return self._get_arithmetic_result(bg_ss, operator.add)
 
     def __sub__(self, bg_ss: SampleSet) -> SampleSet:
-        """Subtracts a single given background spectrum from the spectra of the current SampleSet.
+        """Subtracts the given background spectr(um|a) from the spectra of the current SampleSet.
         """
         return self._get_arithmetic_result(bg_ss, operator.sub)
 

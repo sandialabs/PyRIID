@@ -27,7 +27,7 @@ pbs = PassbySynthesizer(
 )
 
 events = pbs.generate(fg_seeds_ss, bg_seeds_ss)
-_, _, gross_passbys = list(zip(*events))
+_, gross_passbys = list(zip(*events))
 passby_ss = gross_passbys[0]
 passby_ss.concat(gross_passbys[1:])
 

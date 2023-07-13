@@ -24,10 +24,9 @@ class TestSampleSet(unittest.TestCase):
         rng = np.random.default_rng(1)
         fg_seeds_ss, bg_seeds_ss = get_dummy_seeds(rng=rng)\
             .split_fg_and_bg()
-        fg_ss, bg_ss, gross_ss = StaticSynthesizer(rng=rng)\
+        fg_ss, gross_ss = StaticSynthesizer(rng=rng)\
             .generate(fg_seeds_ss, bg_seeds_ss, verbose=False)
         fg_ss.__repr__()
-        bg_ss.__repr__()
         gross_ss.__repr__()
 
     def test__eq__(self):
@@ -111,7 +110,7 @@ class TestSampleSet(unittest.TestCase):
         self.assertRaises(
             InvalidSampleCountError,
             fg_ss._check_arithmetic_supported,
-            get_dummy_seeds(n_channels=N_TARGET_CHANNELS)
+            get_dummy_seeds(n_channels=N_TARGET_CHANNELS)[list(range(fg_ss.n_samples - 1))]
         )
         self.assertRaises(
             ChannelCountMismatchError,
@@ -824,16 +823,11 @@ class TestSampleSet(unittest.TestCase):
         }
         fg_seeds_ss1, bg_seeds_ss1 = get_dummy_seeds().split_fg_and_bg()
         static_syn1 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)
-        _, _, gross_ss1 = static_syn1.generate(fg_seeds_ss1, bg_seeds_ss1, verbose=False)
-        """ |      |         |
-            |      |         |> gross samples
-            |      |> background-only samples
-            |> source-only samples
-        """
+        _, gross_ss1 = static_syn1.generate(fg_seeds_ss1, bg_seeds_ss1, verbose=False)
 
         fg_seeds_ss2, bg_seeds_ss2 = get_dummy_seeds().split_fg_and_bg()
         static_syn2 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)
-        _, _, gross_ss2 = static_syn2.generate(fg_seeds_ss2, bg_seeds_ss2, verbose=False)
+        _, gross_ss2 = static_syn2.generate(fg_seeds_ss2, bg_seeds_ss2, verbose=False)
 
         _, _, _ = gross_ss1.compare_to(gross_ss2)
         _, _, col_comparison_same = gross_ss1.compare_to(gross_ss1)

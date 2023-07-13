@@ -31,10 +31,9 @@ static_synth = StaticSynthesizer(
     snr_function="log10",
     snr_function_args=(1, 20),
     return_fg=True,
-    return_bg=True,
     return_gross=True,
 )
-train_fg_ss, _, _ = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss, verbose=False)
+train_fg_ss, _ = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss, verbose=False)
 train_fg_ss.normalize()
 
 model_nn = MLPClassifier(hidden_layers=(5,))
@@ -46,8 +45,9 @@ model_pb.fit(fg_seeds_ss)
 
 # Generate some test data
 static_synth.samples_per_seed = 50
-test_fg_ss, test_bg_ss, test_gross_ss = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss,
-                                                              verbose=False)
+test_fg_ss, test_gross_ss = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss,
+                                                  verbose=False)
+test_bg_ss = test_gross_ss - test_fg_ss
 test_fg_ss.normalize()
 test_gross_ss.sources.drop(bg_seeds_ss.sources.columns, axis=1, inplace=True)
 test_gross_ss.normalize_sources()

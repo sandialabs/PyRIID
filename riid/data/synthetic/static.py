@@ -8,7 +8,7 @@ from typing import Tuple
 import numpy as np
 from numpy.random import Generator
 
-from riid.data.sampleset import SampleSet
+from riid.data.sampleset import SampleSet, SpectraState
 from riid.data.synthetic import Synthesizer, get_distribution_values
 
 
@@ -32,11 +32,12 @@ class StaticSynthesizer(Synthesizer):
     def __init__(self, samples_per_seed: int = 100,
                  live_time_function: str = "uniform", live_time_function_args=(0.25, 8.0),
                  snr_function: str = "uniform", snr_function_args=(0.01, 100.0),
-                 bg_cps: float = 300.0, apply_poisson_noise: bool = True,
+                 bg_cps: float = 300.0, long_bg_live_time: float = 120.0,
+                 apply_poisson_noise: bool = True,
                  normalize_sources: bool = True,
-                 return_fg: bool = True, return_bg: bool = False, return_gross: bool = False,
+                 return_fg: bool = True, return_gross: bool = False,
                  rng: Generator = np.random.default_rng()) -> None:
-        """Constructs a synthetic gamma spectra generator.
+        """Constructs a static collection synthesizer.
 
         Arguments:
             samples_per_seed: Defines the number of synthetic samples to generate
@@ -50,8 +51,8 @@ class StaticSynthesizer(Synthesizer):
             snr_function_args: Defines the range of values which are sampled in the fashion
                 specified by the `snr_function` argument.
         """
-        super().__init__(bg_cps, apply_poisson_noise, normalize_sources,
-                         return_fg, return_bg, return_gross, rng)
+        super().__init__(bg_cps, long_bg_live_time, apply_poisson_noise, normalize_sources,
+                         return_fg, return_gross, rng)
 
         self.samples_per_seed = samples_per_seed
         self.live_time_function = live_time_function
@@ -131,6 +132,7 @@ class StaticSynthesizer(Synthesizer):
     def _get_concatenated_batches(self, ss_batches, n_samples_expected):
         ss = SampleSet()
         ss.measured_or_synthetic = self.SYNTHETIC_STR
+        ss.spectra_state = SpectraState.Counts
         ss.concat(ss_batches)
         self._verify_n_samples_synthesized(ss.n_samples, n_samples_expected)
         if self.normalize_sources:
@@ -141,11 +143,10 @@ class StaticSynthesizer(Synthesizer):
         """Iterate over each background, then each source, to generate a batch of spectra that
             target a set of SNR and live time values.
         """
-        n_returns = self.return_fg + self.return_bg + self.return_gross
+        n_returns = self.return_fg + self.return_gross
         n_samples_per_return = self.samples_per_seed * fg_seeds_ss.n_samples * bg_seeds_ss.n_samples
         n_samples_expected = n_returns * n_samples_per_return
         fg_ss_batches = []
-        bg_ss_batches = []
         gross_ss_batches = []
 
         fg_labels = fg_seeds_ss.get_labels(target_level="Seed", max_only=False,
@@ -165,13 +166,12 @@ class StaticSynthesizer(Synthesizer):
                 fg_seed = fg_seeds_ss.spectra.iloc[f]
                 fg_sources = fg_seeds_ss.sources.iloc[f]
                 ecal = fg_seeds_ss.ecal[f]
-                fg_batch_ss, bg_batch_ss, gross_batch_ss = self._get_batch(
+                fg_batch_ss, gross_batch_ss = self._get_batch(
                     fg_seed, fg_sources,
                     bg_seed, bg_sources,
                     ecal, lt_targets, snr_targets
                 )
                 fg_ss_batches.append(fg_batch_ss)
-                bg_ss_batches.append(bg_batch_ss)
                 gross_ss_batches.append(gross_batch_ss)
 
                 if verbose:
@@ -180,15 +180,13 @@ class StaticSynthesizer(Synthesizer):
                         fg_labels[f]
                     )
 
-        fg_ss = bg_ss = gross_ss = None
+        fg_ss = gross_ss = None
         if self.return_fg:
             fg_ss = self._get_concatenated_batches(fg_ss_batches, n_samples_per_return)
-        if self.return_bg:
-            bg_ss = self._get_concatenated_batches(bg_ss_batches, n_samples_per_return)
         if self.return_gross:
             gross_ss = self._get_concatenated_batches(gross_ss_batches, n_samples_per_return)
 
-        return fg_ss, bg_ss, gross_ss
+        return fg_ss, gross_ss
 
     def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet,
                  verbose: bool = True) -> Tuple[SampleSet, SampleSet, SampleSet]:
@@ -229,7 +227,7 @@ class StaticSynthesizer(Synthesizer):
         if verbose:
             tstart = time()
 
-        fg_ss, bg_ss, gross_ss = self._get_synthetic_samples(
+        fg_ss, gross_ss = self._get_synthetic_samples(
             fg_seeds_ss,
             bg_seeds_ss,
             verbose=verbose
@@ -239,7 +237,7 @@ class StaticSynthesizer(Synthesizer):
             delay = time() - tstart
             self._report_completion(delay)
 
-        return fg_ss, bg_ss, gross_ss
+        return fg_ss, gross_ss
 
 
 class NoSeedError(Exception):

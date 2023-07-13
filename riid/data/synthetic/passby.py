@@ -24,15 +24,15 @@ class PassbySynthesizer(Synthesizer):
                  fwhm_function: str = "discrete", fwhm_function_args=(1,),
                  snr_function: str = "uniform", snr_function_args=(1.0, 10.0),
                  min_fraction: float = 0.005, normalize_sources: bool = True,
-                 bg_cps: float = 300.0, apply_poisson_noise: bool = True,
-                 return_fg: bool = True, return_bg: bool = False, return_gross: bool = False,
+                 bg_cps: float = 300.0, long_bg_live_time: float = 120.0,
+                 apply_poisson_noise: bool = True,
+                 return_fg: bool = True, return_gross: bool = False,
                  rng: Generator = np.random.default_rng()):
-        """Constructs a synthetic passy-by generator.
+        """Constructs a pass-by collection synthesizer.
 
         Args:
             events_per_seed: Defines the number of pass-bys to generate
                 per source-background seed pair.
-            bg_cps: Defines the constant rate of gammas from background.
             live_time_function: Defines the string that names the method of sampling
                 for target live time values. Options: uniform; log10; discrete; list.
             live_time_function_args: Defines the range of values which are sampled in the
@@ -43,8 +43,8 @@ class PassbySynthesizer(Synthesizer):
                 specified by the `snr_function` argument.
             min_fraction: Minimum proportion of peak amplitude to exclude.
         """
-        super().__init__(bg_cps, apply_poisson_noise, normalize_sources,
-                         return_fg, return_bg, return_gross, rng)
+        super().__init__(bg_cps, long_bg_live_time, apply_poisson_noise, normalize_sources,
+                         return_fg, return_gross, rng)
 
         self.events_per_seed = events_per_seed
         self.sample_interval = sample_interval
@@ -228,7 +228,7 @@ class PassbySynthesizer(Synthesizer):
         n_samples = len(snr_targets)
         live_times = np.ones(n_samples) * self.sample_interval
 
-        fg_ss, bg_ss, gross_ss = self._get_batch(
+        fg_ss, gross_ss = self._get_batch(
             fg_seed,
             fg_sources,
             bg_seed,
@@ -241,12 +241,10 @@ class PassbySynthesizer(Synthesizer):
         if self.normalize_sources:
             if self.return_fg:
                 fg_ss.normalize_sources()
-            if self.return_bg:
-                bg_ss.normalize_sources()
             if self.return_gross:
                 gross_ss.normalize_sources()
 
-        return fg_ss, bg_ss, gross_ss
+        return fg_ss, gross_ss
 
     def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet,
                  verbose: bool = True) \

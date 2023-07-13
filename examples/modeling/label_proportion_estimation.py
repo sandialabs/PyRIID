@@ -19,15 +19,16 @@ mixed_bg_seeds_ss = SeedMixer(
 
 static_syn = StaticSynthesizer(
     samples_per_seed=100,
-    live_time_function_args=(600, 600),
-    snr_function_args=(1, 1),
+    bg_cps=300.0,
+    live_time_function_args=(60, 600),
+    snr_function_args=(0, 0),
     return_fg=False,
-    return_bg=True,
+    return_gross=True,
 )
 
 _, bg_ss = static_syn.generate(fg_seeds_ss[0], mixed_bg_seeds_ss)
 bg_ss.drop_sources_columns_with_all_zeros()
-bg_ss.normalize(p=1)
+bg_ss.normalize()
 
 # Create the model
 model = LabelProportionEstimator(
@@ -61,7 +62,7 @@ model.fit(
 
 # Generate some test data.
 static_syn.samples_per_seed = 50
-_, test_bg_ss, _ = static_syn.generate(fg_seeds_ss[0], mixed_bg_seeds_ss)
+_, test_bg_ss = static_syn.generate(fg_seeds_ss[0], mixed_bg_seeds_ss)
 test_bg_ss.normalize(p=1)
 test_bg_ss.drop_sources_columns_with_all_zeros()
 

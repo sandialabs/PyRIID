@@ -26,10 +26,10 @@ class TestStaticSynthesis(unittest.TestCase):
             samples_per_seed=2,
             snr_function="log10",
             rng=np.random.default_rng(1),
-            return_bg=True,
+            return_fg=True,
             return_gross=True,
         )
-        fg_1, bg_1, gross_1 = static_syn.generate(
+        fg_1, gross_1 = static_syn.generate(
             fg_seeds_ss=fg_seeds_ss,
             bg_seeds_ss=mixed_bg_seeds_ss,
             verbose=False,
@@ -38,12 +38,12 @@ class TestStaticSynthesis(unittest.TestCase):
         static_syn = StaticSynthesizer(
             samples_per_seed=2,
             snr_function="log10",
-            return_bg=True,
+            return_fg=True,
             return_gross=True,
             rng=np.random.default_rng(1),
         )
 
-        fg_2, bg_2, gross_2 = static_syn.generate(
+        fg_2, gross_2 = static_syn.generate(
             fg_seeds_ss=fg_seeds_ss,
             bg_seeds_ss=mixed_bg_seeds_ss,
             verbose=False
@@ -52,23 +52,21 @@ class TestStaticSynthesis(unittest.TestCase):
         static_syn = StaticSynthesizer(
             samples_per_seed=2,
             snr_function="log10",
-            return_bg=True,
+            return_fg=True,
             return_gross=True,
             rng=np.random.default_rng(2),
         )
 
-        fg_3, bg_3, gross_3 = static_syn.generate(
+        fg_3, gross_3 = static_syn.generate(
             fg_seeds_ss=fg_seeds_ss,
             bg_seeds_ss=mixed_bg_seeds_ss,
             verbose=False
         )
 
         self.assertEqual(fg_1, fg_2)  # used the same random_state
-        self.assertEqual(bg_1, bg_2)  # used the same random_state
         self.assertEqual(gross_1, gross_2)  # used the same random_state
 
         self.assertNotEqual(fg_3, fg_2)  # used different random_state
-        self.assertNotEqual(bg_3, bg_2)  # used different random_state
         self.assertNotEqual(gross_3, gross_2)  # used different random_state
 
     def test_get_expected_spectra(self):
@@ -208,7 +206,6 @@ class TestStaticSynthesis(unittest.TestCase):
             bg_cps=300,
             apply_poisson_noise=False,
             return_fg=True,
-            return_bg=True,
             return_gross=True,
         )
         fg_seed = pd.Series([0.0, 0.0, 0.0, 0.2, 0.8])
@@ -225,7 +222,7 @@ class TestStaticSynthesis(unittest.TestCase):
         lts = np.array([4.2]).astype(float)
         snrs = np.array([63.2]).astype(float)
 
-        fg_ss, bg_ss, gross_ss = synth._get_batch(
+        fg_ss, gross_ss = synth._get_batch(
             fg_seed=fg_seed,
             fg_sources=fg_sources,
             bg_seed=bg_seed,
@@ -254,15 +251,6 @@ class TestStaticSynthesis(unittest.TestCase):
             fg_ss.sources.loc[:, fg_sources.index].sum(axis=1),
         ))
 
-        self.assertTrue(np.allclose(
-            gross_ss.sources.loc[:, bg_sources.index],
-            bg_ss.sources.loc[:, bg_sources.index],
-        ))
-        self.assertTrue(np.allclose(
-            bg_ss.spectra.sum(axis=1),
-            bg_ss.sources.loc[:, bg_sources.index].sum(axis=1),
-        ))
-
     def test_source_proportions(self):
         """Test that SNR equals fg/bg source cumulative source proportions."""
         fg_seeds_ss, bg_seeds_ss = get_dummy_seeds().split_fg_and_bg()
@@ -273,11 +261,10 @@ class TestStaticSynthesis(unittest.TestCase):
             snr_function="log10",
             rng=np.random.default_rng(1),
             return_fg=False,
-            return_bg=False,
             return_gross=True,
             apply_poisson_noise=False,
         )
-        _, _, gross_ss = static_syn.generate(
+        _, gross_ss = static_syn.generate(
             fg_seeds_ss=fg_seeds_ss,
             bg_seeds_ss=mixed_bg_seeds_ss,
             verbose=False,

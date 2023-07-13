@@ -29,9 +29,9 @@ fg_seeds_ss, bg_seeds_ss = get_dummy_seeds()\
 mixed_bg_seed_ss = SeedMixer(bg_seeds_ss, mixture_size=3)\
     .generate(1)
 
-_, _, gross_ss1 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)\
+_, gross_ss1 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)\
     .generate(fg_seeds_ss, mixed_bg_seed_ss)
-_, _, gross_ss2 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)\
+_, gross_ss2 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)\
     .generate(fg_seeds_ss, mixed_bg_seed_ss)
 
 ss1_stats, ss2_stats, col_comparisons = gross_ss1.compare_to(gross_ss2,
