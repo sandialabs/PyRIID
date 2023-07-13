@@ -17,18 +17,28 @@ class Synthesizer():
     SYNTHETIC_STR = "synthetic"
     SUPPORTED_SAMPLING_FUNCTIONS = ["uniform", "log10", "discrete", "list"]
 
-    def __init__(self, bg_cps: float = 300.0,
+    def __init__(self, bg_cps: float = 300.0, long_bg_live_time: float = 120.0,
                  apply_poisson_noise: bool = True,
                  normalize_sources: bool = True,
                  return_fg: bool = True,
-                 return_bg: bool = False,
                  return_gross: bool = False,
                  rng: Generator = np.random.default_rng()):
+        """Base class for synthesizers.
+
+        Args:
+            bg_cps: the constant rate of gammas from background.
+            long_bg_live_time: the live time on which to base background subtractions.
+            apply_poisson_noise: whether to apply Poisson noise to spectra.
+            normalize_sources: whether to normalize ground truth proportions to sum to 1.
+            return_fg: whether to compute and return background subtracted spectra.
+            return_gross: whether to return gross spectra (always computed).
+            rng: a NumPy random number generator, useful for experiment repeatability.
+        """
         self.bg_cps = bg_cps
+        self.long_bg_live_time = long_bg_live_time
         self.apply_poisson_noise = apply_poisson_noise
         self.normalize_sources = normalize_sources
         self.return_fg = return_fg
-        self.return_bg = return_bg
         self.return_gross = return_gross
         self._rng = rng
         self._synthesis_start_dt = None
@@ -68,48 +78,54 @@ class Synthesizer():
 
     def _get_batch(self, fg_seed, fg_sources, bg_seed, bg_sources, ecal,
                    lt_targets, snr_targets):
-        if not (self.return_fg or self.return_bg or self.return_gross):
+        if not (self.return_fg or self.return_gross):
             raise ValueError("Computing to return nothing.")
 
         bg_counts_expected = lt_targets * self.bg_cps
         fg_counts_expected = snr_targets * np.sqrt(bg_counts_expected)
+
         fg_spectra = get_expected_spectra(fg_seed.values, fg_counts_expected)
         bg_spectra = get_expected_spectra(bg_seed.values, bg_counts_expected)
+
+        long_bg_counts_expected = self.long_bg_live_time * self.bg_cps
+        long_bg_spectrum_expected = bg_seed.values * long_bg_counts_expected
+
         gross_spectra = None
+        long_bg_spectra = None
         fg_counts = 0
         bg_counts = 0
+        long_bg_counts = 0
         fg_ss = None
-        bg_ss = None
         gross_ss = None
 
         # Spectra
         if self.apply_poisson_noise:
-            if self.return_fg or self.return_gross:
-                gross_spectra = self._rng.poisson(fg_spectra + bg_spectra)
-            if self.return_fg or self.return_bg:
-                bg_spectra = self._rng.poisson(bg_spectra)
+            gross_spectra = self._rng.poisson(fg_spectra + bg_spectra)
             if self.return_fg:
-                fg_spectra = gross_spectra - bg_spectra
-        elif self.return_gross:
+                long_bg_spectrum = self._rng.poisson(long_bg_spectrum_expected)
+                long_bg_seed = long_bg_spectrum / long_bg_spectrum.sum()
+                long_bg_spectra = get_expected_spectra(long_bg_seed, bg_counts_expected)
+                fg_spectra = gross_spectra - long_bg_spectra
+        else:
             gross_spectra = fg_spectra + bg_spectra
+            if self.return_fg:
+                long_bg_spectra = bg_spectra
+                fg_spectra = gross_spectra - long_bg_spectra
 
         # Counts
-        if self.return_fg or self.return_gross:
-            fg_counts = fg_spectra.sum(axis=1, dtype=float)
-        if self.return_bg or self.return_gross:
+        fg_counts = fg_spectra.sum(axis=1, dtype=float)
+        if self.return_fg:
+            long_bg_counts = long_bg_spectra.sum(axis=1, dtype=float)
+        if self.return_gross:
             bg_counts = bg_spectra.sum(axis=1, dtype=float)
 
         # Sample sets
         if self.return_fg:
+            snrs = fg_counts / np.sqrt(long_bg_counts.clip(1))
             fg_ss = get_fg_sample_set(fg_spectra, fg_sources, ecal, lt_targets,
-                                      snrs=fg_counts, total_counts=fg_counts,
+                                      snrs=snrs, total_counts=fg_counts,
                                       timestamps=self._synthesis_start_dt)
             self._n_samples_synthesized += fg_ss.n_samples
-        if self.return_bg:
-            bg_ss = get_bg_sample_set(bg_spectra, bg_sources, ecal, lt_targets,
-                                      snrs=0, total_counts=bg_counts,
-                                      timestamps=self._synthesis_start_dt)
-            self._n_samples_synthesized += bg_ss.n_samples
         if self.return_gross:
             tiled_fg_sources = _tile_sources_and_scale(
                 fg_sources,
@@ -129,7 +145,7 @@ class Synthesizer():
                                             timestamps=self._synthesis_start_dt)
             self._n_samples_synthesized += gross_ss.n_samples
 
-        return fg_ss, bg_ss, gross_ss
+        return fg_ss, gross_ss
 
 
 def get_sample_set(spectra, sources, ecal, live_times, snrs, total_counts=None,
@@ -169,27 +185,6 @@ def _tile_sources_and_scale(sources, n_samples, scalars) -> pd.DataFrame:
     # multiple isotopes.
     tiled_sources = tiled_sources.multiply(scalars, axis="index")
     return tiled_sources
-
-
-def get_bg_sample_set(spectra, sources, ecal, live_times, snrs, total_counts,
-                      real_times=None, timestamps=None, descriptions=None) -> SampleSet:
-    tiled_sources = _tile_sources_and_scale(
-        sources,
-        spectra.shape[0],
-        spectra.sum(axis=1)
-    )
-    ss = get_sample_set(
-        spectra=spectra,
-        sources=tiled_sources,
-        ecal=ecal,
-        live_times=live_times,
-        snrs=snrs,
-        total_counts=total_counts,
-        real_times=real_times,
-        timestamps=timestamps,
-        descriptions=descriptions
-    )
-    return ss
 
 
 def get_fg_sample_set(spectra, sources, ecal, live_times, snrs, total_counts,
@@ -313,15 +308,17 @@ def get_samples_per_seed(columns: pd.MultiIndex, min_samples_per_seed: int, bala
     return lv_to_samples_per_seed, total_samples_expected
 
 
-def get_dummy_seeds(n_channels: int = 512, live_time: float = 1,
-                    count_rate: float = 100, normalize: bool = True,
+def get_dummy_seeds(n_channels: int = 512, live_time: float = 600.0,
+                    count_rate: float = 1000.0, normalize: bool = True,
                     rng: Generator = np.random.default_rng()) -> SampleSet:
     """Builds a random, dummy SampleSet for demonstration or test purposes.
 
     Args:
         n_channels: the number of channels in the spectra DataFrame.
-        live_time: the collection time for all measurements.
-        count_rate: the count rate for the seeds measurements.
+        live_time: the collection time on which to base seeds
+            (higher creates a less noisy shape).
+        count_rate: the count rate on which to base seeds
+            (higher creates a less noisy shape).
         normalize: whether to apply an L1-norm to the spectra.
         rng: a NumPy random number generator, useful for experiment repeatability.
 
@@ -362,13 +359,12 @@ def get_dummy_seeds(n_channels: int = 512, live_time: float = 1,
         mu = i * channels_per_sources + channels_per_sources / 2
         counts = rng.normal(mu, fg_std, size=N_FG_COUNTS)
         fg_histogram, _ = np.histogram(counts, bins=n_channels, range=(0, n_channels))
-        histogram = rng.poisson(fg_histogram)
-        histograms.append(histogram)
+        histograms.append(fg_histogram)
     histograms = np.array(histograms)
 
     ss.spectra = pd.DataFrame(data=histograms)
 
-    ss.info["total_counts"] = ss.spectra.sum(axis=1)
+    ss.info.total_counts = ss.spectra.sum(axis=1)
     ss.info.live_time = live_time
     ss.info.real_time = live_time
     ss.info.snr = None

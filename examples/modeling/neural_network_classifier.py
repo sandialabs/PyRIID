@@ -19,7 +19,7 @@ static_synth = StaticSynthesizer(
     return_fg=False,
     return_gross=True,
 )
-_, _, train_ss = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss)
+_, train_ss = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss)
 train_ss.normalize()
 
 model = MLPClassifier()
@@ -27,7 +27,7 @@ model.fit(train_ss, epochs=10, patience=5, verbose=1)
 
 # Generate some test data
 static_synth.samples_per_seed = 50
-_, _, test_ss = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss)
+_, test_ss = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss)
 test_ss.normalize()
 
 # Predict

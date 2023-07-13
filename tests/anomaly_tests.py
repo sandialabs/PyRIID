@@ -37,7 +37,7 @@ class TestAnomaly(unittest.TestCase):
                                    rng=np.random.default_rng(42))\
             .generate(fg_seeds_ss, mixed_bg_seeds_ss, verbose=False)
 
-        _, _, gross_events = list(zip(*events))
+        _, gross_events = list(zip(*events))
         passby_ss = gross_events[0]
 
         expected_bg_counts = SAMPLE_INTERVAL * BG_RATE

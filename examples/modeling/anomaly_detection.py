@@ -92,7 +92,7 @@ events = PassbySynthesizer(
     return_fg=False,
     return_gross=True,
 ).generate(fg_seeds_ss, mixed_bg_seed_ss)
-_, _, gross_events = list(zip(*events))
+_, gross_events = list(zip(*events))
 passby_ss = gross_events[0]
 
 print("Passing by...")

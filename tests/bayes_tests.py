@@ -66,17 +66,17 @@ class TestPoissonBayesClassifier(unittest.TestCase):
             live_time_function_args=(4, 4),
             snr_function_args=(10, 10),
             rng=np.random.default_rng(42),
-            return_fg=False,
-            return_bg=True,
+            return_fg=True,
             return_gross=True,
         )
-        _, test_bg_ss, test_ss = gss.generate(fg_seeds_ss, bg_seeds_ss, verbose=False)
+        test_fg_ss, test_gross_ss = gss.generate(fg_seeds_ss, bg_seeds_ss, verbose=False)
+        test_bg_ss = test_gross_ss - test_fg_ss
 
         # Predict
-        pb_model.predict(test_ss, test_bg_ss)
+        pb_model.predict(test_gross_ss, test_bg_ss)
 
         truth_labels = fg_seeds_ss.get_labels()
-        predictions_labels = test_ss.get_predictions()
+        predictions_labels = test_gross_ss.get_predictions()
         assert (truth_labels == predictions_labels).all()
 
 

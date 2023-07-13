@@ -16,13 +16,13 @@ static_syn = StaticSynthesizer(
     # This makes the SampleSet overall "harder" to classify.
     snr_function="log10",
     samples_per_seed=50,
-    return_fg=False,
-    return_bg=True,
+    return_fg=True,
     return_gross=True,
 )
 
 # Generate some training data
-_, bg_ss, gross_ss = static_syn.generate(fg_seeds_ss, bg_seeds_ss)
+fg_ss, gross_ss = static_syn.generate(fg_seeds_ss, bg_seeds_ss)
+bg_ss = gross_ss - fg_ss
 bg_ss.normalize()
 gross_ss.normalize()
 
@@ -34,7 +34,8 @@ model2 = MLPClassifier()
 model2.fit(gross_ss, bg_ss=bg_ss, verbose=1, epochs=50, patience=20)
 
 # Generate two sample sets (with same sources but predictions from different models)
-_, train2a_bg_ss, train2a_ss = static_syn.generate(fg_seeds_ss, bg_seeds_ss)
+train2a_fg_ss, train2a_ss = static_syn.generate(fg_seeds_ss, bg_seeds_ss)
+train2a_bg_ss = train2a_ss - train2a_fg_ss
 train2b_ss = copy(train2a_ss)
 train2b_bg_ss = copy(train2a_bg_ss)
 

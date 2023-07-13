@@ -34,7 +34,7 @@ class TestVisualize(unittest.TestCase):
             return_fg=False,
             return_gross=True
         )
-        _, _, self.train_ss = self.static_synth.generate(
+        _, self.train_ss = self.static_synth.generate(
             self.fg_seeds_ss,
             self.mixed_bg_seed_ss,
             verbose=False
@@ -47,7 +47,7 @@ class TestVisualize(unittest.TestCase):
 
         # Generate some test data
         self.static_synth.samples_per_seed = 50
-        _, _, self.test_ss = self.static_synth.generate(
+        _, self.test_ss = self.static_synth.generate(
             self.fg_seeds_ss,
             self.mixed_bg_seed_ss,
             verbose=False
@@ -125,9 +125,9 @@ class TestVisualize(unittest.TestCase):
             "return_gross": True,
         }
 
-        _, _, gross_ss1 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)\
+        _, gross_ss1 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)\
             .generate(self.fg_seeds_ss, self.mixed_bg_seed_ss, verbose=False)
-        _, _, gross_ss2 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)\
+        _, gross_ss2 = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)\
             .generate(self.fg_seeds_ss, self.mixed_bg_seed_ss, verbose=False)
 
         # Compare two different gross sample sets - Live time

@@ -22,7 +22,7 @@ fg_seeds_ss, bg_seeds_ss = get_dummy_seeds().split_fg_and_bg()
 mixed_bg_seed_ss = SeedMixer(bg_seeds_ss, mixture_size=3)\
     .generate(1)
 
-train_ss, _, _ = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)\
+train_ss, _ = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)\
     .generate(fg_seeds_ss, mixed_bg_seed_ss)
 train_ss.normalize()
 
@@ -36,7 +36,7 @@ SYNTHETIC_DATA_CONFIG = {
     "samples_per_seed": 50,
 }
 
-test_ss, _, _ = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)\
+test_ss, _ = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)\
     .generate(fg_seeds_ss, mixed_bg_seed_ss)
 test_ss.normalize()
 
