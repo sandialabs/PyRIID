@@ -111,5 +111,5 @@ def _get_spectral_distances(seeds_ss, mixed_ss):
     return spectral_distances
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -914,5 +914,5 @@ def _get_test_sources_df():
     return df
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
