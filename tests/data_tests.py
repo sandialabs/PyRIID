@@ -270,5 +270,5 @@ def compare_samplesets(unit_test, ss1: SampleSet, ss2: SampleSet):
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

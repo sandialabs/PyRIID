@@ -90,5 +90,5 @@ class TestGadras(unittest.TestCase):
         ss.to_pcf(TEMP_PCF_PATH, verbose=False)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

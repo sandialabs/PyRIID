@@ -1,2 +1,5 @@
 [flake8]
 max-line-length=100
+select=Q0
+inline-quotes=double
+avoid-escape=False

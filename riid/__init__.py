@@ -11,9 +11,9 @@ from pkg_resources import get_distribution
 HANDLER = logging.StreamHandler(sys.stdout)
 logging.root.addHandler(HANDLER)
 logging.root.setLevel(logging.DEBUG)
-MPL_LOGGER = logging.getLogger('matplotlib')
+MPL_LOGGER = logging.getLogger("matplotlib")
 MPL_LOGGER.setLevel(logging.WARNING)
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
 
 SAMPLESET_FILE_EXTENSION = ".h5"
 PCF_FILE_EXTENSION = ".pcf"

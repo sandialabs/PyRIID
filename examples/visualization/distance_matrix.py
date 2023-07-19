@@ -18,7 +18,7 @@ if len(sys.argv) == 2:
 seeds_ss = get_dummy_seeds(n_channels=16)
 distance_df = seeds_ss.get_spectral_distance_matrix()
 
-sns.set(rc={'figure.figsize': (10, 7)})
+sns.set(rc={"figure.figsize": (10, 7)})
 ax = sns.heatmap(
     distance_df,
     cbar_kws={"label": "Jensen-Shannon Distance"},
