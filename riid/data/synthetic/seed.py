@@ -116,7 +116,7 @@ class SeedSynthesizer():
 
                     # Source injects
                     if verbose:
-                        print('Obtaining sources...')
+                        print("Obtaining sources...")
                     pcf_abs_path = source_injector.generate(
                         config,
                         rel_output_path,

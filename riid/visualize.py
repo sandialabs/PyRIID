@@ -46,7 +46,7 @@ def save_or_show_plot(func):
         if return_bytes:
             import io
             buf = io.BytesIO()
-            fig.savefig(buf, format='png')
+            fig.savefig(buf, format="png")
             buf.seek(0)
             plt.close(fig)
             return buf
@@ -91,7 +91,7 @@ def confusion_matrix(ss: SampleSet, as_percentage: bool = False, cmap: str = "bi
         raise EmptyPredictionsArrayError(msg)
 
     if not cmap:
-        cmap = ListedColormap(['white'])
+        cmap = ListedColormap(["white"])
 
     cm_values = confusion_matrix_sklearn(y_true, y_pred, labels=labels)
     if as_percentage:
@@ -549,7 +549,7 @@ def plot_score_distribution(ss: SampleSet, bin_width=None, n_bins=100,
 def _bin_df_values_and_plot(data: pd.Series, fig, ax):
     binned_labels = data.value_counts()
     binned_labels.sort_index(inplace=True)
-    binned_labels.plot(kind='bar', subplots=True, fig=fig, ax=ax)
+    binned_labels.plot(kind="bar", subplots=True, fig=fig, ax=ax)
 
 
 @save_or_show_plot
@@ -642,7 +642,7 @@ def plot_label_and_prediction_distributions(ss: SampleSet, ylim: tuple = (1, Non
         index=["Labels", "Predictions"]).T.fillna(0.0)
     binned_labels_and_predictions.sort_index(inplace=True)
 
-    binned_labels.plot(kind='bar', subplots=True, fig=fig, ax=ax)
+    binned_labels.plot(kind="bar", subplots=True, fig=fig, ax=ax)
 
     ax.set_ylim(ylim)
     ax.set_yscale(yscale)
@@ -797,9 +797,9 @@ def plot_ss_comparison(info_stats1: dict, info_stats2: dict, col_comparisons: di
     fig, ax = plt.subplots()
 
     if info_stats1[target_col]["density"]:
-        ax.set_ylabel('Density')
+        ax.set_ylabel("Density")
     else:
-        ax.set_ylabel('Count')
+        ax.set_ylabel("Count")
 
     if x_label:
         ax.set_xlabel(x_label)
@@ -810,10 +810,10 @@ def plot_ss_comparison(info_stats1: dict, info_stats2: dict, col_comparisons: di
 
     dist_value = col_comparisons[target_col]
     if title:
-        ax.set_title(f'{title}\nJ-S Distance: {round(dist_value, distance_precision)}')
+        ax.set_title(f"{title}\nJ-S Distance: {round(dist_value, distance_precision)}")
     else:
-        ax.set_title(f'Histogram of {xlbl} Occurrences'
-                     f'\nJ-S Distance: {round(dist_value, distance_precision)}')
+        ax.set_title(f"Histogram of {xlbl} Occurrences"
+                     f"\nJ-S Distance: {round(dist_value, distance_precision)}")
 
     stats1 = info_stats1[target_col]
     bin_width = stats1["bins"][1] - stats1["bins"][0]

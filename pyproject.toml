@@ -69,6 +69,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "flake8",
+    "flake8-quotes",
     "coverage",
     "ipykernel",
     "tabulate",

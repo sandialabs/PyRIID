@@ -696,11 +696,11 @@ class LabelProportionEstimator(TFModelBase):
     def _get_model_file_paths(self, save_path):
         root, ext = os.path.splitext(save_path)
 
-        if ext[1:].lower() != 'onnx':
+        if ext[1:].lower() != "onnx":
             raise NameError("Model must be an .onnx file.")
 
-        model_path = root + '.onnx'
-        model_info_path = root + '_info.json'
+        model_path = root + ".onnx"
+        model_info_path = root + "_info.json"
 
         return model_info_path, model_path
 
@@ -854,8 +854,8 @@ class LabelProportionEstimator(TFModelBase):
                 unit="batch",
                 postfix="loss={loss_value}",
                 total=n_train_batches,
-                colour='green',
-                bar_format='{l_bar}{bar:30}{r_bar}{bar:-30b}',
+                colour="green",
+                bar_format="{l_bar}{bar:30}{r_bar}{bar:-30b}",
                 desc=f"epoch {epoch}"
             )
             train_batches.set_postfix(loss_value=0.0)

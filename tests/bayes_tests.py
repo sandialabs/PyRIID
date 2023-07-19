@@ -80,5 +80,5 @@ class TestPoissonBayesClassifier(unittest.TestCase):
         assert (truth_labels == predictions_labels).all()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

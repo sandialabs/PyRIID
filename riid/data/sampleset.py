@@ -1096,7 +1096,7 @@ class SampleSet():
             ss2_stats: dict of stats for the second sampleset.
             col_comparisons: dict of distance values comparing each column.
         """
-        TARGET_SUMMARY_STATS = ['min', 'max', 'median', 'mean', 'std']
+        TARGET_SUMMARY_STATS = ["min", "max", "median", "mean", "std"]
         STAT_PRECISION = 3
 
         # Get info columns we want to compare
@@ -1110,11 +1110,11 @@ class SampleSet():
         # Check valid columns in each sample set (cannot have None or 0)
         ss1_valid_cols = [
             c for c in info_df1.columns
-            if pd.to_numeric(info_df1[c], errors='coerce').notnull().all() and any(info_df1[c])
+            if pd.to_numeric(info_df1[c], errors="coerce").notnull().all() and any(info_df1[c])
         ]
         ss2_valid_cols = [
             c for c in info_df2.columns
-            if pd.to_numeric(info_df2[c], errors='coerce').notnull().all() and any(info_df2[c])
+            if pd.to_numeric(info_df2[c], errors="coerce").notnull().all() and any(info_df2[c])
         ]
 
         # Remove non shared column lists

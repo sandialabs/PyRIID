@@ -37,7 +37,7 @@ for i, f in enumerate(files_to_run, start=1):
                                          shell=True)
 
     except subprocess.CalledProcessError as e:
-        if (bytes('Error', 'utf-8')) in e.output:
+        if (bytes("Error", "utf-8")) in e.output:
             print(e.output.decode())
             return_code = e.returncode
 
