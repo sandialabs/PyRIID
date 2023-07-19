@@ -365,26 +365,26 @@ def _pack_compressed_text_buffer(title, desc, source, field_len=60):
 
     if title_len <= field_len and desc_len <= field_len and source_len <= field_len:
         ctb = \
-            f'{title:{field_len}.{field_len}}' + \
-            f'{desc:{field_len}.{field_len}}' + \
-            f'{source:{field_len}.{field_len}}'
+            f"{title:{field_len}.{field_len}}" + \
+            f"{desc:{field_len}.{field_len}}" + \
+            f"{source:{field_len}.{field_len}}"
     else:
         if title_len + desc_len + source_len <= ctb_len - 3:
             ctb = \
-                '\xFF' + \
-                f'{title:{title_len}.{title_len}}' + \
-                '\xFF' + \
-                f'{desc:{desc_len}.{desc_len}}' + \
-                '\xFF' + \
-                f'{source:{source_len}.{source_len}}'
+                "\xFF" + \
+                f"{title:{title_len}.{title_len}}" + \
+                "\xFF" + \
+                f"{desc:{desc_len}.{desc_len}}" + \
+                "\xFF" + \
+                f"{source:{source_len}.{source_len}}"
         else:
             # Description is thrown away
             title_len = min(title_len, ctb_len - 3 - source_len)
             ctb = \
-                '\xFF' + \
-                f'{title:{title_len}.{title_len}}' + \
-                '\xFF\xFF' + \
-                f'{source:{source_len}.{source_len}}'
+                "\xFF" + \
+                f"{title:{title_len}.{title_len}}" + \
+                "\xFF\xFF" + \
+                f"{source:{source_len}.{source_len}}"
 
     if len(ctb) < ctb_len:
         ctb = ctb.ljust(ctb_len)
