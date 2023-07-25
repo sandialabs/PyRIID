@@ -1,6 +1,5 @@
 # API Reference
 
-
 ::: riid
 
 ::: riid.data
@@ -13,3 +12,6 @@
 
 ::: riid.visualize
 
+::: tests
+
+::: examples

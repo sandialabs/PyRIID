@@ -15,6 +15,28 @@ nav:
 
 For more information and styling of pages, you can find more information [here.](https://mkdocs.readthedocs.io/en/0.14.0/user-guide/writing-your-docs/#configure-pages-and-navigation)
 
+# How to add modules to the API
+
+1. Open the `api.md` file in the `docs` folder
+
+2. Place which module you want to add to the file in the following format using `::: moduleFolder.moduleName`
+
+```
+# API Reference
+
+::: riid
+
+::: riid.data
+
+::: riid.gadras
+
+::: riid.models
+
+::: riid.anomaly
+
+::: riid.visualize
+
+```
 
 # API reference configurations
 
