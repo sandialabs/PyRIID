@@ -41,7 +41,7 @@ For more information and styling of pages, you can find more information [here.]
 ::: riid.visualize
 
 ```
-### Or Autogenerate
+### Autogenerate
 
 You can autogenerate the api modules from folders that you pick. Currently it is only generated from the folders, `riid`, `tests`, `examples`. In the `docs` folder you can run the following command and it will generate the `api.md` file for you based on the modules in the preivously stated folders.
 
