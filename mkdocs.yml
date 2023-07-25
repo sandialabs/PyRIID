@@ -2,6 +2,8 @@ site_name: PyRIID
 theme:
   name: readthedocs
   highlightjs: true
+  features:
+    - navigation.sections
 plugins:
   - search
   - mkdocstrings:
@@ -19,6 +21,5 @@ markdown_extensions:
   - admonition
 nav:
     - Home: 'index.md'
-      - Installation: README.md#Installation
     - API Reference: 'api.md'
     - Developer: 'howto.md'
