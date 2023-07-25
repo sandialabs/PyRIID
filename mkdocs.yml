@@ -19,6 +19,6 @@ markdown_extensions:
   - admonition
 nav:
     - Home: 'index.md'
-      - Installation: 'README.md#Installation'
+      - Installation: README.md#Installation
     - API Reference: 'api.md'
     - Developer: 'howto.md'
