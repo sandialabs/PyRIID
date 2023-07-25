@@ -1,4 +1,8 @@
-# How To Add Custom Pages to RTD pages
+# Developer
+
+Developers can use this page to update docs!
+
+## How To Add Custom Pages to RTD pages
 
 1. Create a `.md` new file in the `docs` folder
 
@@ -15,7 +19,7 @@ nav:
 
 For more information and styling of pages, you can find more information [here.](https://mkdocs.readthedocs.io/en/0.14.0/user-guide/writing-your-docs/#configure-pages-and-navigation)
 
-# How to add modules to the API
+## How to add modules to the API
 
 1. Open the `api.md` file in the `docs` folder
 
@@ -37,7 +41,7 @@ For more information and styling of pages, you can find more information [here.]
 ::: riid.visualize
 
 ```
-## Or 
+### Or Autogenerate
 
 You can autogenerate the api modules from folders that you pick. Currently it is only generated from the folders, `riid`, `tests`, `examples`. In the `docs` folder you can run the following command and it will generate the `api.md` file for you based on the modules in the preivously stated folders.
 
@@ -46,7 +50,7 @@ python .\generate_api_md.py
 ```
 
 
-# API reference configurations
+## API reference configurations
 
 There are multiple styles we can use for our api. You can find more about those configurations [here.](https://mkdocstrings.github.io/python/reference/mkdocstrings_handlers/python/handler/)
 
