@@ -27,16 +27,13 @@ folders_to_include = ['riid', 'tests', 'examples']
 exclude = ['run_examples.py', 'courses', '__pycache__', '__init__.py']
 
 # navigate throught the desired folders and get file names
-curr_path = os.getcwd()
-api_str = ""
+
 
 for filename in folders_to_include:
-    f = os.path.join('..\\', filename)
-    api_str = navigate_dir(f, api_str)
-
-# print(api_str)
-
-writer = open('api.md', 'w')
-writer.write("# API Reference \n\n")
-writer.write(api_str)
-writer.close()
+    api_str = ""
+    f = os.path.join('..\\riid', filename)
+    api_str = navigate_dir('..\\riid', api_str)
+    writer = open(filename + '_api.md', 'w')
+    writer.write("# " + filename.capitalize() + " API Reference \n\n")
+    writer.write(api_str)
+    writer.close()

@@ -1,4 +1,4 @@
-# RIID API
+# Riid API Reference 
 
 ::: riid.anomaly
 
@@ -7,3 +7,6 @@
 ::: riid.gadras
 
 ::: riid.models
+
+::: riid.visualize
+

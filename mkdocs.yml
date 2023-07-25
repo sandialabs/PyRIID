@@ -2,10 +2,6 @@ site_name: PyRIID
 theme:
   name: readthedocs
   highlightjs: true
-  features:
-    - navigation.tabs
-    - navigation.tabs.sticky
-    - toc.integrate
 plugins:
   - search
   - mkdocstrings:

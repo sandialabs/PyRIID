@@ -1,17 +1,12 @@
-# Tests API
+# Tests API Reference 
 
-::: tests.anomaly_tests
+::: riid.anomaly
 
-::: tests.bayes_tests
+::: riid.data
 
-::: tests.data_tests
+::: riid.gadras
 
-::: tests.gadras_tests
+::: riid.models
 
-::: tests.sampleset_tests
+::: riid.visualize
 
-::: tests.seedmixer_tests
-
-::: tests.staticsynth_tests
-
-::: tests.visualize_tests
