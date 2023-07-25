@@ -19,7 +19,8 @@ For more information and styling of pages, you can find more information [here.]
 
 1. Open the `api.md` file in the `docs` folder
 
-2. Place which module you want to add to the file in the following format using `::: moduleFolder.moduleName`
+2. Place which module you want to add to the file in the following format using 
+`::: moduleFolder.moduleName`
 
 ```
 # API Reference
