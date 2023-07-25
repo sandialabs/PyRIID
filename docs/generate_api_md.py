@@ -34,9 +34,9 @@ for filename in folders_to_include:
     f = os.path.join('..\\', filename)
     api_str = navigate_dir(f, api_str)
 
-print(api_str)
+# print(api_str)
 
 writer = open('api.md', 'w')
-writer.write("# API Reference")
+writer.write("# API Reference \n\n")
 writer.write(api_str)
 writer.close()

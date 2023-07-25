@@ -1,4 +1,6 @@
-# API Reference::: riid.anomaly
+# API Reference 
+
+::: riid.anomaly
 
 ::: riid.data
 
