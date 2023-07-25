@@ -1,4 +1,4 @@
-site_name: PyRIID Project
+site_name: PyRIID
 theme:
   name: readthedocs
   highlightjs: true
@@ -17,3 +17,7 @@ markdown_extensions:
   - markdown_include.include:
       base_path: .
   - admonition
+nav:
+    - Home: 'index.md'
+    - API Reference: 'api.md'
+    - Developer: 'howto.md'
