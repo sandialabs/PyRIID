@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools >= 66", "wheel"]
+requires = ["setuptools >= 66", "wheel","flit_core >=3.2,<4"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]

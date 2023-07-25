@@ -1,0 +1,19 @@
+site_name: PyRIID Project
+theme:
+  name: readthedocs
+  highlightjs: true
+plugins:
+  - search
+  - mkdocstrings:
+      enabled: !ENV [ENABLE_MKDOCSTRINGS, true]
+      custom_templates: templates
+      default_handler: python
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+            show_source: true
+markdown_extensions:
+  - markdown_include.include:
+      base_path: .
+  - admonition
