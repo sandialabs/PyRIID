@@ -1,6 +1,6 @@
 # API Reference 
 
-{!riid_api.md!}
+## [riid](riid_api.md)
 
 ## [tests](tests_api.md)
 
