@@ -4,6 +4,7 @@
 """This modules contains utilities for generating synthetic gamma spectrum templates from GADRAS."""
 import os
 from contextlib import contextmanager
+from copy import deepcopy
 from typing import Iterator, List, Tuple, Union
 
 import numpy as np
@@ -143,7 +144,7 @@ class SeedSynthesizer():
 
         ss = SampleSet()
         ss.concat(source_list)
-        ss.detector_info = config["gamma_detector"]
+        ss.detector_info = deepcopy(config["gamma_detector"])
 
         return ss
 
