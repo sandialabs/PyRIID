@@ -1587,7 +1587,7 @@ def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
             "live_time": spectrum["header"]["Live_Time"],
             "real_time": spectrum["header"]["Total_time_per_real_time"],
             "total_counts": sum(spectrum["spectrum"]),
-            "total_neutron_counts": spectrum["header"]["Total_Neutron_Counts"],
+            "neutron_counts": spectrum["header"]["Total_Neutron_Counts"],
             "distance_cm": distance,
             "area_density": ad,
             "ecal_order_0": order_0,
