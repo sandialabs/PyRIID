@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 
+import tqdm
 from jsonschema import validate
 
 from riid.data.sampleset import SampleSet, read_pcf
@@ -232,7 +233,8 @@ class SourceInjector(BaseInjector):
             worker = self.gadras_api.GetBatchInjectWorker()
 
         injects_exist = False
-        for fg in config["sources"]:
+        source_configs = tqdm.tqdm(config["sources"], desc="Running injects")
+        for fg in source_configs:
             inject_setups = self._get_inject_setups_for_sources(
                 self.gadras_api,
                 config["gamma_detector"]["parameters"],
@@ -252,6 +254,8 @@ class SourceInjector(BaseInjector):
             return
 
         # Add source name to foreground seeds file
+        if verbose:
+            logging.info("Filling in source names...")
         record_num = 1
         for fg in config["sources"]:
             for source in fg["configurations"]:
