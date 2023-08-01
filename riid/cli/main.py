@@ -3,10 +3,8 @@ import os
 import click
 
 from riid.data.sampleset import read_hdf
-from riid.models.neural_nets import MLPClassifier
 
 # @click.option('--verbose', is_flag=True, help="Show detailed output.")
-
 
 @click.group(help="CLI tool for PyRIID")
 def cli():
@@ -41,12 +39,16 @@ def train(model_type, data_path, model_path=None, results_dir_path=None):
               type=click.Path(exists=False, file_okay=True),
               help="Path to directory where identification results are output")
 def identify(model_path, data_path, results_dir_path=None):
+    from riid.models.neural_nets import MLPClassifier
 
-    print(f"Identifying measurements with model: {model_path} and data: {data_path}")
+    print(f"Identifying measurements with model: {model_path} and data: {data_path}")  # TODO: make consistent with detect command
     if not results_dir_path:
         results_dir_path = "./identify_results/"
     if not os.path.exists(results_dir_path):
         os.mkdir(results_dir_path)
+
+    # TODO: regenerate data files to test this command
+    # TODO: schedule meeting with Tyler to review identify and detect commands before moving on
 
     model = MLPClassifier()
     model.load(model_path)
@@ -54,9 +56,6 @@ def identify(model_path, data_path, results_dir_path=None):
     model.predict(data_ss)
 
     data_ss.prediction_probas.to_csv(results_dir_path + "results.csv")
-
-    print("Done!")
-
 
 @cli.command(
     short_help="Detect events within a series of gamma spectra based on a background measurement")
@@ -66,9 +65,12 @@ def identify(model_path, data_path, results_dir_path=None):
               type=click.Path(exists=False, file_okay=True),
               help="Path to directory where identification results are output")
 def detect(gross_path, bg_path, results_dir_path=None):
+    import numpy as np
 
-    print(f"""Detecting events with gross measurements: {gross_path}
-          and background measurement: {bg_path}""")
+    from riid.anomaly import PoissonNChannelEventDetector
+
+    print(f"Detecting events with gross measurements:      {gross_path}")
+    print(f"                      background measurements: {bg_path}")
     if not results_dir_path:
         results_dir_path = "./detect_results/"
     if not os.path.exists(results_dir_path):
@@ -77,7 +79,83 @@ def detect(gross_path, bg_path, results_dir_path=None):
     gross = read_hdf(gross_path)
     background = read_hdf(bg_path)
 
-    print("Done!")
+    bg_live_time = background.info.live_time.values[0]
+    bg_cps = background.info.total_counts.values[0] / bg_live_time
+    gross_live_time = gross.info.live_time.values[0]
+    expected_bg_counts = gross_live_time * bg_cps
+    expected_bg_measurement = background.spectra.iloc[0] * expected_bg_counts
+
+    ed = PoissonNChannelEventDetector(
+        long_term_duration=600,
+        short_term_duration=1.5,
+        pre_event_duration=5,
+        max_event_duration=120,
+        post_event_duration=1.5,
+        tolerable_false_alarms_per_day=2,
+        anomaly_threshold_update_interval=60,
+    )
+
+    print("Filling background...")
+    measurement_id = 0
+    while ed.background_percent_complete < 100:
+        noisy_bg_measurement = np.random.poisson(expected_bg_measurement)
+        _ = ed.add_measurement(
+            measurement_id,
+            noisy_bg_measurement,
+            gross_live_time,
+            verbose=False
+        )
+        measurement_id += 1
+
+    events = []
+    print("Detecting events...")
+    for i in range(gross.n_samples):
+        gross_spectrum = gross.spectra.iloc[i].values
+        event_result = ed.add_measurement(
+            measurement_id,
+            gross_spectrum,
+            gross_live_time,
+            verbose=False
+        )
+        measurement_id += 1
+        if event_result:
+            events.append(event_result)
+
+    if ed.event_in_progress:
+        print("Event still in progress, adding more backgrounds...")
+        while not event_result:
+            noisy_bg_measurement = np.random.poisson(expected_bg_measurement)
+            event_result = ed.add_measurement(
+                measurement_id,
+                noisy_bg_measurement,
+                gross_live_time,
+                verbose=False
+            )
+            measurement_id += 1
+            if event_result:
+                events.append(event_result)
+
+    num_events = len(events)
+    events_msg_suffix = "" if num_events == 1 else "s"
+    events_msg = f"{num_events} event{events_msg_suffix} detected."
+    print(events_msg)
+
+    for event_result in events:
+        _, _, event_duration, measurement_ids = event_result
+        first_measurement_id = measurement_ids[0]
+        last_measurement_id = measurement_ids[-1]
+        print(f"  > {event_duration:.2f}s from {first_measurement_id} to {last_measurement_id}")
+
+    """ TODO: Save results to JSON file with following structure:
+    [
+        {
+            "gross_spectrum": event_result[0],
+            "bg_spectrum": event_result[1],
+            "duration_seconds": event_result[2],
+            "measurement_ids": event_result[3]
+        }
+    ]
+    """
 
 
 @cli.command(short_help="Collect spectra from a device")
