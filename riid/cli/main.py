@@ -6,6 +6,7 @@ from riid.data.sampleset import read_hdf
 
 # @click.option('--verbose', is_flag=True, help="Show detailed output.")
 
+
 @click.group(help="CLI tool for PyRIID")
 def cli():
     pass
@@ -41,7 +42,8 @@ def train(model_type, data_path, model_path=None, results_dir_path=None):
 def identify(model_path, data_path, results_dir_path=None):
     from riid.models.neural_nets import MLPClassifier
 
-    print(f"Identifying measurements with model: {model_path} and data: {data_path}")  # TODO: make consistent with detect command
+    print(f"Identifying measurements with model: {model_path}")
+    print(f"                               data: {data_path}")
     if not results_dir_path:
         results_dir_path = "./identify_results/"
     if not os.path.exists(results_dir_path):
@@ -56,6 +58,7 @@ def identify(model_path, data_path, results_dir_path=None):
     model.predict(data_ss)
 
     data_ss.prediction_probas.to_csv(results_dir_path + "results.csv")
+
 
 @cli.command(
     short_help="Detect events within a series of gamma spectra based on a background measurement")
