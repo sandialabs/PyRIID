@@ -67,7 +67,30 @@ def identify(model_path, data_path, results_dir_path=None):
 @click.option('--results_dir_path', '--results', metavar='',
               type=click.Path(exists=False, file_okay=True),
               help="Path to directory where identification results are output")
-def detect(gross_path, bg_path, results_dir_path=None):
+@click.option('--long_term_duration', metavar='', type=int, default=600, show_default=True,
+              help="The duration (in seconds) of the long-term buffer")
+@click.option('--short_term_duration', metavar='', type=int, default=1.5, show_default=True,
+              help="The duration (in seconds) of the short-term buffer")
+@click.option('--pre_event_duration', metavar='', type=int, default=5, show_default=True,
+              help="The duration (in seconds) specifying the amount of pre-event, background"
+              " samples to include in the event result")
+@click.option('--max_event_duration', metavar='', type=int, default=120, show_default=True,
+              help="The maximum duration (in seconds) of the event buffer")
+@click.option('--post_event_duration', metavar='', type=int, default=1.5, show_default=True,
+              help="The duration (in seconds) that determines the number of"
+              " consecutive, insignificant measurements that must be observed"
+              " in order to end an event")
+@click.option('--tolerable_false_alarms_per_day', metavar='', type=int,
+              default=2, show_default=True,
+              help="The DESIRED maximum number of allowable false positive"
+              " events per day for all spectrum channels")
+@click.option('--anomaly_threshold_update_interval', metavar='', type=int,
+              default=60, show_default=True,
+              help="The time (in seconds) between updates to the anomaly probability thresholds")
+def detect(gross_path, bg_path, results_dir_path=None, long_term_duration=None,
+           short_term_duration=None, pre_event_duration=None, max_event_duration=None,
+           post_event_duration=None, tolerable_false_alarms_per_day=None,
+           anomaly_threshold_update_interval=None):
     import json
 
     import numpy as np
@@ -91,13 +114,13 @@ def detect(gross_path, bg_path, results_dir_path=None):
     expected_bg_measurement = background.spectra.iloc[0] * expected_bg_counts
 
     ed = PoissonNChannelEventDetector(
-        long_term_duration=600,
-        short_term_duration=1.5,
-        pre_event_duration=5,
-        max_event_duration=120,
-        post_event_duration=1.5,
-        tolerable_false_alarms_per_day=2,
-        anomaly_threshold_update_interval=60,
+        long_term_duration,
+        short_term_duration,
+        pre_event_duration,
+        max_event_duration,
+        post_event_duration,
+        tolerable_false_alarms_per_day,
+        anomaly_threshold_update_interval,
     )
 
     print("Filling background...")
@@ -172,7 +195,6 @@ def detect(gross_path, bg_path, results_dir_path=None):
         #     else:
         #         outfile.write(', \n\t')
         # outfile.write("}")
-    outfile.close
 
     """ TODO: Save results to JSON file with following structure:
     [
