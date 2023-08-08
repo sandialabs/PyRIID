@@ -67,35 +67,42 @@ def identify(model_path, data_path, results_dir_path=None):
 @click.option('--results_dir_path', '--results', metavar='',
               type=click.Path(exists=False, file_okay=True),
               help="Path to directory where identification results are output")
-@click.option('--long_term_duration', metavar='', type=int, default=600, show_default=True,
+@click.option('--long_term_duration', metavar='', type=float, default=120.0, show_default=True,
               help="The duration (in seconds) of the long-term buffer")
-@click.option('--short_term_duration', metavar='', type=int, default=1.5, show_default=True,
+@click.option('--short_term_duration', metavar='', type=float, default=1.0, show_default=True,
               help="The duration (in seconds) of the short-term buffer")
-@click.option('--pre_event_duration', metavar='', type=int, default=5, show_default=True,
+@click.option('--pre_event_duration', metavar='', type=float, default=5.0, show_default=True,
               help="The duration (in seconds) specifying the amount of pre-event, background"
               " samples to include in the event result")
-@click.option('--max_event_duration', metavar='', type=int, default=120, show_default=True,
+@click.option('--max_event_duration', metavar='', type=float, default=120.0, show_default=True,
               help="The maximum duration (in seconds) of the event buffer")
-@click.option('--post_event_duration', metavar='', type=int, default=1.5, show_default=True,
+@click.option('--post_event_duration', metavar='', type=float, default=1.5, show_default=True,
               help="The duration (in seconds) that determines the number of"
               " consecutive, insignificant measurements that must be observed"
               " in order to end an event")
 @click.option('--tolerable_false_alarms_per_day', metavar='', type=int,
-              default=2, show_default=True,
+              default=1, show_default=True,
               help="The DESIRED maximum number of allowable false positive"
               " events per day for all spectrum channels")
-@click.option('--anomaly_threshold_update_interval', metavar='', type=int,
-              default=60, show_default=True,
+@click.option('--anomaly_threshold_update_interval', metavar='', type=float,
+              default=60.0, show_default=True,
               help="The time (in seconds) between updates to the anomaly probability thresholds")
+@click.option('--event_gross_file_path', metavar='',
+              type=click.Path(exists=False, file_okay=True),
+              help="Path to file where gross event spectra are saved")
+@click.option('--event_bg_file_path', metavar='',
+              type=click.Path(exists=False, file_okay=True),
+              help="Path to file where backgrounds for gross event spectra are saved")
 def detect(gross_path, bg_path, results_dir_path=None, long_term_duration=None,
            short_term_duration=None, pre_event_duration=None, max_event_duration=None,
            post_event_duration=None, tolerable_false_alarms_per_day=None,
-           anomaly_threshold_update_interval=None):
-    import json
+           anomaly_threshold_update_interval=None,
+           event_gross_file_path=None, event_bg_file_path=None):
 
     import numpy as np
 
     from riid.anomaly import PoissonNChannelEventDetector
+    from riid.data import SampleSet
 
     print(f"Detecting events with gross measurements:       {gross_path}")
     print(f"                 background measurements:       {bg_path}")
@@ -182,30 +189,6 @@ def detect(gross_path, bg_path, results_dir_path=None, long_term_duration=None,
         else:
             event_result_pairs[key] = value.tolist()
 
-    # detect_results = json.dumps(event_result_pairs)
-    with open(f"{results_dir_path}/detect.json", "w+") as outfile:
-        json.dump(event_result_pairs, outfile, indent=4)
-        # outfile.write("{\n\t")
-        # for i in event_result_pairs:
-        #     outfile.write(json.dumps(i))
-        #     outfile.write(': ')
-        #     outfile.write(json.dumps(event_result_pairs[i]))
-        #     if i == "measurement_ids":
-        #         outfile.write('\n')
-        #     else:
-        #         outfile.write(', \n\t')
-        # outfile.write("}")
-
-    """ TODO: Save results to JSON file with following structure:
-    [
-        {
-            "gross_spectrum": event_result[0],
-            "bg_spectrum": event_result[1],
-            "duration_seconds": event_result[2],
-            "measurement_ids": event_result[3]
-        }
-    ]
-    """
 
 
 @cli.command(short_help="Collect spectra from a device")
