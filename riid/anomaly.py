@@ -20,10 +20,10 @@ class PoissonNChannelEventDetector():
 
     """
 
-    def __init__(self, long_term_duration: int = 120, short_term_duration: int = 1,
-                 pre_event_duration: int = 5, max_event_duration: float = 120,
-                 post_event_duration: int = 1.5, tolerable_false_alarms_per_day: float = 1.0,
-                 anomaly_threshold_update_interval: float = 60):
+    def __init__(self, long_term_duration: float = 120.0, short_term_duration: float = 1.0,
+                 pre_event_duration: float = 5.0, max_event_duration: float = 120.0,
+                 post_event_duration: float = 1.5, tolerable_false_alarms_per_day: int = 1,
+                 anomaly_threshold_update_interval: float = 60.0):
         """Initializes an event detector object.
 
         Args:
