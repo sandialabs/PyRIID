@@ -3,6 +3,17 @@ import os
 import click
 
 from riid.data.sampleset import read_hdf
+# from riid.cli.validate import validate_ext_is_supported
+from pathlib import Path
+
+SUPPORTED_FILE_TYPES = [".pcf", ".h5"]
+
+
+def validate_ext_is_supported(file_path):
+    path = Path(file_path)
+    ext = path.suffix
+    if ext not in SUPPORTED_FILE_TYPES:
+        raise ValueError(f"'{ext}' is an unsupported output file format.")
 
 # @click.option('--verbose', is_flag=True, help="Show detailed output.")
 
@@ -99,6 +110,22 @@ def detect(gross_path, bg_path, results_dir_path=None, long_term_duration=None,
            anomaly_threshold_update_interval=None,
            event_gross_file_path=None, event_bg_file_path=None):
 
+    if not event_gross_file_path:
+        path_gross = Path(gross_path)
+        gross_results_path = Path(path_gross.parent, f"{path_gross.stem}_events{path_gross.suffix}")
+
+    if not event_bg_file_path:
+        path_bg = Path(bg_path)
+        bg_results_path = Path(path_bg.parent, f"{path_bg.stem}_events{path_bg.suffix}")
+
+    else:
+        validate_ext_is_supported(event_gross_file_path)
+        validate_ext_is_supported(event_bg_file_path)
+
+        gross_results_path = Path(event_gross_file_path)
+        bg_results_path = Path(event_bg_file_path)
+
+
     import numpy as np
 
     from riid.anomaly import PoissonNChannelEventDetector
@@ -181,13 +208,28 @@ def detect(gross_path, bg_path, results_dir_path=None, long_term_duration=None,
         last_measurement_id = measurement_ids[-1]
         print(f"  > {event_duration:.2f}s from {first_measurement_id} to {last_measurement_id}")
 
-    event_result_keys = ["gross_spectrum", "bg_spectrum", "duration_seconds", "measurement_ids"]
-    event_result_pairs = {}
-    for key, value in zip(event_result_keys, event_result):
-        if key == "measurement_ids":
-            event_result_pairs[key] = list(value)
-        else:
-            event_result_pairs[key] = value.tolist()
+    gross_ss = SampleSet()
+    gross_ss.spectra = event_result[0]
+    gross_ss.info.live_time = event_result[2]
+    gross_ss.info.first_measurement_id = event_result[3][0]
+    gross_ss.info.last_measurement_id = event_result[3][-1]
+
+    bg_ss = SampleSet()
+    bg_ss.spectra = event_result[1]
+    bg_ss.info.live_time = event_result[2]
+    bg_ss.info.first_measurement_id = event_result[3][0]
+    bg_ss.info.last_measurement_id = event_result[3][-1]
+
+    # if gross_results_path.suffix == ".h5":
+    #     gross_ss.to_hdf(str(gross_results_path))
+    # else:
+    #     gross_ss.to_pcf(str(gross_results_path))
+    # if bg_results_path == ".h5":
+    #     bg_ss.to_hdf(str(bg_results_path))
+    # else:
+    #     bg_ss.to_pcf(str(bg_results_path))
+
+    # print(type(str(gross_results_path)), str(gross_results_path))
 
 
 
