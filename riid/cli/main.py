@@ -127,6 +127,7 @@ def detect(gross_path, bg_path, results_dir_path=None, long_term_duration=None,
 
 
     import numpy as np
+    import pandas as pd
 
     from riid.anomaly import PoissonNChannelEventDetector
     from riid.data import SampleSet
@@ -209,27 +210,25 @@ def detect(gross_path, bg_path, results_dir_path=None, long_term_duration=None,
         print(f"  > {event_duration:.2f}s from {first_measurement_id} to {last_measurement_id}")
 
     gross_ss = SampleSet()
-    gross_ss.spectra = event_result[0]
+    gross_ss.spectra = pd.DataFrame(event_result[0])
     gross_ss.info.live_time = event_result[2]
     gross_ss.info.first_measurement_id = event_result[3][0]
     gross_ss.info.last_measurement_id = event_result[3][-1]
 
     bg_ss = SampleSet()
-    bg_ss.spectra = event_result[1]
+    bg_ss.spectra = pd.DataFrame(event_result[1])
     bg_ss.info.live_time = event_result[2]
     bg_ss.info.first_measurement_id = event_result[3][0]
     bg_ss.info.last_measurement_id = event_result[3][-1]
 
-    # if gross_results_path.suffix == ".h5":
-    #     gross_ss.to_hdf(str(gross_results_path))
-    # else:
-    #     gross_ss.to_pcf(str(gross_results_path))
-    # if bg_results_path == ".h5":
-    #     bg_ss.to_hdf(str(bg_results_path))
-    # else:
-    #     bg_ss.to_pcf(str(bg_results_path))
-
-    # print(type(str(gross_results_path)), str(gross_results_path))
+    if gross_results_path.suffix == ".h5":
+        gross_ss.to_hdf(str(gross_results_path))
+    else:
+        gross_ss.to_pcf(str(gross_results_path))
+    if bg_results_path.suffix == ".h5":
+        bg_ss.to_hdf(str(bg_results_path))
+    else:
+        bg_ss.to_pcf(str(bg_results_path))
 
 
 
