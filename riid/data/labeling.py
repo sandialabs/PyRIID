@@ -143,6 +143,8 @@ SEED_TO_ISOTOPE_SPECIAL_CASES = {
     "HEU": "U235",
     "DU": "U238",
     "WGPu": "Pu239",
+    "PuWG": "Pu239",
+    "RTG": "Pu238",
     "PotassiumInSoil": "K40",
     "UraniumInSoil": "Ra226",
     "ThoriumInSoil": "Th232",
@@ -260,8 +262,15 @@ def label_to_index_element(label_val: str, label_level="Isotope", verbose=False)
         return (category, old_label)
 
     if label_level == "Seed":
-        if old_label in SEED_TO_ISOTOPE_SPECIAL_CASES:
+        special_cases = SEED_TO_ISOTOPE_SPECIAL_CASES.keys()
+        exact_match = old_label in special_cases
+        first_partial_match = None
+        if not exact_match:
+            first_partial_match = next((x for x in special_cases if x in old_label), None)
+        if exact_match:
             isotope = SEED_TO_ISOTOPE_SPECIAL_CASES[old_label]
+        elif first_partial_match:
+            isotope = SEED_TO_ISOTOPE_SPECIAL_CASES[first_partial_match]
         else:
             isotope = _find_isotope(old_label, verbose)
         category = _find_category(isotope)
