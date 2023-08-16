@@ -3,6 +3,7 @@ import os
 import click
 
 from riid.data.sampleset import read_hdf
+from riid.data.sampleset import read_pcf
 # from riid.cli.validate import validate_ext_is_supported
 from pathlib import Path
 
@@ -75,9 +76,6 @@ def identify(model_path, data_path, results_dir_path=None):
     short_help="Detect events within a series of gamma spectra based on a background measurement")
 @click.argument('gross_path', type=click.Path(exists=True, file_okay=True))
 @click.argument('bg_path', type=click.Path(exists=True, file_okay=True))
-@click.option('--results_dir_path', '--results', metavar='',
-              type=click.Path(exists=False, file_okay=True),
-              help="Path to directory where identification results are output")
 @click.option('--long_term_duration', metavar='', type=float, default=120.0, show_default=True,
               help="The duration (in seconds) of the long-term buffer")
 @click.option('--short_term_duration', metavar='', type=float, default=1.0, show_default=True,
@@ -104,7 +102,7 @@ def identify(model_path, data_path, results_dir_path=None):
 @click.option('--event_bg_file_path', metavar='',
               type=click.Path(exists=False, file_okay=True),
               help="Path to file where backgrounds for gross event spectra are saved")
-def detect(gross_path, bg_path, results_dir_path=None, long_term_duration=None,
+def detect(gross_path, bg_path, long_term_duration=None,
            short_term_duration=None, pre_event_duration=None, max_event_duration=None,
            post_event_duration=None, tolerable_false_alarms_per_day=None,
            anomaly_threshold_update_interval=None,
@@ -125,6 +123,9 @@ def detect(gross_path, bg_path, results_dir_path=None, long_term_duration=None,
         gross_results_path = Path(event_gross_file_path)
         bg_results_path = Path(event_bg_file_path)
 
+    if gross_results_path.suffix != bg_results_path.suffix:
+        raise ValueError("The desired format of the output file is ambiguous due to differing input"
+                         " file types (PCF and HDF). Please provide an output_file_path.")
 
     import numpy as np
     import pandas as pd
@@ -134,13 +135,14 @@ def detect(gross_path, bg_path, results_dir_path=None, long_term_duration=None,
 
     print(f"Detecting events with gross measurements:       {gross_path}")
     print(f"                 background measurements:       {bg_path}")
-    if not results_dir_path:
-        results_dir_path = "./detect_results/"
-    if not os.path.exists(results_dir_path):
-        os.mkdir(results_dir_path)
 
-    gross = read_hdf(gross_path)
-    background = read_hdf(bg_path)
+    if path_gross.suffix == ".h5":
+        gross = read_hdf(path_gross)
+        background = read_hdf(path_bg)
+
+    else:
+        gross = read_pcf(path_gross)
+        background = read_pcf(path_bg)
 
     bg_live_time = background.info.live_time.values[0]
     bg_cps = background.info.total_counts.values[0] / bg_live_time
@@ -172,17 +174,30 @@ def detect(gross_path, bg_path, results_dir_path=None, long_term_duration=None,
 
     events = []
     print("Detecting events...")
-    for i in range(gross.n_samples):
-        gross_spectrum = gross.spectra.iloc[i].values
-        event_result = ed.add_measurement(
-            measurement_id,
-            gross_spectrum,
-            gross_live_time,
-            verbose=False
-        )
-        measurement_id += 1
-        if event_result:
-            events.append(event_result)
+    if path_gross.suffix == ".h5":
+        for i in range(gross.n_samples):
+            gross_spectrum = gross.spectra.iloc[i].values
+            event_result = ed.add_measurement(
+                measurement_id,
+                gross_spectrum,
+                gross_live_time,
+                verbose=False
+            )
+            measurement_id += 1
+            if event_result:
+                events.append(event_result)
+    else:
+        for i in range(gross.n_samples):
+            gross_spectrum = gross.spectra.iloc[i].values
+            event_result = ed.add_measurement(
+                measurement_id,
+                gross_spectrum.astype(float),
+                gross_live_time.astype(float),
+                verbose=False
+            )
+            measurement_id += 1.0
+            if event_result:
+                events.append(event_result)
 
     if ed.event_in_progress:
         print("Event still in progress, adding more backgrounds...")
@@ -212,19 +227,20 @@ def detect(gross_path, bg_path, results_dir_path=None, long_term_duration=None,
     gross_ss = SampleSet()
     gross_ss.spectra = pd.DataFrame(event_result[0])
     gross_ss.info.live_time = event_result[2]
-    gross_ss.info.first_measurement_id = event_result[3][0]
+    gross_ss.info.first_measurement_id = float(event_result[3][0])
     gross_ss.info.last_measurement_id = event_result[3][-1]
 
     bg_ss = SampleSet()
     bg_ss.spectra = pd.DataFrame(event_result[1])
     bg_ss.info.live_time = event_result[2]
-    bg_ss.info.first_measurement_id = event_result[3][0]
+    bg_ss.info.first_measurement_id = float(event_result[3][0])
     bg_ss.info.last_measurement_id = event_result[3][-1]
 
     if gross_results_path.suffix == ".h5":
         gross_ss.to_hdf(str(gross_results_path))
     else:
         gross_ss.to_pcf(str(gross_results_path))
+
     if bg_results_path.suffix == ".h5":
         bg_ss.to_hdf(str(bg_results_path))
     else:
