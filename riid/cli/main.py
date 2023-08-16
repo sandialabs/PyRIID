@@ -139,10 +139,11 @@ def detect(gross_path, bg_path, long_term_duration=None,
     if path_gross.suffix == ".h5":
         gross = read_hdf(path_gross)
         background = read_hdf(path_bg)
-
     else:
         gross = read_pcf(path_gross)
         background = read_pcf(path_bg)
+
+    gross.spectra = gross.spectra.astype(int)
 
     bg_live_time = background.info.live_time.values[0]
     bg_cps = background.info.total_counts.values[0] / bg_live_time
@@ -174,30 +175,17 @@ def detect(gross_path, bg_path, long_term_duration=None,
 
     events = []
     print("Detecting events...")
-    if path_gross.suffix == ".h5":
-        for i in range(gross.n_samples):
-            gross_spectrum = gross.spectra.iloc[i].values
-            event_result = ed.add_measurement(
-                measurement_id,
-                gross_spectrum,
-                gross_live_time,
-                verbose=False
-            )
-            measurement_id += 1
-            if event_result:
-                events.append(event_result)
-    else:
-        for i in range(gross.n_samples):
-            gross_spectrum = gross.spectra.iloc[i].values
-            event_result = ed.add_measurement(
-                measurement_id,
-                gross_spectrum.astype(float),
-                gross_live_time.astype(float),
-                verbose=False
-            )
-            measurement_id += 1.0
-            if event_result:
-                events.append(event_result)
+    for i in range(gross.n_samples):
+        gross_spectrum = gross.spectra.iloc[i].values
+        event_result = ed.add_measurement(
+            measurement_id,
+            gross_spectrum,
+            gross_live_time,
+            verbose=False
+        )
+        measurement_id += 1
+        if event_result:
+            events.append(event_result)
 
     if ed.event_in_progress:
         print("Event still in progress, adding more backgrounds...")
