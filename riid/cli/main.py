@@ -61,9 +61,6 @@ def identify(model_path, data_path, results_dir_path=None):
     if not os.path.exists(results_dir_path):
         os.mkdir(results_dir_path)
 
-    # TODO: regenerate data files to test this command
-    # TODO: schedule meeting with Tyler to review identify and detect commands before moving on
-
     model = MLPClassifier()
     model.load(model_path)
     data_ss = read_hdf(data_path)
@@ -213,16 +210,23 @@ def detect(gross_path, bg_path, long_term_duration=None,
         print(f"  > {event_duration:.2f}s from {first_measurement_id} to {last_measurement_id}")
 
     gross_ss = SampleSet()
-    gross_ss.spectra = pd.DataFrame(event_result[0])
-    gross_ss.info.live_time = event_result[2]
-    gross_ss.info.first_measurement_id = float(event_result[3][0])
-    gross_ss.info.last_measurement_id = event_result[3][-1]
-
     bg_ss = SampleSet()
-    bg_ss.spectra = pd.DataFrame(event_result[1])
-    bg_ss.info.live_time = event_result[2]
-    bg_ss.info.first_measurement_id = float(event_result[3][0])
-    bg_ss.info.last_measurement_id = event_result[3][-1]
+
+    gross_spectra = [x[0] for x in events]
+    bg_spectra = [x[1] for x in events]
+    live_time = [x[2] for x in events]
+    first_measurement_id = [x[3][0] for x in events]
+    last_measurement_id = [x[3][-1] for x in events]
+
+    gross_ss.spectra = pd.DataFrame(gross_spectra)
+    gross_ss.info.live_time = live_time
+    gross_ss.info["first_measurement_id"] = first_measurement_id
+    gross_ss.info["last_measurement_id"] = last_measurement_id
+
+    bg_ss.spectra = pd.DataFrame(bg_spectra)
+    bg_ss.info.live_time = live_time
+    bg_ss.info["first_measurement_id"] = first_measurement_id
+    bg_ss.info["last_measurement_id"] = last_measurement_id
 
     if gross_results_path.suffix == ".h5":
         gross_ss.to_hdf(str(gross_results_path))
@@ -233,7 +237,6 @@ def detect(gross_path, bg_path, long_term_duration=None,
         bg_ss.to_hdf(str(bg_results_path))
     else:
         bg_ss.to_pcf(str(bg_results_path))
-
 
 
 @cli.command(short_help="Collect spectra from a device")
