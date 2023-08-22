@@ -661,18 +661,27 @@ class SampleSet():
             Modifications are made in-place.
 
         """
-        self.sources = self.sources.loc[:, (self.sources != 0).any(axis=0)]
+        idxs = (self.sources != 0).any(axis=0)
+        self.sources = self.sources.loc[:, idxs]
 
-    def drop_spectra_with_no_contributors(self):
-        """Removes spectra (from spectra, sources, and info dfs) which have no positive
-        sources.
+        return idxs
 
-        Modification are made in-place.
+    def drop_spectra_with_no_contributors(self) -> np.ndarray:
+        """Removes spectra (from spectra, sources, and info dfs) which have no positive sources.
+
+            Modifications are made in-place.
+
+        Returns:
+            A boolean mask of which rows were kept.
         """
-        zero_contrib_inds = np.where(self.sources.values.sum(axis=1) == 0)[0]
-        self.spectra = self.spectra.drop(zero_contrib_inds).reset_index(drop=True)
-        self.sources = self.sources.drop(zero_contrib_inds).reset_index(drop=True)
-        self.info = self.info.drop(zero_contrib_inds).reset_index(drop=True)
+        idxs = np.where(self.sources.values.sum(axis=1) == 0)[0]
+        kept_mask = ~np.in1d(self.sources.index.values, idxs)
+
+        self.spectra = self.spectra.drop(index=idxs).reset_index(drop=True)
+        self.sources = self.sources.drop(index=idxs).reset_index(drop=True)
+        self.info = self.info.drop(index=idxs).reset_index(drop=True)
+
+        return kept_mask
 
     def extend(self, spectra: Union[dict, list, np.array, pd.DataFrame],
                sources: pd.DataFrame, info: Union[list, pd.DataFrame]):
