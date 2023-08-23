@@ -186,17 +186,18 @@ class SeedMixer():
 
     def __call__(self, n_samples: int, max_batch_size: int = 100) -> Iterator[SampleSet]:
         """Yields batches of seeds one at a time until a specified number of samples has
-            been reached.
+        been reached.
 
-            Dirichlet intuition:
-                Higher alpha: values will converge on 1/N where N is mixture size
-                Lower alpha: values will converge on ~0 but there will be a single 1
+        Dirichlet intuition:
 
-                Using `np.random.dirichlet` with too small of an alpha will result in nans
-                    (per https://github.com/rust-random/rand/pull/1209)
-                Using `numpy.random.Generator.dirichlet` instead avoids this.
+        - Higher alpha: values will converge on 1/N where N is mixture size
+        - Lower alpha: values will converge on ~0 but there will be a single 1
 
-            TODO: seed-level restrictions
+        Using `np.random.dirichlet` with too small of an alpha will result in NaNs
+            (per https://github.com/rust-random/rand/pull/1209)
+        Using `numpy.random.Generator.dirichlet` instead avoids this.
+
+        TODO: seed-level restrictions
 
         Args:
             n_samples: the total number of mixture seeds to produce across all batches
@@ -334,12 +335,13 @@ class bidict(dict):
 def get_choices(choices_so_far: list, options: list, options_probas: np.array,
                 restricted_pairs: bidict, n_choices_remaining: int, rng: Generator = None):
     """Makes a random choice from the given options until the desired number of choices
-        is reached.
+    is reached.
 
-        After a choice is made, future options are adjusted as follows:
-        - The current choice itself is excluded
-        - If the current choice is not allowed to co-exist with other options,
-          those options are also exclude
+    After a choice is made, future options are adjusted as follows:
+
+    - The current choice itself is excluded
+    - If the current choice is not allowed to co-exist with other options,
+        those options are also exclude
 
     Args:
         choices_so_far: the list being build up over time with random choices from `options`

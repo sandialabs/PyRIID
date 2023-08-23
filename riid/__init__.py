@@ -1,7 +1,9 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
-"""This module sets up shared logging functionality and global variables."""
+"""
+.. include:: ../README.md
+"""
 import logging
 import os
 import sys
@@ -20,3 +22,7 @@ PCF_FILE_EXTENSION = ".pcf"
 RIID = "riid"
 
 __version__ = get_distribution(RIID).version
+
+__pdoc__ = {
+    "riid.data.synthetic.seed.SeedMixer.__call__": True
+}

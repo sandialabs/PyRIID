@@ -4,6 +4,7 @@
 """This module contains utilities for working with GADRAS PCF files."""
 import struct
 from collections import defaultdict
+from typing import List, Tuple
 
 import numpy as np
 import tqdm
@@ -71,7 +72,7 @@ SPECTRUM_DEFINITION = {
 }
 
 
-def _get_srsi(file_bytes: list):
+def _get_srsi(file_bytes: list) -> Tuple[str, int]:
     """Obtains the PCF file Spectral Records Start Index (SRSI).
 
     Args:
@@ -103,7 +104,7 @@ def _get_srsi(file_bytes: list):
     return return_value, srsi
 
 
-def _get_spectrum_header_offset(spectrum_number: int, srsi: int, nrps: int):
+def _get_spectrum_header_offset(spectrum_number: int, srsi: int, nrps: int) -> int:
     """Calculates the PCF header offset for spectrum.
 
     Args:
@@ -118,7 +119,7 @@ def _get_spectrum_header_offset(spectrum_number: int, srsi: int, nrps: int):
     Raises:
         None.
     """
-    return 256*(srsi + nrps * (spectrum_number - 1) - 1)
+    return 256 * (srsi + nrps * (spectrum_number - 1) - 1)
 
 
 def _read_header(header_bytes: list, header_def: dict):
@@ -146,7 +147,7 @@ def _read_header(header_bytes: list, header_def: dict):
     return header
 
 
-def _read_spectra(data: list, n_rec_per_spec: int, spec_rec_start_indx: int):
+def _read_spectra(data: list, n_rec_per_spec: int, spec_rec_start_indx: int) -> List[dict]:
     """Reads spectra from PCF file.
 
     Args:
@@ -192,7 +193,7 @@ def _read_spectra(data: list, n_rec_per_spec: int, spec_rec_start_indx: int):
     return spectra
 
 
-def _pcf_to_dict(pcf_file_path: str, verbose: bool = False):
+def _pcf_to_dict(pcf_file_path: str, verbose: bool = False) -> dict:
     """Converts .pcf file into a python dictionary.
 
     Args:
@@ -224,7 +225,7 @@ def _pcf_to_dict(pcf_file_path: str, verbose: bool = False):
     return {"header": header, "spectra": spectra}
 
 
-def _convert_header(header_dict: dict, header_def: dict):
+def _convert_header(header_dict: dict, header_def: dict) -> bytes:
     """Converts the header to a bytes object.
 
     Args:
@@ -254,9 +255,8 @@ def _convert_header(header_dict: dict, header_def: dict):
     return struct.pack(header_def["mask"], *values)
 
 
-def _spectrum_byte_offset(spectrum_index: int,
-                          n_records_per_spectrum: int,
-                          spec_rec_start_index: int = 83):
+def _spectrum_byte_offset(spectrum_index: int, n_records_per_spectrum: int,
+                          spec_rec_start_index: int = 83) -> int:
     """Gives byte offset in file for where spectrum should occur, where
     spectrum_index begins with index 1.
 
@@ -281,7 +281,7 @@ def _dict_to_pcf(pcf_dict: dict, save_path: str, verbose=False):
         save_path: Defines the path at which to save the pcf.
 
     Returns:
-        The bytes object that is saved to file.
+        None.
 
     Raises:
         None.
@@ -320,7 +320,7 @@ def _dict_to_pcf(pcf_dict: dict, save_path: str, verbose=False):
             fout.write(file_bytes)
 
 
-def _unpack_compressed_text_buffer(ctb, field_len=60):
+def _unpack_compressed_text_buffer(ctb, field_len=60) -> Tuple[str, str, str]:
     """Unpacks a compressed text buffer into title, description, and source."""
     if ord(ctb[0]) == 255:
         ctb_parts = ctb.split(ctb[0])
@@ -336,7 +336,7 @@ def _unpack_compressed_text_buffer(ctb, field_len=60):
     return title, description, source
 
 
-def _pack_compressed_text_buffer(title, desc, source, field_len=60):
+def _pack_compressed_text_buffer(title, desc, source, field_len=60) -> str:
     """ Converts title, description, and source strings into a single, PCF-compatible array of 180
         characters to be put into the compressed text buffer.
 
