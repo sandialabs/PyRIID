@@ -29,15 +29,16 @@ from typeguard import typechecked
 def sparsemax(logits, axis: int = -1) -> tf.Tensor:
     r"""Sparsemax activation function.
 
-    For each batch $i$, and class $j$,
+    For each batch \( i \), and class \( j \),
     compute sparsemax activation function:
 
     $$
     \mathrm{sparsemax}(x)[i, j] = \max(\mathrm{logits}[i, j] - \tau(\mathrm{logits}[i, :]), 0).
     $$
 
-    See [From Softmax to Sparsemax: A Sparse Model of Attention and Multi-Label Classification]
-    (https://arxiv.org/abs/1602.02068).
+    See
+    [From Softmax to Sparsemax: A Sparse Model of Attention and Multi-Label Classification
+    ](https://arxiv.org/abs/1602.02068).
 
     Usage:
 
@@ -50,9 +51,11 @@ def sparsemax(logits, axis: int = -1) -> tf.Tensor:
     Args:
         logits: A `Tensor`.
         axis: `int`, axis along which the sparsemax operation is applied.
+
     Returns:
         A `Tensor`, output of sparsemax transformation. Has the same type and
         shape as `logits`.
+
     Raises:
         ValueError: In case `dim(logits) == 1`.
     """
@@ -157,18 +160,13 @@ def _compute_2d_sparsemax(logits):
     return p_safe
 
 
-def sparsemax_loss(
-    logits,
-    sparsemax,
-    labels,
-    name: Optional[str] = None,
-) -> tf.Tensor:
-    """Sparsemax loss function [1].
+def sparsemax_loss(logits, sparsemax, labels, name: Optional[str] = None) -> tf.Tensor:
+    r"""Sparsemax loss function ([1]).
 
     Computes the generalized multi-label classification loss for the sparsemax
     function. The implementation is a reformulation of the original loss
     function such that it uses the sparsemax probability output instead of the
-    internal $ \tau $ variable. However, the output is identical to the original
+    internal \( \tau \) variable. However, the output is identical to the original
     loss function.
 
     [1]: https://arxiv.org/abs/1602.02068
@@ -179,6 +177,7 @@ def sparsemax_loss(
       sparsemax: A `Tensor`. Must have the same type as `logits`.
       labels: A `Tensor`. Must have the same type as `logits`.
       name: A name for the operation (optional).
+
     Returns:
       A `Tensor`. Has the same type as `logits`.
     """

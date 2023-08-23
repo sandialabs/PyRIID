@@ -12,6 +12,7 @@
 _scripts/
 debug/
 *.whl
+docs/
 
 # Mac-specific
 *.DS_Store

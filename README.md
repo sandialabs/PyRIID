@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/riid)](https://badge.fury.io/py/riid)
 [![PyPI](https://badge.fury.io/py/riid.svg)](https://badge.fury.io/py/riid)
 
-This repository contains the PyRIID package (as well as tests and examples) which provides utilities that support machine learning-based research and solutions to radioisotope identification.
+Welcome to PyRIID! PyRIID is a Python package providing models and data synthesis utilities supporting machine learning-based research into radioisotope-related detection, identification, and quantification.
 
 ## Installation
 
@@ -63,6 +63,17 @@ python -m unittest tests/*.py -v
 
 You can also run one of the `run_tests.*` scripts, whichever is appropriate for your platform.
 
+## Docs
+
+API documentation can be found [here](https://sandialabs.github.io/PyRIID).
+
+You can also build the docs with the following commands:
+
+```sh
+pip install -r pdoc/requirements.txt
+pdoc riid -o docs/ --html --template-dir pdoc
+```
+
 ## Contributing
 
 Pull requests are welcome.
@@ -88,3 +99,4 @@ Additionally, **thank you** to the following individuals who have provided inval
 - Ben Maestas
 - Greg Thoreson
 - Michael Enghauser
+- Elliott Leonard

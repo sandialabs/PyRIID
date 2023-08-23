@@ -658,8 +658,7 @@ class SampleSet():
     def drop_sources_columns_with_all_zeros(self):
         """Removes columns from the sources DataFrame that contain only zeros.
 
-            Modifications are made in-place.
-
+        Modifications are made in-place.
         """
         idxs = (self.sources != 0).any(axis=0)
         self.sources = self.sources.loc[:, idxs]
@@ -669,7 +668,7 @@ class SampleSet():
     def drop_spectra_with_no_contributors(self) -> np.ndarray:
         """Removes spectra (from spectra, sources, and info dfs) which have no positive sources.
 
-            Modifications are made in-place.
+        Modifications are made in-place.
 
         Returns:
             A boolean mask of which rows were kept.

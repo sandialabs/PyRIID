@@ -3,6 +3,7 @@
 # the U.S. Government retains certain rights in this software.
 """This module provides visualization functions primarily for visualizing SampleSets."""
 import hashlib
+from functools import wraps
 
 import matplotlib
 import matplotlib.pyplot as plt  # noqa: E402
@@ -31,6 +32,7 @@ def save_or_show_plot(func):
             returns a tuple of (Figure, Axes).
 
     """
+    @wraps(func)
     def save_or_show_plot_wrapper(*args, save_file_path=None, show=True,
                                   return_bytes=False, **kwargs):
         if return_bytes:
