@@ -105,24 +105,39 @@ def detect(gross_path, bg_path, long_term_duration=None,
            anomaly_threshold_update_interval=None,
            event_gross_file_path=None, event_bg_file_path=None):
 
-    if not event_gross_file_path:
-        path_gross = Path(gross_path)
-        gross_results_path = Path(path_gross.parent, f"{path_gross.stem}_events{path_gross.suffix}")
+    path_gross = Path(gross_path)
+    path_bg = Path(bg_path)
 
-    if not event_bg_file_path:
-        path_bg = Path(bg_path)
+    # !gross and !bg
+    if not event_gross_file_path and not event_bg_file_path:
+        gross_results_path = Path(path_gross.parent, f"{path_gross.stem}_events{path_gross.suffix}")
         bg_results_path = Path(path_bg.parent, f"{path_bg.stem}_events{path_bg.suffix}")
 
-    else:
-        validate_ext_is_supported(event_gross_file_path)
-        validate_ext_is_supported(event_bg_file_path)
+    # !gross and bg
+    elif not event_gross_file_path:
+        gross_results_path = Path(path_gross.parent, f"{path_gross.stem}_events{path_gross.suffix}")
+        bg_results_path = Path(event_bg_file_path)
 
+        validate_ext_is_supported(bg_results_path)
+
+    # gross and !bg
+    elif not event_bg_file_path:
+        gross_results_path = Path(event_gross_file_path)
+        bg_results_path = Path(path_bg.parent, f"{path_bg.stem}_events{path_bg.suffix}")
+
+        validate_ext_is_supported(gross_results_path)
+
+    # gross and bg
+    else:
         gross_results_path = Path(event_gross_file_path)
         bg_results_path = Path(event_bg_file_path)
 
+        validate_ext_is_supported(gross_results_path)
+        validate_ext_is_supported(bg_results_path)
+
     if gross_results_path.suffix != bg_results_path.suffix:
-        raise ValueError("The desired format of the output file is ambiguous due to differing input"
-                         " file types (PCF and HDF). Please provide an output_file_path.")
+        raise ValueError("The desired format of the output file is ambiguous due to differing"
+                         " input file types (PCF and HDF). Please provide an output_file_path.")
 
     import numpy as np
     import pandas as pd
