@@ -52,6 +52,9 @@ def train(model_type, data_path, model_path=None, results_dir_path=None):
               type=click.Path(exists=False, file_okay=True),
               help="Path to directory where identification results are output")
 def identify(model_path, data_path, results_dir_path=None):
+    validate_ext_is_supported(model_path)
+    validate_ext_is_supported(data_path)
+
     from riid.models.neural_nets import MLPClassifier
 
     print(f"Identifying measurements with model:        {model_path}")
@@ -104,6 +107,9 @@ def detect(gross_path, bg_path, long_term_duration=None,
            post_event_duration=None, tolerable_false_alarms_per_day=None,
            anomaly_threshold_update_interval=None,
            event_gross_file_path=None, event_bg_file_path=None):
+
+    validate_ext_is_supported(gross_path)
+    validate_ext_is_supported(bg_path)
 
     path_gross = Path(gross_path)
     path_bg = Path(bg_path)
