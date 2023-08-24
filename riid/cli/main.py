@@ -32,13 +32,13 @@ def cli():
 @click.option('--model_path', type=click.Path(exists=True, file_okay=True))
 @click.option('--result_dir_path', '--results', metavar='',
               type=click.Path(exists=True, file_okay=True),
-              help="""Path to directory hwere training results are output including
+              help="""Path to directory here training results are output including
                 model info as a JSON file""")
 def train(model_type, data_path, model_path=None, results_dir_path=None):
 
     print(f"Training model: {model_type} on data: {data_path}")
     if (model_type.casefold() == 'mlp'):
-        pass
+        print("MLP")
     elif (model_type.casefold() == 'lpe'):
         pass
     elif (model_type.casefold() == 'pb'):
@@ -52,8 +52,11 @@ def train(model_type, data_path, model_path=None, results_dir_path=None):
               type=click.Path(exists=False, file_okay=True),
               help="Path to directory where identification results are output")
 def identify(model_path, data_path, results_dir_path=None):
-    validate_ext_is_supported(model_path)
-    validate_ext_is_supported(data_path)
+    path_model = Path(model_path)
+    path_data = Path(data_path)
+
+    validate_ext_is_supported(path_model)
+    validate_ext_is_supported(path_data)
 
     from riid.models.neural_nets import MLPClassifier
 
@@ -65,8 +68,13 @@ def identify(model_path, data_path, results_dir_path=None):
         os.mkdir(results_dir_path)
 
     model = MLPClassifier()
-    model.load(model_path)
-    data_ss = read_hdf(data_path)
+    model.load(path_model)
+
+    if path_data.suffix == '.h5':
+        data_ss = read_hdf(path_data)
+    else:
+        data_ss = read_pcf(path_data)
+        
     model.predict(data_ss)
 
     data_ss.prediction_probas.to_csv(results_dir_path + "results.csv")
