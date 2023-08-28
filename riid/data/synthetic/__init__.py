@@ -13,7 +13,8 @@ from riid.data.sampleset import SampleSet, SpectraState, _get_utc_timestamp
 
 
 class Synthesizer():
-    """Base synthesizer."""
+    """Base class for synthesizers."""
+
     SYNTHETIC_STR = "synthetic"
     SUPPORTED_SAMPLING_FUNCTIONS = ["uniform", "log10", "discrete", "list"]
 
@@ -23,16 +24,15 @@ class Synthesizer():
                  return_fg: bool = True,
                  return_gross: bool = False,
                  rng: Generator = np.random.default_rng()):
-        """Base class for synthesizers.
-
+        """
         Args:
-            bg_cps: the constant rate of gammas from background.
-            long_bg_live_time: the live time on which to base background subtractions.
-            apply_poisson_noise: whether to apply Poisson noise to spectra.
-            normalize_sources: whether to normalize ground truth proportions to sum to 1.
-            return_fg: whether to compute and return background subtracted spectra.
-            return_gross: whether to return gross spectra (always computed).
-            rng: a NumPy random number generator, useful for experiment repeatability.
+            bg_cps: constant rate of gammas from background
+            long_bg_live_time: live time on which to base background subtractions
+            apply_poisson_noise: whether to apply Poisson noise to spectra
+            normalize_sources: whether to normalize ground truth proportions to sum to 1
+            return_fg: whether to compute and return background subtracted spectra
+            return_gross: whether to return gross spectra (always computed)
+            rng: NumPy random number generator, useful for experiment repeatability
         """
         self.bg_cps = bg_cps
         self.long_bg_live_time = long_bg_live_time
@@ -226,21 +226,20 @@ def get_gross_sample_set(spectra, sources, ecal, live_times, snrs, total_counts,
 
 def get_distribution_values(function: str, function_args: Any, n_values: int,
                             rng: Generator = np.random.default_rng()):
-    """Gets the values for the synthetic data distribution based
-    on the sampling type used.
+    """Randomly sample a list of values based one of many distributions.
 
     Args:
-        function: Defines the name of the distribution function.
-        function_args: Defines the argument or collection of arguments to be
+        function: name of the distribution function
+        function_args: argument or collection of arguments to be
             passed to the function, if any.
-        n_values: Defines the size of the distribution.
-        rng: a NumPy random number generator, useful for experiment repeatability.
+        n_values: size of the distribution
+        rng: NumPy random number generator, useful for experiment repeatability
 
     Returns:
-        The value or collection of values defining the distribution.
+        Value or collection of sampled values
 
     Raises:
-        ValueError: Raised when an unsupported function type is provided.
+        `ValueError` when an unsupported function type is provided
     """
     values = None
     if function == "uniform":
@@ -259,22 +258,24 @@ def get_distribution_values(function: str, function_args: Any, n_values: int,
 
 
 def get_expected_spectra(seeds: np.ndarray, expected_counts: np.ndarray) -> np.ndarray:
-    """ Multiples a 1-D array of expected counts by either a 1-D array or 2-D
-        matrix of seed spectra.
+    """Multiply a 1-D array of expected counts by either a 1-D array or 2-D
+    matrix of seed spectra.
 
-        The dimension(s) of the seed array(s), `seeds`, is expanded to be (m, n, 1) where:
-            m = # of seeds
-            n = # of channels
-            and the final dimension is added in order to facilitate proper broadcasting
-        The dimension of the `expected_counts` must be 1, but the length `p` can be
-        any positive number.
+    The dimension(s) of the seed array(s), `seeds`, is expanded to be `(m, n, 1)` where:
 
-        The resulting expected spectra will be of shape (m x p, n).
-        This representings the same number of channels `n`, but each expected count
-        value, of which there were `p`, will be me multiplied through each seed spectrum,
-        of which there were `m`.
-        All expected spectra matrices for each seed are then concatenated together
-        (stacked), eliminating the 3rd dimension.
+    - m = # of seeds
+    - n = # of channels
+
+    and the final dimension is added in order to facilitate proper broadcasting
+    The dimension of the `expected_counts` must be 1, but the length `p` can be
+    any positive number.
+
+    The resulting expected spectra will be of shape `(m x p, n)`.
+    This representings the same number of channels `n`, but each expected count
+    value, of which there were `p`, will be me multiplied through each seed spectrum,
+    of which there were `m`.
+    All expected spectra matrices for each seed are then concatenated together
+    (stacked), eliminating the 3rd dimension.
     """
     if expected_counts.ndim != 1:
         raise ValueError("Expected counts array must be 1-D.")
@@ -311,19 +312,19 @@ def get_samples_per_seed(columns: pd.MultiIndex, min_samples_per_seed: int, bala
 def get_dummy_seeds(n_channels: int = 512, live_time: float = 600.0,
                     count_rate: float = 1000.0, normalize: bool = True,
                     rng: Generator = np.random.default_rng()) -> SampleSet:
-    """Builds a random, dummy SampleSet for demonstration or test purposes.
+    """Get a random, dummy `SampleSet` for demonstration or test purposes.
 
     Args:
-        n_channels: the number of channels in the spectra DataFrame.
-        live_time: the collection time on which to base seeds
-            (higher creates a less noisy shape).
-        count_rate: the count rate on which to base seeds
-            (higher creates a less noisy shape).
-        normalize: whether to apply an L1-norm to the spectra.
-        rng: a NumPy random number generator, useful for experiment repeatability.
+        n_channels: number of channels in the spectra DataFrame
+        live_time: collection time on which to base seeds
+            (higher creates a less noisy shape)
+        count_rate: count rate on which to base seeds
+            (higher creates a less noisy shape)
+        normalize: whether to apply an L1-norm to the spectra
+        rng: NumPy random number generator, useful for experiment repeatability
 
     Returns:
-        A SampleSet with randomly generated spectra
+        `SampleSet` with randomly generated spectra
     """
     ss = SampleSet()
     ss.measured_or_synthetic = "synthetic"
@@ -383,4 +384,5 @@ def get_dummy_seeds(n_channels: int = 512, live_time: float = 600.0,
 
 
 class InvalidSeedError(Exception):
+    """Seed spectra data structure is not 1- or 2-dimensional."""
     pass

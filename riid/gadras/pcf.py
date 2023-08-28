@@ -76,16 +76,14 @@ def _get_srsi(file_bytes: list) -> Tuple[str, int]:
     """Obtains the PCF file Spectral Records Start Index (SRSI).
 
     Args:
-        file_bytes: Defines a byte array of the pcf file contents.
+        file_bytes: byte array of the pcf file contents
 
     Returns:
-        A tuple containing the return_value and srsi.
-        return_value: The string indicator for what Deviation pairs type is being used.
-        srsi: Spectral Records Start Index.  Index in file where spectra records begin
-        after skipping past deviation pairs.
+        Tuple containing:
 
-    Raises:
-        None.
+        - return_value: string indicator for what Deviation pairs type is being used
+        - srsi: Spectral Records Start Index, the index where spectra records begin
+            after skipping past deviation pairs
     """
     test_lengths = [30, 20]
     index = 256
@@ -105,19 +103,16 @@ def _get_srsi(file_bytes: list) -> Tuple[str, int]:
 
 
 def _get_spectrum_header_offset(spectrum_number: int, srsi: int, nrps: int) -> int:
-    """Calculates the PCF header offset for spectrum.
+    """Calculate the PCF header offset for a spectrum.
 
     Args:
-        spectrum_number: Defines the number of spectrum for which to the
-            obtain offset of header.
-        srsi: Defines the spectral record start index.
-        nrps: Defines the number of records (channels) per spectrum.
+        spectrum_number: number of spectrum for which to the
+            obtain offset of header
+        srsi: spectral record start index
+        nrps: number of records (channels) per spectrum
 
     Returns:
-        An integer representing the offset of the spectrum header.
-
-    Raises:
-        None.
+        Integer representing the offset of the spectrum header
     """
     return 256 * (srsi + nrps * (spectrum_number - 1) - 1)
 
@@ -126,14 +121,11 @@ def _read_header(header_bytes: list, header_def: dict):
     """Converts bytes of header using header definition.
 
     Args:
-        header_bytes: Defines the byte array of the values of the header.
-        header_def: Dictionary defining the: mask, field names, and lengths of each entry.
+        header_bytes: byte array of the values of the header
+        header_def: dictionary defining the mask, field names, and lengths of each entry
 
     Returns:
-        A dictionary containing the content of the header.
-
-    Raises:
-        None.
+        Dictionary containing the content of the header
     """
     header_values = struct.unpack(
         header_def["mask"],
@@ -148,18 +140,15 @@ def _read_header(header_bytes: list, header_def: dict):
 
 
 def _read_spectra(data: list, n_rec_per_spec: int, spec_rec_start_indx: int) -> List[dict]:
-    """Reads spectra from PCF file.
+    """Read spectra from a PCF.
 
     Args:
-        data: Defines the byte array of pcf file contents.
-        n_rec_per_spec: Defines the number of records per spectrum. (NRPS in pcf ICD).
-        spec_rec_start_index: Defines spectral record start index. (SRSI in pcf ICD).
+        data: byte array of pcf file contents
+        n_rec_per_spec: number of records per spectrum (NRPS in PCF ICD)
+        spec_rec_start_index: spectral record start index (SRSI in PCF ICD)
 
     Returns:
-        A list of dictionaries containing pcf file spectra information.
-
-    Raises:
-        None.
+        List of dictionaries containing pcf file spectra information
     """
     num_samples = int((len(data) - 256 * (spec_rec_start_indx - 1)) / (256 * n_rec_per_spec))
     spectra = []
@@ -194,17 +183,14 @@ def _read_spectra(data: list, n_rec_per_spec: int, spec_rec_start_indx: int) -> 
 
 
 def _pcf_to_dict(pcf_file_path: str, verbose: bool = False) -> dict:
-    """Converts .pcf file into a python dictionary.
+    """Convert a PCF into a dictionary representation.
 
     Args:
-        pcf_file_path: Defintes the path to the pcf to be converted.
-        verbose: Determines whether or not to show verbose function output in terminal.
+        pcf_file_path: path to the PCF to be converted
+        verbose: whether to show detailed output
 
     Returns:
-        A dictionary with keys "header" and "spectra".
-
-    Raises:
-        None.
+        Dictionary with keys "header" and "spectra"
     """
     pcf_data = np.fromfile(pcf_file_path, dtype=np.uint8)
     version = struct.unpack("3s", pcf_data[2:5])[0].decode("utf-8")
@@ -215,8 +201,8 @@ def _pcf_to_dict(pcf_file_path: str, verbose: bool = False) -> dict:
         deviation_values = struct.unpack("5120f", pcf_data[512:512+20480])
         if not set(deviation_values) == {0} and verbose:
             print("Deviation pairs exist in file")
-    # Header provides metadata about the collection. Spectra is a list
-    #  of "header" and "spectrum" pairs for each spectrum in file.
+    # Header provides metadata about the collection.
+    # Spectra is a list of "header" and "spectrum" pairs for each spectrum in file.
     header = _read_header(pcf_data[:256], header_def)
     dev_type, spec_rec_start_indx = _get_srsi(pcf_data)
     header.update({"SRSI": spec_rec_start_indx, "DevType": dev_type})
@@ -226,17 +212,14 @@ def _pcf_to_dict(pcf_file_path: str, verbose: bool = False) -> dict:
 
 
 def _convert_header(header_dict: dict, header_def: dict) -> bytes:
-    """Converts the header to a bytes object.
+    """Convert the header to a bytes object.
 
     Args:
-        header_dict: Defines a dictionary of header values to be converted.
-        header_def: Defines a dictionary of field and n_bytes values.
+        header_dict: dictionary of header values to be converted
+        header_def: dictionary of field and n_bytes values
 
     Returns:
-        A byte array containing the converted header_dict.
-
-    Raises:
-        None.
+        `bytes` object containing the converted header dictionary
     """
     values = []
     for i, tar_len in zip(header_def["fields"], header_def["n_bytes"]):
@@ -257,34 +240,25 @@ def _convert_header(header_dict: dict, header_def: dict) -> bytes:
 
 def _spectrum_byte_offset(spectrum_index: int, n_records_per_spectrum: int,
                           spec_rec_start_index: int = 83) -> int:
-    """Gives byte offset in file for where spectrum should occur, where
-    spectrum_index begins with index 1.
+    """Get the byte offset in the file where the spectrum should occur, where
+    spectrum_index begins with index equals 1.
 
     Args:
-        spectrum_index: Defines the index of the spectrum to be located.
-        n_records_per_spectrum: Defines the number of records (channels) per spectrum.
+        spectrum_index: index of the spectrum to be located
+        n_records_per_spectrum: number of records (channels) per spectrum
 
     Returns:
-        The integer byte offset of the desired spectrum.
-
-    Raises:
-        None.
+        The integer byte offset of the desired spectrum
     """
     return 256 * (spec_rec_start_index + n_records_per_spectrum * (spectrum_index - 1) - 1)
 
 
 def _dict_to_pcf(pcf_dict: dict, save_path: str, verbose=False):
-    """Converts dictionary of pcf information into pcf file.
+    """Convert PCF dictionary representation to PCF binary.
 
     Args:
-        pcf_dict: Defines a dictionary of pcf values.
-        save_path: Defines the path at which to save the pcf.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
+        pcf_dict: dictionary of PCF values
+        save_path: path at which to save the PCF
     """
     header = pcf_dict["header"]
     n_records_per_spectrum = header["NRPS"]
@@ -321,7 +295,7 @@ def _dict_to_pcf(pcf_dict: dict, save_path: str, verbose=False):
 
 
 def _unpack_compressed_text_buffer(ctb, field_len=60) -> Tuple[str, str, str]:
-    """Unpacks a compressed text buffer into title, description, and source."""
+    """Unpack a compressed text buffer into title, description, and source."""
     if ord(ctb[0]) == 255:
         ctb_parts = ctb.split(ctb[0])
         title, description, source = ctb_parts[1:]
@@ -337,21 +311,21 @@ def _unpack_compressed_text_buffer(ctb, field_len=60) -> Tuple[str, str, str]:
 
 
 def _pack_compressed_text_buffer(title, desc, source, field_len=60) -> str:
-    """ Converts title, description, and source strings into a single, PCF-compatible array of 180
-        characters to be put into the compressed text buffer.
+    """Convert title, description, and source strings into a single, PCF-compatible array of 180
+    characters to be put into the compressed text buffer.
 
-        Each argument should by 60 characters or less.
-        PyRIID does not use the delimiter approach for the compressed text buffer when converting
-        from SampleSet to PCF. Any part of the field exceeding 60 bytes will be truncated to fit.
+    Each argument should by 60 characters or less.
+    PyRIID does not use the delimiter approach for the compressed text buffer when converting
+    from `SampleSet` to PCF. Any part of the field exceeding 60 bytes will be truncated to fit.
 
-        Args:
-            title: the isotope of the record
-            desc: custom user description
-            source: the seed used to generate the sample, i.e., the inject source string
-            field_len: the fixed length of each field if delimeters are not to be used
+    Args:
+        title: isotope of the record
+        desc: custom user description
+        source: seed used to generate the sample, i.e., the inject source string
+        field_len: fixed length of each field if delimeters are not to be used
 
-        Returns:
-            A string of length 180.
+    Returns:
+        String of length 180
     """
     assert field_len >= 3
 

@@ -30,7 +30,6 @@ class TFModelBase:
     CUSTOM_OBJECTS = {"multi_f1": multi_f1, "single_f1": single_f1}
 
     def __init__(self, *args, **kwargs):
-        """Initializes the base model."""
         self._info = {}
         self._temp_file_path = "temp_model_file.h5"
 
@@ -88,12 +87,14 @@ class TFModelBase:
             ]
 
     def to_tflite(self, file_path: str = None, quantize: bool = False):
-        """Converts the model to a TFLite model and optionally saves it to a file or quantizes it.
+        """Convert the model to a TFLite model and optionally save or quantize it.
 
         Args:
-            file_path: Defines a string for the file path to which to save the model.
-            quantize: Determines whether or not to apply quantization to the TFLite model.
+            file_path: file path at which to save the model
+            quantize: whether to apply quantization
 
+        Returns:
+            bytes object representing the model in TFLite form
         """
         converter = tf.lite.TFLiteConverter.from_keras_model(self.model)
         if quantize:
@@ -104,14 +105,13 @@ class TFModelBase:
         return tflite_model
 
     def save(self, file_path: str):
-        """Saves the model to a file.
+        """Save the model to a file.
 
         Args:
-            file_path: Defines a string representing the file path at which to save the model.
+            file_path: file path at which to save the model
 
         Raises:
-            ValueError: Raised when the given file path already exists.
-
+            `ValueError` when the given file path already exists
         """
         if os.path.exists(file_path):
             raise ValueError("Path already exists.")
@@ -124,11 +124,10 @@ class TFModelBase:
         warnings.resetwarnings()
 
     def load(self, file_path: str):
-        """Loads the model from a file.
+        """Load the model from a file.
 
         Args:
-            file_path: Defines a string representing the file path from which to load the model.
-
+            file_path: file path from which to load the model
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -141,11 +140,10 @@ class TFModelBase:
         warnings.resetwarnings()
 
     def serialize(self) -> bytes:
-        """Converts the model to a bytes object.
+        """Convert model to a bytes object.
 
         Returns:
-            A bytes object representing the binary of an HDF file.
-
+            bytes object representing the model on disk
         """
         self.save(self._temp_file_path)
         try:
@@ -157,11 +155,10 @@ class TFModelBase:
         return data
 
     def deserialize(self, stream: bytes):
-        """Populates the current model with the give bytes object.
+        """Populate the current model with the given bytes object.
 
         Args:
-            stream: Defines a bytes object containing the model information.
-
+            stream: bytes object containing the model information
         """
         try:
             with open(self._temp_file_path, "wb") as f:
@@ -171,7 +168,7 @@ class TFModelBase:
             os.remove(self._temp_file_path)
 
     def initialize_info(self):
-        """Initializes the model information with default values."""
+        """Initialize model information with default values."""
         info = {
             "model_id": str(uuid.uuid4()),
             "model_type": self.__class__.__name__,

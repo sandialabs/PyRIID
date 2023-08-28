@@ -1,7 +1,7 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
-"""This module contains a Poisson-Bayes classifier."""
+"""This module contains the Poisson-Bayes classifier."""
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -12,21 +12,21 @@ from riid.models import TFModelBase
 
 
 class PoissonBayesClassifier(TFModelBase):
-    def __init__(self):
-        """This Poisson-Bayes classifier calculates the conditional Poisson log
-        probability of each seed spectrum given the measurement.
+    """This Poisson-Bayes classifier calculates the conditional Poisson log probability of each
+    seed spectrum given the measurement.
 
-        This implementation is an adaptation of a naive Bayes classifier, a formal
-        description of which can be found in ESLII:
-            Hastie, Trevor, et al. The elements of statistical learning: data mining,
-                inference, and prediction. Vol. 2. New York: springer, 2009.
-        For this model, each channel (read: feature) is treated as a Poisson random
-        variable and expectations are provided by the user in the form of
-        seeds rather than learned. Like the model described in ESLII, all classes are
-        considered equally likely and features are assumed to be independent.
-        The latter assumption is generally not true, however it makes estimation far
-        more simple.
-        """
+    This implementation is an adaptation of a naive Bayes classifier, a formal description of
+    which can be found in ESLII:
+
+    Hastie, Trevor, et al. The elements of statistical learning: data mining, inference, and
+    prediction. Vol. 2. New York. Springer, 2009.
+
+    For this model, each spectrum channel is treated as a Poisson random variable and
+    expectations are provided by the user in the form of seeds rather than learned.
+    Like the model described in ESLII, all classes are considered equally likely and features
+    are assumed to be conditionally independent.
+    """
+    def __init__(self):
         super().__init__()
 
     def _create_model(self, seeds_ss: SampleSet):
@@ -97,17 +97,16 @@ class PoissonBayesClassifier(TFModelBase):
         self.model.compile()
 
     def fit(self, seeds_ss: SampleSet = None):
-        """Constructs a TF-based implementation of a poisson-bayes classifier in terms
+        """Construct a TF-based implementation of a poisson-bayes classifier in terms
         of the given seeds.
 
         Args:
-            seeds_ss (SampleSet): Defines a SampleSet of `n` foreground
-                seed spectra where `n` >= 1.
+            seeds_ss: `SampleSet` of `n` foreground seed spectra where `n` >= 1.
 
         Raises:
-            ValueError: Raised when no seeds are provided.
-            NegativeSpectrumError: raised if any seed spectrum has negative counts in any bin.
-            ZeroTotalCountsError: raised if any seed spectrum contains zero total counts.
+            - `ValueError` when no seeds are provided
+            - `NegativeSpectrumError` when any seed spectrum has negative counts in any bin
+            - `ZeroTotalCountsError` when any seed spectrum contains zero total counts
         """
         if seeds_ss.n_samples <= 0:
             raise ValueError("Argument 'seeds_ss' must contain at least one seed.")
@@ -121,16 +120,15 @@ class PoissonBayesClassifier(TFModelBase):
         self.seeds_ss = seeds_ss
         self._create_model(self.seeds_ss)
 
-    def predict(self, gross_ss: SampleSet = None, bg_ss: SampleSet = None,
+    def predict(self, gross_ss: SampleSet, bg_ss: SampleSet,
                 normalize_scores: bool = False, verbose: bool = False):
-        """Uses the Poisson-Bayes model to output prediction
-        probabilities for every spectra in gross_ss SampleSet
-        (and optional background Sample Set)
+        """Compute the conditional Poisson log probability between spectra in a `SampleSet` and
+        the seeds to which the model was fit.
 
         Args:
-            gross_ss (SampleSet): Defines a SampleSet of `n` gross spectra where `n` >= 1.
-            bg_ss (SampleSet): Defines a SampleSet of `n` background spectra where `n` >= 1.
-            normalize_scores (bool): normalize prediction probabilities.
+            gross_ss: `SampleSet` of `n` gross spectra where `n` >= 1
+            bg_ss: `SampleSet` of `n` background spectra where `n` >= 1
+            normalize_scores (bool): whether to normalize prediction probabilities
                 When True, this makes the probabilities positive and rescales them
                 by the minimum value present in given the dataset.
                 While this can be helpful in terms of visualizing probabilities in log scale,
@@ -157,12 +155,10 @@ class PoissonBayesClassifier(TFModelBase):
 
 
 class ZeroTotalCountsError(ValueError):
-    """An exception that indicates that a total count of zero has
-    been found, which means the model statistics cannot be calculated."""
+    """All spectrum channels are zero."""
     pass
 
 
 class NegativeSpectrumError(ValueError):
-    """An exception that indicates that a negative spectrum value has
-    been found, which means that the model statistics cannot be calculated."""
+    """At least one spectrum channel is negative."""
     pass

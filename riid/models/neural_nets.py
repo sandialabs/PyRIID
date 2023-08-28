@@ -1,7 +1,7 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
-"""This module contains a multi-layer perceptron classifier."""
+"""This module contains multi-layer perceptron classifiers and regressors."""
 import json
 import os
 from typing import Any, List, Tuple
@@ -47,26 +47,24 @@ def _get_reordered_spectra(old_spectra_df: pd.DataFrame, old_sources_df: pd.Data
 
 
 class MLPClassifier(TFModelBase):
+    """Multi-layer perceptron classifier."""
     def __init__(self, hidden_layers: tuple = (512,), activation: str = "relu",
                  loss: str = "categorical_crossentropy",
                  optimizer: Any = Adam(learning_rate=0.01, clipnorm=0.001),
                  metrics: tuple = ("accuracy", "categorical_crossentropy", multi_f1, single_f1),
                  l2_alpha: float = 1e-4, activity_regularizer=l1(0), dropout: float = 0.0,
                  learning_rate: float = 0.01, final_activation: str = "softmax"):
-        """Initializes the classifier.
-
-        The model is implemented as a tf.keras.Sequential object.
-
+        """
         Args:
-            hidden_layers: Defines a tuple defining the number and size of dense layers.
-            activation: Defines the activate function to use for each dense layer.
-            loss: Defines the loss function to use for training.
-            optimizer: Defines the tensorflow optimizer or optimizer name to use for training.
-            metrics: Defines a list of metrics to be evaluating during training.
-            l2_alpha: Defines the alpha value for the L2 regularization of each dense layer.
-            activity_regularizer: Defines the regularizer function applied each dense layer output.
-            dropout: Defines the amount of dropout to apply to each dense layer.
-            learning_rate: the learning rate to use for an Adam optimizer.
+            hidden_layers: tuple defining the number and size of dense layers
+            activation: activate function to use for each dense layer
+            loss: loss function to use for training
+            optimizer: tensorflow optimizer or optimizer name to use for training
+            metrics: list of metrics to be evaluating during training
+            l2_alpha: alpha value for the L2 regularization of each dense layer
+            activity_regularizer: regularizer function applied each dense layer output
+            dropout: amount of dropout to apply to each dense layer
+            learning_rate: learning rate to use for an Adam optimizer
         """
         super().__init__()
 
@@ -92,40 +90,36 @@ class MLPClassifier(TFModelBase):
             validation_split: float = 0.2, callbacks=None, val_ss: SampleSet = None,
             val_bg_ss: SampleSet = None, patience: int = 15, es_monitor: str = "val_loss",
             es_mode: str = "min", es_verbose=0, target_level="Isotope", verbose: bool = False):
-        """Fits a model to the given SampleSet(s).
+        """Fit a model to the given `SampleSet`(s).
 
         Args:
-            ss: Defines a SampleSet of `n` spectra where `n` >= 1 and the spectra are either
+            ss: `SampleSet` of `n` spectra where `n` >= 1 and the spectra are either
                 foreground (AKA, "net") or gross.
-            bg_ss: Defines a SampleSet of `n` spectra where `n` >= 1 and the spectra are background.
-            batch_size: Defines the number of samples per gradient update.
-            epochs: Defines maximum number of training iterations.
-            validation_split: Defines the percentage of the training data to use as validation data.
-            callbacks: Defines a list of callbacks to be passed to TensorFlow Model.fit() method.
-            val_ss: Defines an optionally-provided provided validation set to be used instead of
-                taking a portion of `ss` for validation.
-            val_bg_ss: Defines an optionally-provided validation set to be used as background for
-                val_ss.
-            patience: Defines the number of epochs to wait for tf.keras.callbacks.EarlyStopping
-                object.
-            es_monitor: Defines the quantity to be monitored for tf.keras.callbacks.EarlyStopping
-                object.
-            es_mode: mode for tf.keras.callbacks.EarlyStopping object.
-            es_verbose: Determines verbosity level for tf.keras.callbacks.EarlyStopping object.
-            target_level: The source level to target for model output.
-            verbose: Determines whether or not model training output is printed to the terminal.
+            bg_ss: `SampleSet` of `n` spectra where `n` >= 1 and the spectra are background
+            batch_size: number of samples per gradient update
+            epochs: maximum number of training iterations
+            validation_split: percentage of the training data to use as validation data
+            callbacks: list of callbacks to be passed to the TensorFlow `Model.fit()` method
+            val_ss: validation set to be used instead of taking a portion of the training data
+            val_bg_ss: validation set to be used as background for `val_ss`
+            patience: number of epochs to wait for `tf.keras.callbacks.EarlyStopping`
+            es_monitor: quantity to be monitored for `tf.keras.callbacks.EarlyStopping`
+            es_mode: mode for `tf.keras.callbacks.EarlyStopping`
+            es_verbose: verbosity level for `tf.keras.callbacks.EarlyStopping`
+            target_level: `SampleSet.sources` column level to use
+            verbose: whether to show detailed model training output
 
         Returns:
-            A tf.History object.
+            `tf.History` object.
 
         Raises:
-            ValueError: Raised when no spectra are provided as `ss` input.
+            `ValueError` when no spectra are provided as input
         """
         if ss.n_samples <= 0:
             raise ValueError("No spectr[a|um] provided!")
 
         x_train = ss.get_samples().astype(float)
-        source_contributions_df = ss.get_source_contributions(target_level=target_level)
+        source_contributions_df = ss.sources.groupby(axis=1, level=target_level).sum()
         y_train = source_contributions_df.values.astype(float)
         if bg_ss:
             x_bg_train = bg_ss.get_samples().astype(float)
@@ -134,12 +128,12 @@ class MLPClassifier(TFModelBase):
             if val_bg_ss:
                 val_data = (
                     [val_ss.get_samples().astype(float), val_bg_ss.get_samples().astype(float)],
-                    val_ss.get_source_contributions().values.astype(float),
+                    val_ss.get_source_contributions().astype(float),
                 )
             else:
                 val_data = (
                     val_ss.get_samples().astype(float),
-                    val_ss.get_source_contributions().values.astype(float),
+                    val_ss.get_source_contributions().astype(float),
                 )
             validation_split = None
         else:
@@ -236,14 +230,14 @@ class MLPClassifier(TFModelBase):
         return history
 
     def predict(self, ss: SampleSet, bg_ss: SampleSet = None, verbose=False):
-        """Classifies the spectra in the provided SampleSet(s).
+        """Classify the spectra in the provided `SampleSet`(s).
 
         Results are stored inside the first SampleSet's prediction-related properties.
 
         Args:
-            ss: Defines a SampleSet of `n` spectra where `n` >= 1 and the spectra are either
-                foreground (AKA, "net") or gross.
-            bg_ss: Defines a SampleSet of `n` spectra where `n` >= 1 and the spectra are background.
+            ss: `SampleSet` of `n` spectra where `n` >= 1 and the spectra are either
+                foreground (AKA, "net") or gross
+            bg_ss: `SampleSet` of `n` spectra where `n` >= 1 and the spectra are background
         """
         x_test = ss.get_samples().astype(float)
         if bg_ss:
@@ -265,6 +259,8 @@ class MLPClassifier(TFModelBase):
 
 
 class MultiEventClassifier(TFModelBase):
+    """A classifier for spectra from multiple detectors observing the same event."""
+
     def __init__(self, hidden_layers: tuple = (512,), activation: str = "relu",
                  loss: str = "categorical_crossentropy",
                  optimizer: Any = Adam(
@@ -274,25 +270,17 @@ class MultiEventClassifier(TFModelBase):
                  metrics: list = ["accuracy", "categorical_crossentropy", multi_f1, single_f1],
                  l2_alpha: float = 1e-4, activity_regularizer: tf.keras.regularizers = l1(0),
                  dropout: float = 0.0, learning_rate: float = 0.01):
-        """Initializes the classifier.
-        The model is implemented as a tf.keras.Model object.
-
+        """
         Args:
-            hidden_layers: Defines a tuple containing the number and size of dense layers.
-            activation: Defines the activate function to use for each dense layer.
-            loss: Defines the string name of the loss function to use for training.
-            optimizer: Defines the string name of the optimizer to use for training.
-            metrics: Defines a list of metrics to be evaluating during training.
-            l2_alpha: Defines the alpha value for the L2 regularization of each dense layer.
-            activity_regularizer: Defines the regularizer function applied each dense layer output.
-            dropout: Defines the amount of dropout to apply to each dense layer.
-            learning_rate: the learning rate to use for an Adam optimizer.
-
-        Returns:
-            None.
-
-        Raises:
-            None.
+            hidden_layers: tuple containing the number and size of dense layers
+            activation: activate function to use for each dense layer
+            loss: string name of the loss function to use for training
+            optimizer: string name of the optimizer to use for training
+            metrics: list of metrics to be evaluating during training
+            l2_alpha: alpha value for the L2 regularization of each dense layer
+            activity_regularizer: regularizer function applied each dense layer output
+            dropout: amount of dropout to apply to each dense layer
+            learning_rate: learning rate to use for an Adam optimizer
         """
         super().__init__()
 
@@ -316,35 +304,32 @@ class MultiEventClassifier(TFModelBase):
             val_model_target_contributions: pd.DataFrame = None,
             patience: int = 15, es_monitor: str = "val_loss", es_mode: str = "min",
             es_verbose: bool = False, target_level="Isotope", verbose: bool = False):
-        """Fits a model to the given SampleSet(s).
+        """Fit a model to the given SampleSet(s).
 
         Args:
-            list_of_ss: Defines a list of SampleSets which have prediction_probas populated from
-                single-event classifiers.
-            target_contributions: Defines a DataFrame of the contributions for each
+            list_of_ss: list of `SampleSet`s which have prediction_probas populated from
+                single-event classifiers
+            target_contributions: DataFrame of the contributions for each
                 observation. Column titles are the desired label strings.
-            batch_size: Defines the number of samples per gradient update.
-            epochs: Defines the maximum number of training iterations.
-            validation_split: Defines the percentage of the training data to use as validation data.
-            callbacks: Defines a list of callbacks to be passed to TensorFlow Model.fit() method.
-            val_model_ss_list: Defines an optionally-provided validation set to be used instead of
-                taking a portion of `ss` for validation.
-            val_model_target_contributions: Defines the target contributions to the model for
-                each sample.
-            patience: Defines the number of epochs to wait for tf.keras.callbacks.EarlyStopping
-                object.
-            es_monitor: Defintes the quantity to be monitored for tf.keras.callbacks.EarlyStopping
-                object.
-            es_mode: Defines the mode for tf.keras.callbacks.EarlyStopping object.
-            es_verbose: Determines the verbosity level for tf.keras.callbacks.EarlyStopping object.
-            target_level: The source level to target for model output.
-            verbose: Determines whether or not the training output is printed to the terminal.
+            batch_size: number of samples per gradient update
+            epochs: maximum number of training iterations
+            validation_split: percentage of the training data to use as validation data
+            callbacks: list of callbacks to be passed to TensorFlow Model.fit() method
+            val_model_ss_list: validation set to be used instead of taking a portion of the
+                training data
+            val_model_target_contributions: target contributions to the model for each sample
+            patience: number of epochs to wait for `tf.keras.callbacks.EarlyStopping` object
+            es_monitor: quantity to be monitored for `tf.keras.callbacks.EarlyStopping` object
+            es_mode: mode for `tf.keras.callbacks.EarlyStopping` object
+            es_verbose: verbosity level for `tf.keras.callbacks.EarlyStopping` object
+            target_level: source level to target for model output
+            verbose: whether to show detailed training output
 
         Returns:
-            A tf.History object.
+            `tf.History` object
 
         Raises:
-            ValueError: Raised when no predictions are provided with `list_of_ss` input.
+            `ValueError` when no predictions are provided with `list_of_ss` input
         """
         if len(list_of_ss) <= 0:
             raise ValueError("No model predictions provided!")
@@ -438,14 +423,13 @@ class MultiEventClassifier(TFModelBase):
         return history
 
     def predict(self, list_of_ss: List[SampleSet]) -> pd.DataFrame:
-        """Classifies the spectra in the provided SampleSet(s) based on each Sampleset's results.
+        """Classify the spectra in the provided `SampleSet`(s) based on each one's results.
 
         Args:
-            list_of_ss: Defines a list of SampleSets which had predictions made by
-                single-event models.
+            list_of_ss: list of `SampleSet`s which had predictions made by single-event models
 
         Returns:
-            A DataFrame of predicted results for the Sampleset(s).
+            `DataFrame` of predicted results for the `Sampleset`(s)
         """
         X = [ss.prediction_probas for ss in list_of_ss]
         results = self.model.predict(X)  # output size will be n_samples by n_labels
@@ -536,44 +520,40 @@ class LabelProportionEstimator(TFModelBase):
                  dropout: float = 0.0, target_level: str = "Seed", ood_fp_rate: float = 0.05,
                  spline_bins: int = 15, spline_k: int = 3, spline_s: int = 0, spline_snrs=None,
                  spline_recon_errors=None, history=None, _info=None, **base_kwargs):
-        """Initializes the classifier.
-
-        The model is implemented as a tf.keras.Sequential object.
-
+        """
         Args:
-            hidden_layers: tuple defining the number and size of dense layers.
-            sup_loss: supervised loss function to use for training.
+            hidden_layers: tuple defining the number and size of dense layers
+            sup_loss: supervised loss function to use for training
             unsup_loss: unsupervised loss function to use for training the
-                foreground branch of the network.  Options: "sse", "poisson_nll",
-                "normal_nll", or "weighted_sse".
-            beta: tradeoff parameter between the supervised and unsupervised foreground loss.
-            source_dict: 2D array of pure, long-collect foreground spectra.
-            optimizer: tensorflow optimizer or optimizer name to use for training.
-            learning_rate: learning rate for the foreground optimizer.
-            epsilon: epsilon constant for the Adam optimizer.
-            hidden_layer_activation: activattion function to use for each dense layer.
-            kernel_l1_regularization: l1 regularization value for the kernel regularizer.
-            kernel_l2_regularization: l2 regularization value for the kernel regularizer.
-            bias_l1_regularization: l1 regularization value for the bias regularizer.
-            bias_l2_regularization: l2 regularization value for the bias regularizer.
-            activity_l1_regularization: l1 regularization value for the activity regularizer.
-            activity_l2_regularization: l2 regularization value for the activity regularizer.
-            dropout: amount of dropout to apply to each dense layer.
-            target_level: ground truth level the model will target.
-                Options are: "Category", "Isotope", or "Seed".
+                foreground branch of the network (options: "sse", "poisson_nll",
+                "normal_nll", or "weighted_sse")
+            beta: tradeoff parameter between the supervised and unsupervised foreground loss
+            source_dict: 2D array of pure, long-collect foreground spectra
+            optimizer: tensorflow optimizer or optimizer name to use for training
+            learning_rate: learning rate for the foreground optimizer
+            epsilon: epsilon constant for the Adam optimizer
+            hidden_layer_activation: activattion function to use for each dense layer
+            kernel_l1_regularization: l1 regularization value for the kernel regularizer
+            kernel_l2_regularization: l2 regularization value for the kernel regularizer
+            bias_l1_regularization: l1 regularization value for the bias regularizer
+            bias_l2_regularization: l2 regularization value for the bias regularizer
+            activity_l1_regularization: l1 regularization value for the activity regularizer
+            activity_l2_regularization: l2 regularization value for the activity regularizer
+            dropout: amount of dropout to apply to each dense layer
+            target_level: `SampleSet.sources` column level to use
             ood_fp_rate: false positive rate used to determine threshold for
-                out-of-distribution (OOD) detection.
+                out-of-distribution (OOD) detection
             spline_bins: number of bins used when fitting the UnivariateSpline threshold
-                function for OOD detection.
-            spline_k: degree of smoothing for the UnivariateSpline.
+                function for OOD detection
+            spline_k: degree of smoothing for the UnivariateSpline
             spline_s: positive smoothing factor used to choose the number of knots in the
                 UnivariateSpline (s=0 forces the spline through all the datapoints, equivalent to
-                InterpolatedUnivariateSpline).
-            spline_snrs: SNRs from training used as the x-values to fit the UnivariateSpline.
+                InterpolatedUnivariateSpline)
+            spline_snrs: SNRs from training used as the x-values to fit the UnivariateSpline
             spline_recon_errors: reconstruction errors from training used as the y-values to
-                fit the UnivariateSpline.
-            history: dictionary of training/val history, automatically filled when loading model.
-            _info: internal dictionary uses to store target level and output columns.
+                fit the UnivariateSpline
+            history: dictionary of training/val history, automatically filled when loading model
+            _info: internal dictionary uses to store target level and output columns
         """
         super().__init__(**base_kwargs)
 
@@ -724,36 +704,30 @@ class LabelProportionEstimator(TFModelBase):
             es_mode: str = "min", es_verbose=0, es_min_delta: float = 0.0,
             normalize_sup_loss: bool = True, normalize_func=tf.math.tanh,
             normalize_scaler: float = 1.0, verbose: bool = False):
-        """Fits a model to the given SampleSet(s).
+        """Fit a model to the given SampleSet(s).
 
         Args:
-            seeds_ss: SampleSet of pure, long-collect spectra.
-            ss: SampleSet of `n` gross or foreground spectra where `n` >= 1.
-            bg_cps: background rate assumption used for calculating SNR in spline
-                function using in OOD detection.
-            is_gross: whether `ss` contains gross spectra.
-            batch_size: number of samples per gradient update.
-            epochs: maximum number of training iterations.
-            validation_split: proportion of training data to use as validation data.
-            callbacks: list of callbacks to be passed to TensorFlow Model.fit() method.
-            patience: number of epochs to wait for tf.keras.callbacks.EarlyStopping object.
-            es_monitor: quantity to be monitored for tf.keras.callbacks.EarlyStopping object.
-            es_mode: mode for tf.keras.callbacks.EarlyStopping object.
-            es_verbose: verbosity level for tf.keras.callbacks.EarlyStopping object.
-            es_min_delta: minimum change to count as an improvement for early stopping.
-            normalize_sup_loss: whether or not to normalize the supervised loss term.
-            normalize_func: normalization function used for supervised loss term.
-            normalize_scaler: scalar that sets the steepness of the normalization function.
-            verbose: whether or not model training output is printed to the terminal.
-
-        Returns:
-            None
-
-        Raises:
-            ValueError: Raised when no spectra are provided as `fg_ss` input.
+            seeds_ss: `SampleSet` of pure, long-collect spectra
+            ss: `SampleSet` of `n` gross or foreground spectra where `n` >= 1
+            bg_cps: background rate assumption used for calculating SNR in spline function
+                using in OOD detection
+            is_gross: whether `ss` contains gross spectra
+            batch_size: number of samples per gradient update
+            epochs: maximum number of training iterations
+            validation_split: proportion of training data to use as validation data
+            callbacks: list of callbacks to be passed to TensorFlow Model.fit() method
+            patience: number of epochs to wait for tf.keras.callbacks.EarlyStopping object
+            es_monitor: quantity to be monitored for tf.keras.callbacks.EarlyStopping object
+            es_mode: mode for tf.keras.callbacks.EarlyStopping object
+            es_verbose: verbosity level for tf.keras.callbacks.EarlyStopping object
+            es_min_delta: minimum change to count as an improvement for early stopping
+            normalize_sup_loss: whether to normalize the supervised loss term
+            normalize_func: normalization function used for supervised loss term
+            normalize_scaler: scalar that sets the steepness of the normalization function
+            verbose: whether model training output is printed to the terminal
         """
         spectra = ss.get_samples().astype(float)
-        sources_df = ss.get_source_contributions(target_level=self._info["target_level"])
+        sources_df = ss.sources.groupby(axis=1, level=self._info["target_level"]).sum()
         sources = sources_df.values.astype(float)
         self.sources_columns = sources_df.columns
 
@@ -845,16 +819,16 @@ class LabelProportionEstimator(TFModelBase):
         return history
 
     def predict(self, ss: SampleSet, bg_cps: int = 300, is_gross: bool = False):
-        """Estimates the proportions of counts present in each sample of the provided SampleSet.
+        """Estimate the proportions of counts present in each sample of the provided SampleSet.
 
         Results are stored inside the SampleSet's prediction_probas property.
 
         Args:
-            ss: SampleSet of `n` foreground or gross spectra where `n` >= 1.
+            ss: `SampleSet` of `n` foreground or gross spectra where `n` >= 1
             bg_cps: background rate used for estimating sample SNRs.
                 If background rate varies to a significant degree, split up sampleset
                 by SNR and make multiple calls to this method.
-            is_gross: whether `ss` contains gross spectra.
+            is_gross: whether `ss` contains gross spectra
         """
         test_spectra = ss.get_samples().astype(float)
 
@@ -899,13 +873,13 @@ class LabelProportionEstimator(TFModelBase):
         ss.info["ood"] = recon_errors > thresholds
 
     def save(self, file_path) -> Tuple[str, str]:
-        """Saves the model in ONNX format.
+        """Save the model in ONNX format.
 
         Args:
-            file_path: path at which to save the model.
+            file_path: file path at which to save the model
 
         Returns:
-            Tuple containing path to model and additional info.
+            Tuple containing path to model and additional info
         """
         model_info_path, model_path = \
             self._get_model_file_paths(file_path)
@@ -930,11 +904,10 @@ class LabelProportionEstimator(TFModelBase):
         return model_info_path, model_path
 
     def load(self, file_path):
-        """Load the model from ONNX format (in place).
+        """Load the model from ONNX format in place.
 
         Args:
-            file_path: path from which to load the model.
-
+            file_path: path from which to load the model
         """
         model_info_path, model_path = \
             self._get_model_file_paths(file_path)

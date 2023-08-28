@@ -50,10 +50,10 @@ class TestSeedMixer(unittest.TestCase):
 
     def test_mixture_ratios(self):
         # check for valid probability distribution
-        for each in self.two_mix_seeds_ss.get_source_contributions(target_level="Isotope").values:
+        for each in self.two_mix_seeds_ss.get_source_contributions(target_level="Isotope"):
             self.assertAlmostEqual(each.sum(), 1.0)
 
-        for each in self.three_mix_seeds_ss.get_source_contributions(target_level="Isotope").values:
+        for each in self.three_mix_seeds_ss.get_source_contributions(target_level="Isotope"):
             self.assertAlmostEqual(each.sum(), 1.0)
 
     def test_mixture_number(self):

@@ -8,17 +8,17 @@ import sklearn
 from riid.data import SampleSet
 
 
-def multi_f1(y_true: np.ndarray, y_pred: np.ndarray):
-    """This metric provides a measure of the F1 score of two tensors.
-    Values for y_true and y_pred are assumed to sum to 1.
+def multi_f1(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """Calculate a measure of the F1 score of two tensors.
+
+    Values for `y_true` and `y_pred` are assumed to sum to 1.
 
     Args:
-        y_true: Defines a list of ground truth.
-        y_pred: Defines a list of predictions to compare against the ground truth.
+        y_true: list of ground truth
+        y_pred: list of predictions to compare against the ground truth
 
     Returns:
-        The custom loss score for two tensors.
-
+        Multi F1-score value(s)
     """
     from keras import backend as K
 
@@ -31,16 +31,16 @@ def multi_f1(y_true: np.ndarray, y_pred: np.ndarray):
 
 
 def single_f1(y_true: np.ndarray, y_pred: np.ndarray):
-    """ Computes the weighted F1 score for the maximum prediction and maximum
-    ground truth. Values for y_true and y_pred are assumed to sum to 1.
+    """Compute the weighted F1 score for the maximum prediction and maximum ground truth.
+
+    Values for `y_true` and `y_pred` are assumed to sum to 1.
 
     Args:
-        y_true: Defines a list of ground truth.
-        y_pred: Defines a list of predictions to compare against the ground truth.
+        y_true: list of ground truth
+        y_pred: list of predictions to compare against the ground truth
 
     Returns:
-        Returns the custom loss score.
-
+        F1-score value(s)
     """
     import tensorflow as tf
     from keras import backend as K
@@ -64,21 +64,20 @@ def single_f1(y_true: np.ndarray, y_pred: np.ndarray):
 
 
 def harmonic_mean(x, y):
-    """Computes the harmonic mean of two same-dim arrays.
+    """Compute the harmonic mean of two same-dimensional arrays.
 
     Used to compute F1 score:
 
-        ```
-        f1_score = harmonic_mean(precision, recall)
-        ```
+    ```
+    f1_score = harmonic_mean(precision, recall)
+    ```
 
     Args:
         x (array-like): numeric or array_like of numerics
         y (array-like): numeric or array_like of numerics matching the shape/type of `x`
 
     Returns:
-        (array-like): the harmonic mean of `x` and `y`
-
+        Array-like harmonic mean of `x` and `y`
     """
     return 2 * x * y / (x + y)
 
@@ -94,7 +93,7 @@ def precision_recall_curve(ss: SampleSet, smooth: bool = True, multiclass: bool 
     all predictions are discarded except for the argmax.
 
     Args:
-        ss: a SampleSet that predictions were generated on
+        ss: `SampleSet` that predictions were generated on
         smooth: if True, precision is smoothing is applied to make a monotonically
             decreasing precision function
         multiclass: set to True if this is a multi-class (i.e. y_true is one-hot) as
@@ -105,17 +104,16 @@ def precision_recall_curve(ss: SampleSet, smooth: bool = True, multiclass: bool 
             not guaranteed to reach 1.0.
         include_micro: if True, compute an additional precision and recall for the
             micro-average across all labels and put it under entry `"micro"`
-        target_level: true labels are extracted from `ss.sources` at the target column index level
-            ("Category", "Isotope", "Seed", ...)
+        target_level: `SampleSet.sources` and `SampleSet.prediction_probas` column level to use
         minimum_contribution: threshold for a source to be considered a ground truth positive
             label. if this is set to `None` the raw mixture ratios will be used as y_true.
 
     Returns:
-        precision (dict): a dict with keys for each label and values that are the
+        precision (dict): dict with keys for each label and values that are the
             monotonically increasing precision values at each threshold
-        recall (dict): a dict with keys for each label and values that are the
+        recall (dict): dict with keys for each label and values that are the
             monotonically decreasing recall values at each threshold
-        thresholds (dict): a dict with keys for each label and values that are the
+        thresholds (dict): dict with keys for each label and values that are the
             monotonically increasing thresholds on the decision function used to compute
             precision and recall
 
@@ -185,7 +183,7 @@ def precision_recall_curve(ss: SampleSet, smooth: bool = True, multiclass: bool 
 
 
 def average_precision_score(precision, recall):
-    """Computes the average precision (area under the curve) for each precision/recall
+    """Compute the average precision (area under the curve) for each precision/recall
     pair.
 
     Args:
@@ -199,13 +197,13 @@ def average_precision_score(precision, recall):
 
 
 def _step(x):
-    """Computes the right going maximum of `x` and all previous values of `x`.
+    """Compute the right going maximum of `x` and all previous values of `x`.
 
     Args:
-        x (array-like): the 1D array to process
+        x (array-like): 1D array to process
 
     Returns:
-        (array-like): the right-going maximum of `x`
+        (array-like): right-going maximum of `x`
 
     """
     y = np.array(x)
@@ -215,15 +213,15 @@ def _step(x):
 
 
 def _integrate(x, y, y_left=True):
-    """Integrates an (x, y) function pair.
+    """Integrate an (x, y) function pair.
 
     Args:
-        x (array-like): the 1D array of x values
-        y (array-like): the 1D array of y values
+        x (array-like): 1D array of x values
+        y (array-like): 1D array of y values
         y_left: if true, omit the last value of y, else, omit the first value
 
     Returns:
-        (float): the integrated "area under the curve"
+        (float): integrated "area under the curve"
 
     """
     delta_x = x[1:] - x[:-1]

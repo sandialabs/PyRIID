@@ -8,15 +8,14 @@ from keras import backend as K
 
 
 def negative_log_f1(y_true: np.ndarray, y_pred: np.ndarray):
-    """Implements custom negative log F1 loss score for use in multi-isotope classifiers.
+    """Calculate negative log F1 score.
 
     Args:
-        y_true: Defines a list of ground truth.
-        y_pred: Defines a list of predictions to compare against the ground truth.
+        y_true: list of ground truth
+        y_pred: list of predictions to compare against the ground truth
 
     Returns:
-        The custom loss score on a log scale.
-
+        Custom loss score on a log scale
     """
     diff = y_true - y_pred
     negs = K.clip(diff, -1.0, 0.0)
@@ -29,15 +28,14 @@ def negative_log_f1(y_true: np.ndarray, y_pred: np.ndarray):
 
 
 def negative_f1(y_true, y_pred):
-    """Implements custom negative F1 loss score for use in multi-isotope classifiers.
+    """Calculate negative F1 score.
 
     Args:
-        y_true: Defines a list of ground truth.
-        y_pred: Defines a list of predictions to compare against the ground truth.
+        y_true: list of ground truth
+        y_pred: list of predictions to compare against the ground truth
 
     Returns:
-        The custom loss score.
-
+        Custom loss score
     """
     diff = y_true - y_pred
     negs = K.clip(diff, -1.0, 0.0)
@@ -59,8 +57,8 @@ def build_keras_semisupervised_loss_func(supervised_loss_func,
     def _semisupervised_loss_func(data, y_pred):
         """
         Args:
-            data: Contains true labels and input features (spectra).
-            y_pred: Model output (unactivated logits).
+            data: Contains true labels and input features (spectra)
+            y_pred: Model output (unactivated logits)
         """
         y_true = data[:, :n_labels]
         spectra = data[:, n_labels:]
@@ -81,13 +79,13 @@ def build_keras_semisupervised_loss_func(supervised_loss_func,
 
 
 def sse_diff(spectra, reconstructed_spectra):
-    """Computes the sum of squares error.
+    """Compute the sum of squares error.
 
     TODO: refactor to assume spectral inputs are in the same form
 
     Args:
-        spectra: the spectral samples, assumed to be in counts
-        reconstructed_spectra: the reconstructed spectra created using a
+        spectra: spectral samples, assumed to be in counts
+        reconstructed_spectra: reconstructed spectra created using a
             dictionary with label proportion estimates
     """
     total_counts = tf.reduce_sum(spectra, axis=-1)
@@ -102,13 +100,13 @@ def sse_diff(spectra, reconstructed_spectra):
 
 
 def poisson_nll_diff(spectra, reconstructed_spectra, eps=1e-8):
-    """Computes the Poisson Negative Log-Likelihood.
+    """Compute the Poisson Negative Log-Likelihood.
 
     TODO: refactor to assume spectral inputs are in the same form
 
     Args:
-        spectra: the spectral samples, assumed to be in counts
-        reconstructed_spectra: the reconstructed spectra created using a
+        spectra: spectral samples, assumed to be in counts
+        reconstructed_spectra: reconstructed spectra created using a
             dictionary with label proportion estimates
     """
     total_counts = tf.reduce_sum(spectra, axis=-1)
@@ -128,13 +126,13 @@ def poisson_nll_diff(spectra, reconstructed_spectra, eps=1e-8):
 
 
 def normal_nll_diff(spectra, reconstructed_spectra, eps=1e-8):
-    """Computes the Normal Negative Log-Likelihood.
+    """Compute the Normal Negative Log-Likelihood.
 
     TODO: refactor to assume spectral inputs are in the same form
 
     Args:
-        spectra: the spectral samples, assumed to be in counts
-        reconstructed_spectra: the reconstructed spectra created using a
+        spectra: spectral samples, assumed to be in counts
+        reconstructed_spectra: reconstructed spectra created using a
             dictionary with label proportion estimates
     """
     total_counts = tf.reduce_sum(spectra, axis=-1)
@@ -154,12 +152,12 @@ def normal_nll_diff(spectra, reconstructed_spectra, eps=1e-8):
 
 
 def weighted_sse_diff(spectra, reconstructed_spectra):
-    """ Computes the Normal Negative Log-Likelihood under constant variance
+    """Compute the Normal Negative Log-Likelihood under constant variance
     (this reduces to the SSE, just on a different scale).
 
     Args:
-        spectra: the spectral samples, assumed to be in counts
-        reconstructed_spectra: the reconstructed spectra created using a
+        spectra: spectral samples, assumed to be in counts
+        reconstructed_spectra: reconstructed spectra created using a
             dictionary with label proportion estimates
     """
     total_counts = tf.reduce_sum(spectra, axis=1)

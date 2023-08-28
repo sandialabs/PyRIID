@@ -1,7 +1,9 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
-"""This modules contains utilities for synthesizing gamma spectra as static collections."""
+"""This module contains utilities for synthesizing gamma spectra
+based on a source moving past a detector.
+"""
 from time import time
 from typing import Tuple
 
@@ -18,6 +20,7 @@ class StaticSynthesizer(Synthesizer):
     The "seed" templates are count-normalized spectra representing signature shapes of interest.
     The static synthesizer takes the seeds you have chosen and scales them up in terms of three
     components:
+
     - live time (the amount of time over which the spectrum was collected/integrated)
     - signal-to-noise ratio (SNR) (source counts divided by the square root of background counts,
       i.e., the number of standard deviations above background)
@@ -37,19 +40,18 @@ class StaticSynthesizer(Synthesizer):
                  normalize_sources: bool = True,
                  return_fg: bool = True, return_gross: bool = False,
                  rng: Generator = np.random.default_rng()) -> None:
-        """Constructs a static collection synthesizer.
-
-        Arguments:
-            samples_per_seed: Defines the number of synthetic samples to generate
-                per source-background seed pair.
-            live_time_function: Defines the string that names the method of sampling
-                for target live time values. Options: uniform; log10; discrete; list.
-            live_time_function_args: Defines the range of values which are sampled in the
-                fashion specified by the `live_time_function` argument.
-            snr_function: Defines the string that names the method of sampling for target
-                signal-to-noise ratio values. Options: uniform; log10; discrete; list.
-            snr_function_args: Defines the range of values which are sampled in the fashion
-                specified by the `snr_function` argument.
+        """
+        Args:
+            samples_per_seed: number of synthetic samples to generate
+                per source-background seed pair
+            live_time_function: string that names the method of sampling
+                for target live time values (options: uniform, log10, discrete, list)
+            live_time_function_args: range of values which are sampled in the
+                fashion specified by the `live_time_function` argument
+            snr_function: string that names the method of sampling for target
+                signal-to-noise ratio values (options: uniform, log10, discrete, list)
+            snr_function_args: range of values which are sampled in the fashion
+                specified by the `snr_function` argument
         """
         super().__init__(bg_cps, long_bg_live_time, apply_poisson_noise, normalize_sources,
                          return_fg, return_gross, rng)
@@ -67,7 +69,7 @@ class StaticSynthesizer(Synthesizer):
         """Get or set the number of samples to create per seed (excluding the background seed).
 
         Raises:
-            TypeError: Raised if provided samples_per_seed is not an integer.
+            `TypeError` when provided samples_per_seed is not an integer.
         """
         return self._samples_per_seed
 
@@ -83,7 +85,7 @@ class StaticSynthesizer(Synthesizer):
         """Get or set the function used to randomly sample the desired live time space.
 
         Raises:
-            ValueError: Raised when an unsupported function type is provided.
+            `ValueError` when an unsupported function type is provided.
         """
         return self._live_time_function
 
@@ -108,7 +110,7 @@ class StaticSynthesizer(Synthesizer):
         ratio space.
 
         Raises:
-            ValueError: Raised when an unsupported function type is provided.
+            `ValueError` when an unsupported function type is provided.
         """
         return self._snr_function
 
@@ -190,31 +192,32 @@ class StaticSynthesizer(Synthesizer):
 
     def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet,
                  verbose: bool = True) -> Tuple[SampleSet, SampleSet, SampleSet]:
-        """Generate a sample set of gamma spectra from the given config.
+        """Generate a `SampleSet` of gamma spectra from the provided config.
 
         Args:
             fg_seeds_ss: spectra normalized by total counts to be used
-                as the source component(s) of spectra.
+                as the source component(s) of spectra
             bg_seeds_ss: spectra normalized by total counts to be used
-                as the background components of gross spectra.
-            fixed_bg_ss: a single spectrum to be used as a fixed (or intrinsic)
+                as the background components of gross spectra
+            fixed_bg_ss: single spectrum to be used as a fixed (or intrinsic)
                 background source; live time information must be present.
                 This spectrum is used to represent things like:
+
                 - cosmic background (which is location-specific);
                 - one or more calibration sources; or
                 - intrinsic counts from the detector material (e.g., LaBr3).
+
                 This spectrum will form the base of each background spectrum where seeds in
                 `bg_seeds_ss`, which represent mixtures of K-U-T, get added on top.
                 Note: this spectrum is not considered part of the `bg_cps` parameter,
-                but is instead added on top of it. This parameter is optional.
-            verbose: whether to display output from synthesis.
+                but is instead added on top of it.
+            verbose: whether to show detailed output
 
         Returns:
-            A tuple of synthetic foreground, background, and gross spectra.
+            Tuple of synthetic foreground, background, and gross spectra
 
         Raises:
-            ValueError: Raised when a seed spectrum does not sum close to 1.
-
+            `ValueError` when a seed spectrum does not sum close to 1
         """
         if not fg_seeds_ss or not bg_seeds_ss:
             raise ValueError("At least one foreground and background seed must be provided.")
