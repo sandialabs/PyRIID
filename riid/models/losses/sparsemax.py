@@ -11,7 +11,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 
-#     http://www.apache.org/licenses/LICENSE-2.0
+# http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -49,15 +49,14 @@ def sparsemax(logits, axis: int = -1) -> tf.Tensor:
            [0., 0., 1.]], dtype=float32)>
 
     Args:
-        logits: A `Tensor`.
-        axis: `int`, axis along which the sparsemax operation is applied.
+        logits: `Tensor`
+        axis: `int`, axis along which the sparsemax operation is applied
 
     Returns:
-        A `Tensor`, output of sparsemax transformation. Has the same type and
-        shape as `logits`.
+        `Tensor`, output of sparsemax transformation (has the same type and shape as `logits`)
 
     Raises:
-        ValueError: In case `dim(logits) == 1`.
+        `ValueError` when `dim(logits) == 1`
     """
     logits = tf.convert_to_tensor(logits, name="logits")
 
@@ -105,7 +104,7 @@ def _swap_axis(logits, dim_index, last_index, **kwargs):
 
 
 def _compute_2d_sparsemax(logits):
-    """Performs the sparsemax operation when axis=-1."""
+    """Perform the sparsemax operation when axis=-1."""
     shape_op = tf.shape(logits)
     obs = tf.math.reduce_prod(shape_op[:-1])
     dims = shape_op[-1]
@@ -172,11 +171,11 @@ def sparsemax_loss(logits, sparsemax, labels, name: Optional[str] = None) -> tf.
     [1]: https://arxiv.org/abs/1602.02068
 
     Args:
-      logits: A `Tensor`. Must be one of the following types: `float32`,
+      logits: `Tensor`. Must be one of the following types: `float32`,
         `float64`.
-      sparsemax: A `Tensor`. Must have the same type as `logits`.
-      labels: A `Tensor`. Must have the same type as `logits`.
-      name: A name for the operation (optional).
+      sparsemax: `Tensor`. Must have the same type as `logits`.
+      labels: `Tensor`. Must have the same type as `logits`.
+      name: name for the operation (optional).
 
     Returns:
       A `Tensor`. Has the same type as `logits`.
@@ -246,7 +245,7 @@ class SparsemaxLoss(tf.keras.losses.Loss):
         is `True`, meaning `y_pred` is the logits.
       reduction: (Optional) Type of `tf.keras.losses.Reduction` to apply to
         loss. Default value is `SUM_OVER_BATCH_SIZE`.
-      name: Optional name for the op.
+      name: Optional name for the op
     """
 
     @typechecked

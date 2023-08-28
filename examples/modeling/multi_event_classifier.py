@@ -44,7 +44,11 @@ model2.predict(train2b_ss, train2b_bg_ss)
 
 # Train MultiEvent model
 mec = MultiEventClassifier()
-mec.fit([train2a_ss, train2b_ss], train2a_ss.get_source_contributions(), epochs=50)
+mec.fit(
+    [train2a_ss, train2b_ss],
+    train2a_ss.sources.groupby(axis=1, level="Isotope").sum(),
+    epochs=50
+)
 
 # Make predictions on multi model
 
@@ -59,7 +63,7 @@ m2_f1_score = f1_score(train2b_ss.get_predictions(),
                        average="weighted")
 
 multi_f1_score = f1_score(multi_preds.values.argmax(axis=1),
-                          train2a_ss.get_source_contributions().values.argmax(axis=1),
+                          train2a_ss.get_source_contributions().argmax(axis=1),
                           average="weighted")
 
 results_str = (

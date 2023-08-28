@@ -17,23 +17,21 @@ class PoissonNChannelEventDetector():
 
     This algorithm assumes that the background environment will be consistent over known timescales.
     I.e., this algorithm is only intended for static detector, mobile source scenarios.
-
     """
 
     def __init__(self, long_term_duration: int = 120, short_term_duration: int = 1,
                  pre_event_duration: int = 5, max_event_duration: float = 120,
                  post_event_duration: int = 1.5, tolerable_false_alarms_per_day: float = 1.0,
                  anomaly_threshold_update_interval: float = 60):
-        """Initializes an event detector object.
-
+        """
         Args:
-            long_term_duration: the duration (in seconds) of the long-term buffer;
+            long_term_duration: duration (in seconds) of the long-term buffer;
                 this buffer contains background samples only if the correctness of the algorithm
                 and environmental assumptions both hold.  A longer duration is often better with
                 the trade-off eventually becoming RAM (to store all of the spectra in the buffer)
                 and waiting time vs. converging on actually seeing the desired number of tolerable
                 false alarms per day.
-            short_term_duration: the duration (in seconds) of the short-term buffer;
+            short_term_duration: duration (in seconds) of the short-term buffer;
                 this buffer can contain background and/or anomalous samples.
                 This is the buffer of "most recent" samples that is compared to the long-term buffer
                 in order to determine if an anomaly is present.  The basic question asked by this
@@ -41,17 +39,17 @@ class PoissonNChannelEventDetector():
                 seen in my long-term buffer?  If so, it's an anomaly so I'll add it to the event
                 buffer.  If not, it's background so I'll add it to the long-term buffer."
                 A short-term duration close to the measurement duration is recommended.
-            pre_event_duration: the duration (in seconds) specifying the amount of pre-event,
+            pre_event_duration: duration (in seconds) specifying the amount of pre-event,
                 background samples to include in the event result (but not summed into the event
                 spectrum) in order to visualize the run-up to the anomaly.
-            max_event_duration: the maximum duration (in seconds) of the event buffer.
+            max_event_duration: maximum duration (in seconds) of the event buffer.
                 If anomalies remain present for more than this specified amount of time, the object
                 will produce an event so that something is reported.  A new event will likely then
                 be started on the subsequent measurement if the anomaly is still present.
-            post_event_duration: the duration (in seconds) that determines the number of
+            post_event_duration: duration (in seconds) that determines the number of
                 consecutive, insignificant measurements (i.e., measurements which are not considered
                 anomalies) that must be observed in order to end an event.
-            tolerable_false_alarms_per_day: the DESIRED maximum number of allowable false
+            tolerable_false_alarms_per_day: DESIRED maximum number of allowable false
                 positive events per day for all spectrum channels.  The actual observed outcome of
                 this parameter primarily depends on the long-term duration (although other
                 parameters such as the short-term duration and limit update frequency also play a
@@ -75,7 +73,7 @@ class PoissonNChannelEventDetector():
                 do? The simple answer is leave this parameter at its default, and then accept the
                 reality of physics that will inevitably lead you to more false positives due to an
                 unobtainable background characterization. In other words, aim high but be realistic.
-            anomaly_threshold_update_interval: the time (in seconds) between updates to the anomaly
+            anomaly_threshold_update_interval: time (in seconds) between updates to the anomaly
                 probability thresholds.  Since this calculation is expensive relative to the other
                 computations going on, and because background itself usually does not significantly
                 between measurements, this parameter can be used to relax computation.
@@ -108,7 +106,7 @@ class PoissonNChannelEventDetector():
 
     @property
     def event_in_progress(self):
-        """Whether or not an event is in progress."""
+        """Whether an event is in progress."""
         return self._event_in_progress
 
     @property
@@ -220,7 +218,7 @@ class PoissonNChannelEventDetector():
     # endregion
 
     def _reset_stats(self):
-        """Resets the Event Detector stats to zeroed/initial state."""
+        """Reset the Event Detector stats to a zeroed, initial state."""
         self._measurement_duration = None
 
         self._anomalous_count = 0
@@ -246,7 +244,7 @@ class PoissonNChannelEventDetector():
         self._long_term_proba_stats = RunningStats(0, 0, 0)
 
     def clear_background(self):
-        """Clears the short-term buffer, long-term buffer, and stats."""
+        """Clear the short-term buffer, long-term buffer, and stats."""
         with self._short_term_buffer.mutex:
             self._short_term_buffer.queue.clear()
         with self._long_term_buffer.mutex:
@@ -255,15 +253,13 @@ class PoissonNChannelEventDetector():
 
     def add_measurement(self, measurement_id: int, measurement: Union[np.array, int],
                         duration: float, verbose=True):
-        """Adds the next measurement to the event detector.
+        """Add the next measurement to the event detector.
 
         Args:
-            measurement_id: a unique identifier for the measurement.
-            measurement (array-like): a 1D array-like object containing one or more
-                channels of measured data.
-            duration: a float representing the length of time over which the
-                measurement was taken.
-            verbose: whether to print log messages.
+            measurement_id: unique identifier for the measurement
+            measurement: 1D array-like object containing one or more channels of measured data
+            duration: float representing the length of time over which the measurement was taken
+            verbose: whether to print log messages
 
         Returns:
             if adding a spectrum concludes an event, a tuple is returned containing:
@@ -273,7 +269,6 @@ class PoissonNChannelEventDetector():
                 - the duration (in seconds) of the event
                 - list of measurement IDs that comprise the event
             else if adding a spectrum does not conclude event, return None
-
         """
         if self._measurement_duration != duration:
             if verbose:
@@ -413,13 +408,11 @@ class RunningStats(object):
     """Helper for calculating stats in a rolling fashion."""
 
     def __init__(self, window_size, average, variance):
-        """Initializes the RunningStats object.
-
+        """
         Args:
-            window_size: the size of the window across which the probabilities are calculated
-            average: the average within the window
-            variance: the variance within the window
-
+            window_size: size of the window across which the probabilities are calculated
+            average: average within the window
+            variance: variance within the window
         """
         self.N = window_size
         self.average = average
@@ -427,12 +420,11 @@ class RunningStats(object):
         self.stddev = np.sqrt(variance)
 
     def update(self, new, old):
-        """Updates the average, variance, and stddev for the RunningStats.
+        """Update the average, variance, and stddev for the RunningStats.
 
         Args:
-            new: the new probability
-            old: the old probability
-
+            new: new value to include in window
+            old: oldest value in window (this must be externally tracked - queue)
         """
         oldavg = self.average
         newavg = oldavg + (new - old) / self.N

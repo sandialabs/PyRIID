@@ -153,18 +153,14 @@ SEED_TO_ISOTOPE_SPECIAL_CASES = {
 
 
 def _find_isotope(seed: str, verbose=True):
-    """Attempts to find the category for the given seed.
+    """Attempt to find the category for the given seed.
 
     Args:
-        seed: a string containing the isotope name
-        verbose: whether or not log warnings
+        seed: string containing the isotope name
+        verbose: whether log warnings
 
     Returns:
         Isotope if found, otherwise NO_ISOTOPE
-
-    Raises:
-        Exception: raised if multiple isotopes are found
-
     """
     if seed.lower() == BACKGROUND_LABEL.lower():
         return BACKGROUND_LABEL
@@ -193,17 +189,13 @@ def _find_isotope(seed: str, verbose=True):
 
 
 def _find_category(isotope: str):
-    """Attempts to find the category for the given isotope.
+    """Attempt to find the category for the given isotope.
 
     Args:
-        isotope: a string containing the isotope name
+        isotope: string containing the isotope name
 
     Returns:
         Category if found, otherwise NO_CATEGORY
-
-    Raises:
-        Exception: raised if multiple categories are found
-
     """
     if isotope.lower() == BACKGROUND_LABEL.lower():
         return BACKGROUND_LABEL
@@ -228,25 +220,25 @@ def _find_category(isotope: str):
 
 
 def label_to_index_element(label_val: str, label_level="Isotope", verbose=False) -> tuple:
-    """Tries to map a label to a tuple for use in DataFrame MultiIndex columns.
+    """Try to map a label to a tuple for use in `DataFrame` `MultiIndex` columns.
 
     Depending on the level of the label value, you will get different tuple:
-    |`label_level` |Resulting Tuple           |
-    |--------------|--------------------------|
+
+    | Label Level  | Resulting Tuple          |
+    |:-------------|:-------------------------|
     |Seed          |(Category, Isotope, Seed) |
     |Isotope       |(Category, Isotope)       |
     |Category      |(Category,)               |
 
     Args:
-        label_val: The part of the label (Category, Isotope, Seed)
-            from which to map the other two label values, if possible.
-        label_level: The level of the part of the label provided, e.g.
-            "Category", "Isotope", or "Seed."
+        label_val: part of the label (Category, Isotope, Seed)
+            from which to map the other two label values, if possible
+        label_level: level of the part of the label provided, e.g,
+            "Category", "Isotope", or "Seed"
 
     Returns:
-        An n-tuple containing the Category, Isotope, Seed values identified
-            for the old label format.
-
+        Tuple containing the Category, Isotope, and/or Seed values identified
+        for the old label format.
     """
 
     old_label = label_val.strip()
@@ -278,32 +270,29 @@ def label_to_index_element(label_val: str, label_level="Isotope", verbose=False)
 
 
 def isotope_name_is_valid(isotope: str):
-    """Validates whether or not the given string contains a properly formatted
-    radioisotope name.
+    """Validate whether the given string contains a properly formatted radioisotope name.
 
-    Note that this function does NOT look up a string
-    to determine if the string corresponds to a
-    radioisotope that actually exists, it just checks
-    the format.
+    Note that this function does NOT look up a string to determine if the string corresponds
+    to a radioisotope that actually exists, it just checks the format.
 
-    The regular expression used by this function
-    looks for the following (in order):
+    The regular expression used by this function looks for the following (in order):
+
     - 1 capital letter
     - 0 to 1 lowercase letters
     - 1 to 3 numbers
     - an optional "m" for metastable
 
     Examples of properly formatted isotope names:
+
     - Y88
     - Ba133
     - Ho166m
 
     Args:
-        isotope: a string containing the isotope name
+        isotope: string containing the isotope name
 
     Returns:
-        A bool representing whether or not the name string is valid.
-
+        Bool representing whether the name string is valid
     """
     validator = re.compile(r"^[A-Z]{1}[a-z]{0,1}[0-9]{1,3}m?$")
     other_valid_names = ["fiestaware"]

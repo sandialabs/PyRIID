@@ -1,8 +1,8 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
-"""This modules contains utilities for synthesizing gamma spectra for a source moving past a
-detector.
+"""This module contains utilities for synthesizing gamma spectra
+based on a detector moving past a source.
 """
 from time import time
 from typing import List, Tuple
@@ -16,7 +16,8 @@ from riid.data.synthetic import Synthesizer, get_distribution_values
 
 
 class PassbySynthesizer(Synthesizer):
-    """Creates synthetic pass-by events as sequences of gamma spectra."""
+    """Synthesizer for creating pass-by events as sequences of gamma spectra."""
+
     _supported_functions = ["uniform", "log10", "discrete", "list"]
 
     def __init__(self, events_per_seed: int = 2, sample_interval: float = 0.125,
@@ -28,20 +29,18 @@ class PassbySynthesizer(Synthesizer):
                  apply_poisson_noise: bool = True,
                  return_fg: bool = True, return_gross: bool = False,
                  rng: Generator = np.random.default_rng()):
-        """Constructs a pass-by collection synthesizer.
-
+        """
         Args:
-            events_per_seed: Defines the number of pass-bys to generate
-                per source-background seed pair.
-            live_time_function: Defines the string that names the method of sampling
-                for target live time values. Options: uniform; log10; discrete; list.
-            live_time_function_args: Defines the range of values which are sampled in the
-                fashion specified by the `live_time_function` argument.
-            snr_function: Defines the string that names the method of sampling for target
-                signal-to-noise ratio values. Options: uniform; log10; discrete; list.
-            snr_function_args: Defines the range of values which are sampled in the fashion
-                specified by the `snr_function` argument.
-            min_fraction: Minimum proportion of peak amplitude to exclude.
+            events_per_seed: number of pass-bys to generate per source-background seed pair
+            live_time_function: string that names the method of sampling
+                for target live time values (options: uniform, log10, discrete, list)
+            live_time_function_args: range of values which are sampled in the
+                fashion specified by the `live_time_function` argument
+            snr_function: string that names the method of sampling for target
+                signal-to-noise ratio values (options: uniform, log10, discrete, list)
+            snr_function_args: range of values which are sampled in the fashion
+                specified by the `snr_function` argument
+            min_fraction: minimum proportion of peak amplitude to exclude
         """
         super().__init__(bg_cps, long_bg_live_time, apply_poisson_noise, normalize_sources,
                          return_fg, return_gross, rng)
@@ -63,7 +62,7 @@ class PassbySynthesizer(Synthesizer):
         """Get or set the function used to randomly sample the desired dwell time space.
 
         Raises:
-            ValueError: Raised when an unsupported function type is provided.
+            `ValueError` when an unsupported function type is provided
         """
         return self._dwell_time_function
 
@@ -83,19 +82,13 @@ class PassbySynthesizer(Synthesizer):
         self._dwell_time_function_args = value
 
     @property
-    def events_per_seed(self):
+    def events_per_seed(self) -> int:
         """Get or set the number of samples to create per seed (excluding the background seed).
-
-        Raises:
-            TypeError: Raised when provided _events_per_seed value is not of type int or dict.
         """
         return self._events_per_seed
 
     @events_per_seed.setter
     def events_per_seed(self, value):
-        if not isinstance(value, int) and not isinstance(value, dict):
-            raise TypeError("Property 'events_per_seed' key must be of type 'int' or 'dict'!")
-
         self._events_per_seed = value
 
     @property
@@ -104,7 +97,7 @@ class PassbySynthesizer(Synthesizer):
         ratio space.
 
         Raises:
-            ValueError: Raised when an unsupported function type is provided.
+            `ValueError` when an unsupported function type is provided
         """
         return self._fwhm_function
 
@@ -147,7 +140,7 @@ class PassbySynthesizer(Synthesizer):
         (SNR) ratio space.
 
         Raises:
-            ValueError: Raised when an unsupported function type is provided.
+            `ValueError` when an unsupported function type is provided
         """
         return self._snr_function
 
@@ -169,18 +162,15 @@ class PassbySynthesizer(Synthesizer):
     # endregion
 
     def _calculate_passby_shape(self, fwhm: float):
-        """Returns a pass-by shape with maximum of 1 which goes from min_fraction to min_fraction of
-        signal with specified fwhm.
+        """Calculates a pass-by shape with maximum of 1 which goes from min_fraction to
+        min_fraction of signal with specified fwhm.
 
         Args:
-            fwhm: Defines the full width at half maximum value to use for calculating
-                the passby shape.
+            fwhm: full width at half maximum value to use for calculating
+                the passby shape
 
         Returns:
-            The array of floats representing the passby shape.
-
-        Raises:
-            None.
+            Array of floats representing the passby shape
         """
         lim = np.sqrt((1-self.min_fraction)/self.min_fraction)
         samples = np.arange(-lim, lim, self.sample_interval / fwhm / 2)
@@ -189,38 +179,27 @@ class PassbySynthesizer(Synthesizer):
     def _generate_single_passby(self, fwhm: float, snr: float, dwell_time: float,
                                 fg_seed: np.array, bg_seed: np.array, fg_ecal: np.array,
                                 fg_sources: pd.Series, bg_sources: pd.Series):
-        """Generates sampleset with a sequence of spectra representative of a single pass-by.
+        """Generate a `SampleSet` with a sequence of spectra representative of a single pass-by.
 
-            A source template is scaled up and then back down over the duration of a pass-by.
-            The following illustrates a general shape of pass-by's in terms of total counts.
-                        ********
-                      **        **
-                    **            **
-                   *|---- FWHM ----|*
-                  *                  *
-               ***                    ***
-            ***                          ***
-            Each sample (*) represents some number of total counts obtained over
-            `dwell_time / sample_interval` seconds.
+        A source template is scaled up and then back down over the duration of a pass-by in a
+        Gaussian fashion.
+        Each sample has some total counts obtained over `dwell_time / sample_interval` seconds.
 
         Args:
             fwhm: full width at half maximum of the (bell-like) shape of the source count rate
-                over time.
-            snr: overall signal-to-noise ratio (SNR) of the passby event.
-            dwell_time: overall time (seconds) the source is present.
+                over time
+            snr: overall signal-to-noise ratio (SNR) of the passby event
+            dwell_time: overall time (seconds) the source is present
             fg_seed: source template to use for calculating the passby; the value of each
-                channel should be calculated as counts divided by total counts.
+                channel should be calculated as counts divided by total counts
             bg_seed: background template to use for calculating the passby; the value of each
-                channel should be calculated as counts divided by total counts.
-            fg_ecal: The e-cal terms for the provided source seed.
-            fg_sources: underlying ground truth proportions of anomalous sources.
-            bg_sources: underlying ground truth proportions of background sources.
+                channel should be calculated as counts divided by total counts
+            fg_ecal: e-cal terms for the provided source seed
+            fg_sources: underlying ground truth proportions of anomalous sources
+            bg_sources: underlying ground truth proportions of background sources
 
         Returns:
-            A SampleSet object containing the synthesized passby data.
-
-        Raises:
-            None.
+            `SampleSet` object containing the synthesized pass-by data
         """
         event_snr_targets = self._calculate_passby_shape(fwhm) * snr
         dwell_targets = np.zeros(int(dwell_time / self.sample_interval))
@@ -246,25 +225,23 @@ class PassbySynthesizer(Synthesizer):
 
         return fg_ss, gross_ss
 
-    def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet,
-                 verbose: bool = True) \
+    def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet, verbose: bool = True) \
             -> List[Tuple[SampleSet, SampleSet, SampleSet]]:
-        """Generate a list of sample sets where each SampleSets represents a pass-by as a
-        sequence of spectra.
+        """Generate a list of `SampleSet`s where each contains a pass-by as a sequence of spectra.
 
         Args:
-            fg_seeds_ss: spectra normalized by total counts to be used
-                as the source component(s) of spectra.
-            bg_seeds_ss: spectra normalized by total counts to be used
-                as the background components of gross spectra.
-            verbose: whether to display output from synthesis.
+            fg_seeds_ss: spectra normalized by total counts to be used as the
+                source component(s) of spectra
+            bg_seeds_ss: spectra normalized by total counts to be used as the
+                background components of gross spectra
+            verbose: whether to display output from synthesis
 
         Returns:
-            A list of tuples of SampleSets where each tuple represents a pass-by event
-            captured in any or all of three ways: foreground, background, or gross.
+            List of tuples of SampleSets where each tuple represents a pass-by event
 
         Raises:
-            None.
+            `ValueError` when either foreground of background seeds are not provided and if
+            either contain spectra that do not sum to 1
         """
         if not fg_seeds_ss or not bg_seeds_ss:
             raise ValueError("At least one foreground and background seed must be provided.")
@@ -305,7 +282,7 @@ class PassbySynthesizer(Synthesizer):
                                fg_ecal, fg_sources, bg_sources)
                     args.append(pb_args)
 
-        # TODO: the follow prevents periodic progress reports
+        # TODO: follow prevents periodic progress reports
         passbys = [self._generate_single_passby(*a) for a in args]
 
         if verbose:

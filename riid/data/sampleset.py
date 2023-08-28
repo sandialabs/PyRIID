@@ -1,7 +1,7 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
-"""This module contains the SampleSet class and other SampleSet-related functions."""
+"""This module contains the `SampleSet` class and other `SampleSet`-related functions."""
 from __future__ import \
     annotations  # Enables SampleSet hints inside SampleSet itself
 
@@ -31,7 +31,7 @@ from riid.gadras.pcf import (_dict_to_pcf, _pack_compressed_text_buffer,
 
 
 class SpectraState(Enum):
-    """Enumerates the potential states of spectra within a SampleSet."""
+    """States in which SampleSet spectra can exist."""
     Unknown = 0
     Counts = 1
     L1Normalized = 2
@@ -39,7 +39,7 @@ class SpectraState(Enum):
 
 
 class SampleSet():
-    """Container for collection of samples."""
+    """A collection of spectrum samples and their metadata."""
     # pylint: disable=R0902
     # pylint: disable=R0904
     SOURCES_MULTI_INDEX_NAMES = (
@@ -87,13 +87,10 @@ class SampleSet():
     )
 
     def __init__(self):
-        """Initializes the SampleSet class and provides default values
-        for all class attributes.
-
+        """
         Expected sizes for DataFrames:
-            self._spectra:  [n_samples, n_channels]
-            self._sources:  [n_samples, n_sources]
-
+            self._spectra: [n_samples, n_channels]
+            self._sources: [n_samples, n_sources]
         """
         self._spectra = pd.DataFrame()
         self._sources = pd.DataFrame()
@@ -103,7 +100,7 @@ class SampleSet():
         self._prediction_probas = pd.DataFrame()
         self._measured_or_synthetic = None
         self.pyriid_version = riid.__version__
-        self.spectra_state = SpectraState.Unknown
+        self._spectra_state = SpectraState.Unknown
         self._classified_by = ""
 
     def __bool__(self):
@@ -208,12 +205,12 @@ class SampleSet():
         return new_ss
 
     def __add__(self, bg_ss: SampleSet) -> SampleSet:
-        """Adds the given background spectr(um|a) to the spectra of the current SampleSet.
+        """Add the given background spectr(um|a) to the spectra of the current SampleSet.
         """
         return self._get_arithmetic_result(bg_ss, operator.add)
 
     def __sub__(self, bg_ss: SampleSet) -> SampleSet:
-        """Subtracts the given background spectr(um|a) from the spectra of the current SampleSet.
+        """Subtract the given background spectr(um|a) from the spectra of the current SampleSet.
         """
         return self._get_arithmetic_result(bg_ss, operator.sub)
 
@@ -221,7 +218,7 @@ class SampleSet():
 
     @property
     def category_names(self):
-        """Gets the names of the categories involved in this SampleSet."""
+        """Get the names of the categories involved in this SampleSet."""
         return self.sources.columns.get_level_values("Category")
 
     @property
@@ -238,7 +235,7 @@ class SampleSet():
 
     @property
     def detector_info(self):
-        """Get or set the detector info on which this SampleSet is based.
+        """Get or set the detector info on which this `SampleSet` is based.
 
         TODO: implement as DataFrame
         """
@@ -250,10 +247,10 @@ class SampleSet():
 
     @property
     def difficulty_score(self, mean=10.0, std=3.0) -> float:
-        """Computes a metric representing the "difficulty" of the given SampleSet on a
-        scale of 0 to 1, where 0 is easiest and 1 is hardest.
+        """Compute the "difficulty" of the `SampleSet` on a scale of 0 to 1,
+        where 0 is easiest and 1 is hardest.
 
-        The difficulty of a SampleSet is the mean of the individual sample difficulties.
+        The difficulty of a `SampleSet` is the mean of the individual sample difficulties.
         Each sample's difficulty is determined by where its signal strength (SNR)
         falls on the survival function (AKA reliability function, or 1 - CDF) for a
         logistic distribution.
@@ -263,29 +260,30 @@ class SampleSet():
         The primary use of this function is for situations where ground truth is unknown
         and you want to get an idea of how "difficult" it will be for a model
         to make predictions.  Consider the following example:
-            Given a SampleSet for which ground truth is unknown and the signal strength for
+            Given a `SampleSet` for which ground truth is unknown and the signal strength for
             each spectrum is low.
-            A model considering, say, 100+ isotopes will see this SampleSet as quite
+            A model considering, say, 100+ isotopes will see this `SampleSet` as quite
             difficult, whereas a model considering 5 isotopes will, being more specialized,
-            see the SampleSet as easier.
+            see the `SampleSet` as easier.
             Of course, this makes the assumption that both models were trained to the
-            isotope(s) contained in the test SampleSet.
+            isotope(s) contained in the test `SampleSet`.
 
         Based on the previous example, the unfortunate state of this function is that you
         must know how to pick means and standard deviations which properly reflect the:
-            - number of target isotopes
-            - amount of variation within each isotope (i.e., shielding, scattering, etc.)
-            - detector resolution
+
+        - number of target isotopes
+        - amount of variation within each isotope (i.e., shielding, scattering, etc.)
+        - detector resolution
+
         A future goal of ours is to provide updates to this function and docstring which make
         choosing the mean and standard deviation easier/automated based on more of our findings.
 
         Arguments:
-            mean: the SNR value representing the mean of the logistic distribution
-            std: the standard deviation of the logistic distribution
+            mean: SNR value representing the mean of the logistic distribution
+            std: standard deviation of the logistic distribution
 
         Returns:
-            The mean of all SNR values passed through a logistic survival function.
-
+            The mean of all SNR values passed through a logistic survival function
         """
         snrs: np.ndarray = self.info.snr.clip(1e-6)
         score = float(stats.logistic.sf(snrs, loc=mean, scale=std).mean())
@@ -294,9 +292,7 @@ class SampleSet():
 
     @property
     def ecal(self):
-        """Gets or sets the ecal terms in order:
-           (ecal_order_0, ecal_order_1, ecal_order_2, ecal_order_3, ecal_low_e)
-        """
+        """Get or set the ecal terms."""
         ecal_terms = self.info[list(self.ECAL_INFO_COLUMNS)].values
         return ecal_terms
 
@@ -319,7 +315,7 @@ class SampleSet():
 
     @property
     def isotope_names(self):
-        """Gets the names of the isotopes involved in this SampleSet."""
+        """Get the names of the isotopes involved in this SampleSet."""
         return self.sources.columns.get_level_values("Isotope")
 
     @property
@@ -333,14 +329,14 @@ class SampleSet():
 
     @property
     def n_channels(self):
-        """Gets the number of channels included in the spectra DataFrame.
+        """Get the number of channels included in the spectra DataFrame.
         Channels may also be referred to as bins.
         """
         return self._spectra.shape[1]
 
     @property
     def n_samples(self):
-        """Gets the number of samples included in the spectra dataframe,
+        """Get the number of samples included in the spectra dataframe,
         where each row is a sample.
         """
         return self._spectra.shape[0]
@@ -359,13 +355,12 @@ class SampleSet():
 
     @property
     def seed_names(self):
-        """Gets the names of the seeds involved in this SampleSet."""
+        """Get the names of the seeds involved in this `SampleSet`."""
         return self.sources.columns.get_level_values("Seed")
 
     @property
     def sources(self):
-        """Get or set the sources DataFrame for the SampleSet object.
-        """
+        """Get or set the sources `DataFrame`."""
         return self._sources
 
     @sources.setter
@@ -374,12 +369,21 @@ class SampleSet():
 
     @property
     def spectra(self):
-        """Get or set the spectra DataFrame for the SampleSet object."""
+        """Get or set the spectra `DataFrame`."""
         return self._spectra
 
     @spectra.setter
     def spectra(self, value):
         self._spectra = value
+
+    @property
+    def spectra_state(self: SpectraState):
+        """Get or set the spectra state."""
+        return self._spectra_state
+
+    @spectra_state.setter
+    def spectra_state(self, value: SpectraState):
+        self._spectra_state = value
 
     @property
     def synthesis_info(self):
@@ -395,25 +399,30 @@ class SampleSet():
     def _channels_to_energies(self, fractional_energy_bins,
                               offset: float, gain: float, quadratic: float, cubic: float,
                               low_energy: float) -> np.ndarray:
-        """Converts fractional energy bins to the energy represented by the lower edge of the bin.
+        r"""Convert fractional energy bins to the energy represented by the lower edge of the bin.
 
         A spectrum represents a range of energy (e.g., 0 keV to 3000 keV).
         The energy range represented by a spectrum can be inferred from its energy calibration
         (e-cal for short), if known.  Using the convention in ANSI N42.42-2006, the e-cal is
         defined using the following terms:
-        - `a_0`: offset (ecal_order_0)
-        - `a_1`: gain (ecal_order_1)
-        - `a_2`: quadratic (ecal_order_2)
-        - `a_3`: cubic (ecal_order_3)
-        - `a_4`: low energy (ecal_low_e)
 
-        The energy represented by the lower edge of channel `i` is then calculated as follows:
+        - \( a_0 \): offset (ecal_order_0)
+        - \( a_1 \): gain (ecal_order_1)
+        - \( a_2 \): quadratic (ecal_order_2)
+        - \( a_3 \): cubic (ecal_order_3)
+        - \( a_4 \): low energy (ecal_low_e)
 
-        `E_i = a_0 + a_1 * x + a_2 * x^2 + a_3 * a^3 + a_4 / (1 + 60x)`
+        The energy represented by the lower edge of channel \( i \) is then calculated as follows:
 
-        where `x` is the fractional energy of the spectral range.
-        Also, under this scheme and ignoring the non-linear terms (e.g., `a_2` through `a_4`),
-        the range of energy represented by a spectrum can be quickly inferred from the e-cal as:
+        $$
+        E_i = a_0 + a_1 * x + a_2 * x^2 + a_3 * a^3 + \frac{a_4}{1 + 60x}
+        $$
+
+        where \( x \) is the fractional energy of the spectral range.
+        Also, under this scheme and ignoring the non-linear terms (e.g., \( a_2 \) through
+        \( a_4 \)), the range of energy represented by a spectrum can be quickly inferred
+        from the e-cal as:
+
         - `min_energy = offset`
         - `max_energy = gain + offset`
 
@@ -422,18 +431,16 @@ class SampleSet():
         support this but may in the future.
 
         Args:
-            fractional_energy_bins: an array of fractions representing the spacing of
-                the channels.
-            offset: e-cal order 0 term.
-            gain: e-cal order 1 term.
-            quadratic: e-cal order 2 term.
-            cubic: e-cal order 3 term.
-            low_energy: e-cal low energy term.
+            fractional_energy_bins: array of fractions representing the spacing of the channels
+            offset: e-cal order 0 term
+            gain: e-cal order 1 term
+            quadratic: e-cal order 2 term
+            cubic: e-cal order 3 term
+            low_energy: e-cal low energy term
 
         Returns:
-            An array containing the energies represented by the lower edge of each channel.
-            Shape depends on the shape of input values.
-
+            Array containing the energies represented by the lower edge of each channel
+            (hape depends on the shape of input values)
         """
         channel_energies = \
             offset + \
@@ -458,7 +465,7 @@ class SampleSet():
     def as_ecal(self, new_offset: float, new_gain: float,
                 new_quadratic: float, new_cubic: float,
                 new_low_energy: float) -> SampleSet:
-        """Re-bins spectra based on energy by interpolating the current shape from the current
+        """Re-bin spectra based on energy by interpolating the current shape from the current
         binning structure to a new one.
 
         Warning: this operation is likely to add or remove spectral information
@@ -472,8 +479,7 @@ class SampleSet():
             new_low_energy: new low energy term
 
         Raises:
-            ValueError: raised if no argument values are provided.
-
+            `ValueError` when no argument values are provided
         """
         new_args = [new_offset, new_gain, new_quadratic, new_cubic, new_low_energy]
         if all(v is None for v in new_args):
@@ -519,14 +525,13 @@ class SampleSet():
         return new_ss
 
     def squash(self) -> SampleSet:
-        """Produces a 1-sample SampleSet from the given SampleSet's data by summing vertically.
+        """Combine all rows of the `SampleSet` into a single row.
 
         All data suited for summing is summed, otherwise the info from the first
         sample is used.
 
         Returns:
-            A flattened SampleSet.
-
+            A flattened `SampleSet`
         """
         flat_spectra = self.spectra.sum(axis=0).to_frame().T
         flat_sources = self.sources.sum(axis=0).to_frame().T
@@ -558,40 +563,37 @@ class SampleSet():
         return flat_ss
 
     def clip_negatives(self, min_value: float = 0):
-        """Sets negative values to min_value.
+        """Clip spectrum values to some minimum value.
 
         Args:
-            min_value: Determines the minimum value in spectra to which
-                smaller values will be clipped.
-
+            min_value: value to which to clip existing spectrum values
         """
         self._spectra = pd.DataFrame(data=self._spectra.clip(min_value))
 
     def concat(self, ss_list: list):
-        """Provides a way to vertically combine many SampleSets.
+        """Vertically concatenate multiple `SampleSet`s into one `SampleSet`.
 
         Combining of non-DataFrame properties (e.g., detector_info, synthesis_info, etc.)
         is NOT performed - it is the responsiblity of the user to ensure proper bookkeeping for
-        these properties when concatenating SampleSets.
+        these properties when concatenating `SampleSet`s.
 
-        This method is most applicable to SampleSets containing measured data from the same
-        detector which could not be made as a single SampleSet because of how measurements had to
+        This method is most applicable to `SampleSet`s containing measured data from the same
+        detector which could not be made as a single `SampleSet` because of how measurements had to
         be taken (i.e., measurements were taken by distinct processes separated by time).
-        Therefore, the user should avoid concatenating SampleSets when:
-            - the data is from different detectors
-              (note that SampleSets are given to models for prediction, and models should be
-              1-to-1 with physical detectors);
-            - a mix of synthetic and measured data would occur
-              (this could make an existing `synthesis_info` value ambiguous, but one way to handle
-              this would be to add a new column to `info` distinguishing between synthetic and
-              measured on a per-sample basis).
+        Therefore, the user should avoid concatenating `SampleSet`s when:
+
+        - the data is from different detectors
+        (note that `SampleSet`s are given to models for prediction, and models should be 1-to-1
+        with physical detectors);
+        - a mix of synthetic and measured data would occur (this could make an existing
+        `synthesis_info` value ambiguous, but one way to handle this would be to add a new column
+        to `info` distinguishing between synthetic and measured on a per-sample basis).
 
         Args:
-            ss_list: Defines the list of SampleSets to concatenate.
+            ss_list: list of `SampleSet`s to concatenate
 
-        Return:
-            A single SampleSet object of the concatenated SampleSet data.
-
+        Returns:
+            `SampleSet` object
         """
         if not ss_list:
             return
@@ -626,15 +628,13 @@ class SampleSet():
         )
 
     def downsample_spectra(self, target_bins: int = 128, min_frac=1e-8):
-        """Replaces spectra with downsampled version. Uniform binning is assumed.
+        """Uniformly down-bin spectra.
 
         Args:
-            target_bins: Defines into how many channels the current spectra channels
-                should be combined.
+            target_bins: number of channels to which to bin the existing spectra
 
         Raises:
-            ValueError: Raised when binning is not a multiple of the target binning.
-
+            `ValueError` when binning is not a multiple of the target binning
         """
         if self.n_channels % target_bins == 0:
             n_per_group = int(self.n_channels / target_bins)
@@ -656,7 +656,7 @@ class SampleSet():
         self._spectra[self._spectra < min_frac] = 0
 
     def drop_sources_columns_with_all_zeros(self):
-        """Removes columns from the sources DataFrame that contain only zeros.
+        """Remove columns from the sources `DataFrame` that contain only zeros.
 
         Modifications are made in-place.
         """
@@ -666,12 +666,12 @@ class SampleSet():
         return idxs
 
     def drop_spectra_with_no_contributors(self) -> np.ndarray:
-        """Removes spectra (from spectra, sources, and info dfs) which have no positive sources.
+        """Remove samples where the spectrum has no recorded contributor.
 
-        Modifications are made in-place.
+        Modifications are inplace.
 
         Returns:
-            A boolean mask of which rows were kept.
+            A boolean mask of which rows were kept
         """
         idxs = np.where(self.sources.values.sum(axis=1) == 0)[0]
         kept_mask = ~np.in1d(self.sources.index.values, idxs)
@@ -684,16 +684,18 @@ class SampleSet():
 
     def extend(self, spectra: Union[dict, list, np.array, pd.DataFrame],
                sources: pd.DataFrame, info: Union[list, pd.DataFrame]):
-        """Extends the current SampleSet with the given data.
+        """Extend the current SampleSet with the given data.
 
         Always verify that the data was appended in the way you expect based on what input type
         you are preferring to work with.
 
         Args:
-            spectra: Defines the spectra to append to the current spectra DataFrame.
-            sources: Defines the sources to append to the current sources DataFrame.
-            info: Defines the info to append to the current info DataFrame.
+            spectra: spectra to append to the current spectra DataFrame
+            sources: sources to append to the current sources DataFrame
+            info: info to append to the current info DataFrame
 
+        Raises:
+            `ValueError` when internal `DataFrame` lengths do not match
         """
         if not spectra.shape[0] == sources.shape[0] == info.shape[0]:
             msg = "The number of rows in each of the required positional arguments must be same."
@@ -716,21 +718,16 @@ class SampleSet():
             .append(pd.DataFrame(info), ignore_index=True, sort=True)
 
     def get_all_channel_energies(self, fractional_energy_bins=None) -> np.ndarray:
-        """Returns an array representing the energy (in keV) represented by the
-        lower edge of each channel for all samples.
+        """Get the energy (in keV) represented by the lower edge of each channel for all samples.
 
         See docstring for `_channels_to_energies()` for more details.
 
         Args:
-            fractional_energy_bins: an array of fractions representing the spacing of
-                the channels. Optional; used for arbitrary channel structures (uncommon).
+            fractional_energy_bins: array of fractions representing the spacing of
+                the channels (for arbitrary channel structures)
 
         Returns:
-            A 2D array of energy values in keV for all samples.
-
-        Raises:
-            ValueError: raised if any energy calibration terms are missing.
-
+            2-D array of energy values in keV for all samples
         """
         if fractional_energy_bins is None:
             fractional_energy_bins = np.linspace(0, 1, self.n_channels)
@@ -739,30 +736,28 @@ class SampleSet():
         for i in range(self.n_samples):
             channel_energies = self.get_channel_energies(i, fractional_energy_bins)
             all_channel_energies.append(channel_energies)
+
         return all_channel_energies
 
     def get_channel_energies(self, sample_index, fractional_energy_bins=None) -> np.ndarray:
-        """Returns an array representing the energy (in keV) represented by the
-        lower edge of each channel for a single sample and the specified index.
+        """Get the energy (in keV) represented by the lower edge of each channel for a
+        single sample at a specific index.
 
         See docstring for `_channels_to_energies()` for more details.
 
         Args:
             sample_index: index of the specific sample for which to obtain energies
-            fractional_energy_bins: an array of fractions representing the spacing of
-                the channels. Optional; used for arbitrary channel structures (uncommon).
+            fractional_energy_bins: array of fractions representing the spacing of
+                the channels (for arbitrary channel structures)
 
         Returns:
-            An array of energy values in keV.
-
-        Raises:
-            ValueError: raised if any energy calibration terms are missing.
-
+            Array of energy values in keV
         """
         if fractional_energy_bins is None:
             fractional_energy_bins = np.linspace(0, 1, self.n_channels)
 
         # TODO: raise error if ecal info is missing for any row
+
         offset, gain, quadratic, cubic, low_energy = self.ecal[sample_index]
         channel_energies = self._channels_to_energies(
             fractional_energy_bins,
@@ -786,7 +781,7 @@ class SampleSet():
 
     def get_spectral_distance_matrix(self, distance_func=distance.jensenshannon,
                                      target_level="Seed") -> pd.DataFrame:
-        """Computes the distance between all pairs of spectra.
+        """Compute the distance between all pairs of spectra.
 
         This method is intended for use on seed spectra (i.e., templates).
         Calling this method on large samplesets, such as those produced by the static
@@ -794,16 +789,16 @@ class SampleSet():
         This method only computes the upper triangle and diagonal of the matrix since the lower
         triangle would be a copy of the upper triangle.
         The diagonal is computed, for when Poisson noise is present, for two main reasons:
-            - the distance between the same source will effectively never be zero.
-            - there is sometimes research interest in comparing the diagonal to the upper triangle.
+
+        - the distance between the same source will effectively never be zero.
+        - there is sometimes research interest in comparing the diagonal to the upper triangle.
 
         Args:
-            distance_func: the specific distance function to use. Default is Jensen-Shannon.
-            target_level: the sources column level to use for the DataFrame labels.
+            distance_func: specific distance function to use
+            target_level: `SampleSet.sources` column level to use
 
         Returns:
-            A 2-D array of distance values.
-
+            A 2-D array of distance values
         """
         distance_values = self._get_spectral_distances(distance_func)
         row_labels = self.get_labels(target_level=target_level)
@@ -815,10 +810,9 @@ class SampleSet():
     def get_labels(self, target_level="Isotope", max_only=True,
                    include_value=False, min_value=0.01,
                    level_aggregation=None):
-        """Gets row labels for each spectrum based on source values.
+        """Get row ground truth labels for each sample based on `sources` values.
 
         See docstring for `_get_row_labels()` for more details.
-
         """
         labels = _get_row_labels(
             self.sources,
@@ -833,10 +827,9 @@ class SampleSet():
     def get_predictions(self, target_level="Isotope", max_only=True,
                         include_value=False, min_value=0.01,
                         level_aggregation=None):
-        """Gets row labels for each spectrum based on prediction values.
+        """Get row predictions for each spectrum based on `prediction_probas` values.
 
         See docstring for `_get_row_labels()` for more details.
-
         """
         labels = _get_row_labels(
             self.prediction_probas,
@@ -848,40 +841,41 @@ class SampleSet():
         )
         return labels
 
-    def get_samples(self):
-        """Gets only the data (spectra + extra data) within the SampleSet
-        as a NumPy array ready for use in model training.
+    def get_samples(self) -> np.ndarray:
+        """Get `spectra` as a NumPy array.
+
+        Replaces NaN values with 0.
 
         Returns:
-            An ndarray containing the NaN-trimmed values for spectra and
-            extra data.
-
+            Array containing spectrum data
         """
         spectra_values = np.nan_to_num(self._spectra)
         return spectra_values
 
-    def get_source_contributions(self, target_level="Isotope"):
-        """Gets the 2D array of values representing the percent contributions of each source.
+    def get_source_contributions(self, target_level="Isotope") -> np.ndarray:
+        """Get `sources` as a NumPy array.
+
+        Replaces NaN values with 0.
 
         Returns:
-            An ndarray containing the source contributions for each sample (i.e., ground truth).
-
+            Array containing the ground truth contributions for each sample
         """
-        return self.sources.groupby(axis=1, level=target_level).sum()
+        collapsed_sources = self.sources.groupby(axis=1, level=target_level).sum()
+        sources_values = np.nan_to_num(collapsed_sources)
+        return sources_values
 
     def normalize(self, p: float = 1, clip_negatives: bool = True):
-        """Normalizes spectra by L-p normalization.
+        """Apply L-p normalization to `spectra` in place.
 
         Default is L1 norm (p=1) can be interpreted as a forming a probability mass function (PMF).
         L2 norm (p=2) is unit energy (sum of squares == 1).
 
-        Ref: "https://en.wikipedia.org/wiki/Parseval's_theorem"
+        Reference: https://en.wikipedia.org/wiki/Parseval's_theorem
 
         Args:
-            p: Defines the exponent to which the spectra values are raised.
-            clip_negatives: Determines whether or not negative values will
-                be removed from the spectra and replaced with 0.
-
+            p: exponent to which the spectra values are raised
+            clip_negatives: whether negative values will be removed from the spectra and
+                replaced with 0
         """
         if clip_negatives:
             self.clip_negatives()
@@ -902,7 +896,7 @@ class SampleSet():
             self.spectra_state = SpectraState.Unknown
 
     def normalize_sources(self):
-        """Converts sources to a valid probability mass function (PMF)."""
+        """Normalize `sources` such that rows sum to 1."""
         row_sums = self._sources.sum(axis=1)
         row_sums[row_sums == 0] = 1
         self._sources = self._sources.clip(0).divide(
@@ -911,10 +905,10 @@ class SampleSet():
         )
 
     def replace_nan(self, replace_value: float = 0):
-        """Replaces np.nan() values with replace_value.
+        """Replace np.nan values.
 
         Args:
-            replace_value: The value with which NaN will be replaced.
+            replace_value: value with which NaN will be replaced
 
         """
         self._spectra.replace(np.nan, replace_value)
@@ -922,15 +916,14 @@ class SampleSet():
         self._info.replace(np.nan, replace_value)
 
     def sample(self, n_samples: int, random_seed: int = None) -> SampleSet:
-        """Randomly samples the SampleSet.
+        """Randomly sample the SampleSet.
 
         Args:
-            n_samples: the number of random samples to be returned.
-            random_seed: the seed value for random number generation.
+            n_samples: number of random samples to be returned
+            random_seed: seed value for random number generation
 
         Returns:
-            A sampleset of `n_samples` randomly selected measurements.
-
+            `Sampleset` of randomly selected measurements
         """
         if random_seed:
             random.seed(random_seed)
@@ -943,20 +936,19 @@ class SampleSet():
         return self[random_mask]
 
     def sources_columns_to_dict(self, target_level="Isotope") -> Union[dict, list]:
-        """Converts the MultiIndex columns of the sources DataFrame to a dictionary.
+        """Convert the MultiIndex columns of `sources` to a dictionary.
 
-        Note: depending on `target_level` and sources columns, duplicate values are possible.
+        Note: depending on `target_level` and `sources` columns, duplicate values are possible.
 
         Args:
-            target_level: the level of the MultiIndex at which the dictionary should start.
-                If "Seed" is chosen, then a flat list will be returned.
+            target_level: `SampleSet.sources` column level to use
 
         Returns:
             If `target_level` is "Category" or "Isotope," then a dict is returned.
             If `target_level` is "Seed," then a list is returned.
 
         Raises:
-            ValueError: if `target_level` is invalid.
+            `ValueError` when `target_level` is invalid
         """
         self._check_target_level(
             target_level,
@@ -987,7 +979,15 @@ class SampleSet():
         return d
 
     def shuffle(self, inplace: bool = True, random_state: int = None) -> SampleSet:
-        """Randomly reorders all dataframes in-place."""
+        """Randomly reorder all DataFrames.
+
+        Args:
+            inplace: whether to perform the operation in-place
+            random_state: random seed for reproducing specific shuffles
+
+        Returns:
+            `SampleSet` object when `inplace` is False
+        """
         new_row_ordering = np.arange(self.n_samples)
         np.random.default_rng(random_state).shuffle(new_row_ordering)
 
@@ -1009,16 +1009,16 @@ class SampleSet():
     def drop_sources(self, col_names: Iterable = DEFAULT_BG_SEED_NAMES,
                      normalize_sources: bool = True,
                      target_level: str = "Seed"):
-        """Drops columns from the sources DataFrame.
+        """Drop columns from `sources`.
 
         Args:
-            col_names: the names of the sources columns to be dropped.
+            col_names: names of the sources columns to be dropped.
                 The names of background seeds are used by default as removing the
                 ground truth for background sources when dealing with synthetic,
                 gross spectra is a common operation.
             normalize_sources: whether to normalize the sources DataFrame after dropping
-                the column(s).
-            target_level: the multi-index level to which the column name(s) correspond.
+                the column(s)
+            target_level: `SampleSet.sources` column level to use
         """
         self.sources.drop(col_names, axis=1, inplace=True, level=target_level)
         if normalize_sources:
@@ -1026,20 +1026,19 @@ class SampleSet():
 
     def split_fg_and_bg(self, bg_seed_names: Iterable = DEFAULT_BG_SEED_NAMES) \
             -> Tuple[SampleSet, SampleSet]:
-        """Splits the current SampleSet into two new SampleSets, one containing only foreground
+        """Split the current `SampleSet` into two new `SampleSet`s, one containing only foreground
         sources and the other containing only background sources.
 
         Foreground sources are assumed to be anything that is not designated as a background source.
 
         Args:
-            bg_seeds_names: the names of the seeds which are considered background sources.
+            bg_seeds_names: names of the seeds which are considered background sources.
                 This list be customized to also extract atypical background sources such as
                 calibration sources.
 
         Returns:
-            Two SampleSets, the first containing only foregrounds and the second only
+            Two `SampleSet`s, the first containing only foregrounds and the second only
             containing backgrounds.
-
         """
         seed_labels = self.get_labels(target_level="Seed")
         bg_mask = seed_labels.isin(bg_seed_names)
@@ -1052,11 +1051,14 @@ class SampleSet():
         return fg_seeds_ss, bg_seeds_ss
 
     def to_hdf(self, path: str, verbose=False):
-        """Writes the sampleset to disk as a HDF file at the given path.
+        """Write the `SampleSet` to disk as a HDF file.
 
         Args:
-            path: the intended location and name of the resulting file.
+            path: file path at which to save as an HDF file
+            verbose: whether to display detailed output
 
+        Raises:
+            `ValueError` when provided path extension is invalid
         """
         if not path.lower().endswith(riid.SAMPLESET_FILE_EXTENSION):
             logging.warning(f"Path does not end in {riid.SAMPLESET_FILE_EXTENSION}")
@@ -1066,11 +1068,14 @@ class SampleSet():
             logging.info(f"Saved SampleSet to '{path}'")
 
     def to_pcf(self, path: str, verbose=True):
-        """Writes the sampleset to disk as a PCF at the given path.
+        """Write the `SampleSet` to disk as a PCF.
 
         Args:
-            path: the intended location and name of the resulting file.
+            path: file path at which to save as a PCF
+            verbose: whether to display detailed output
 
+        Raises:
+            `ValueError` when provided path extension is invalid
         """
         if not path.lower().endswith(riid.PCF_FILE_EXTENSION):
             logging.warning(f"Path does not end in {riid.PCF_FILE_EXTENSION}")
@@ -1081,16 +1086,15 @@ class SampleSet():
             logging.info(f"Saved SampleSet to '{path}'")
 
     def update_timestamp(self):
-        """Sets the timestamp for all samples to now (UTC) in a standard format."""
+        """Set the timestamp for all samples to the current UTC date and time."""
         self.info.timestamp = _get_utc_timestamp()
 
     def upsample_spectra(self, target_bins: int = 4096):
-        """Replaces spectra with upsampled version. Uniform binning is assumed.
+        """Uniformly up-bin spectra.
 
         Args:
-            target_bins: Defines the number of bins into which the current spectra
+            target_bins: number of bins into which the current spectra
                 should be split.
-
         """
         if target_bins % self.n_channels == 0:
             n_per_group = int(target_bins / self.n_channels)
@@ -1110,23 +1114,23 @@ class SampleSet():
 
     def compare_to(self, ss: SampleSet, n_bins: int = 20, density: bool = False) \
             -> Tuple[dict, dict, dict]:
-        """Compares the current sample set to another.
+        """Compare the current `SampleSet` to another `SampleSet`.
 
         The function only compares the selected, mutual information of
-        each sampleset by computing the Jensen-Shannon distance between
-        histograms of that information. The distance value can be interpreted
-        as follows: closer to 0 means more similar and closer to 1 means
-        more dissimilar.
+        each `SampleSet` by computing the Jensen-Shannon distance between
+        histograms of that information.
 
         Args:
-            ss: The sample set we will compare to.
-            n_bins: The number of bins we will sort both sample sets by.
+            ss: `SampleSet` to compare to
+            n_bins: number of bins we will sort both sample sets by
             density: whether histograms should be in counts or density
 
         Returns:
-            ss1_stats: dict of stats for the first sampleset.
-            ss2_stats: dict of stats for the second sampleset.
-            col_comparisons: dict of distance values comparing each column.
+            Tuple of the following:
+
+            - ss1_stats: dictionary of stats describing the first `SampleSet`
+            - ss2_stats: dictionary of stats describing the second `SampleSet`
+            - col_comparisons: dictionary of distance values comparing each stat
         """
         TARGET_SUMMARY_STATS = ["min", "max", "median", "mean", "std"]
         STAT_PRECISION = 3
@@ -1196,15 +1200,13 @@ class SampleSet():
 
 
 def read_hdf(path: str) -> SampleSet:
-    """Reads the HDF file in from the given filepath and creates
-    a SampleSet object with the data.
+    """Read an HDF file in as a `SampleSet` object.
 
     Args:
-        path: Defines the path to the file to be read in.
+        path: path for the HDF file to be read in
 
     Returns:
-        A SampleSet object.
-
+        `SampleSet` object
     """
     ss = None
     if not os.path.isfile(path):
@@ -1219,17 +1221,14 @@ def read_hdf(path: str) -> SampleSet:
 
 
 def read_pcf(path: str, verbose: bool = False) -> SampleSet:
-    """Converts pcf file to sampleset object.
+    """Read a PCF file in as a `SampleSet` object.
 
     Args:
-        path: Defines the path to the PCF file to be read in.
-        verbose: Determines whether or not to show verbose function output in terminal.
+        path: path for the PCF file to be read in
+        verbose: whether to show verbose function output in terminal
 
     Returns:
-        A Sampleset object containing information of pcf file in sampleset format
-
-    Raises:
-        None.
+        `Sampleset` object
     """
     return _pcf_dict_to_ss(_pcf_to_dict(path, verbose), verbose)
 
@@ -1259,26 +1258,26 @@ def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: b
                     include_value: bool = False, min_value: float = 0.01,
                     level_aggregation: str = "sum") -> pd.Series:
     """Interprets the cell values in conjunction with the columns to determine an
-        appropriate label for each row.
+    appropriate label for each row.
 
-        Args:
-            df: The DataFrame with MultiIndex columns and named levels.
-            target_level: the level of the columns to use for row labels.
-            max_only: for each row, whether or not to only use the column
-                containing the max value.  When False, all column names
-                containing a cell value >= `min_value` will be obtained.
-            include_value: whether or not to include the cell value
-                alongside the column name(s).
-            min_value: when `max_only=False`, this filters out columns
-                containing values less than this value. Note: this applies
-                to values AFTER aggregation occurs.
-            level_aggregation: the method to use for combining
-                cell values which have the same column name at the
-                `target_level`.  Acceptable values are "sum" or "mean",
-                otherwise this is ignored.
+    Args:
+        df: `DataFrame` with `MultiIndex` columns and named levels
+        target_level: level of the columns to use for row labels
+        max_only: for each row, whether to only use the column
+            containing the max value.  When False, all column names
+            containing a cell value >= `min_value` will be obtained.
+        include_value: whether to include the cell value
+            alongside the column name(s).
+        min_value: when `max_only=False`, this filters out columns
+            containing values less than this value. Note: this applies
+            to values AFTER aggregation occurs.
+        level_aggregation: method to use for combining
+            cell values which have the same column name at the
+            `target_level`.  Acceptable values are "sum" or "mean",
+            otherwise this is ignored.
 
-        Returns:
-            A Pandas Series where each entry is the row label.
+    Returns:
+        Pandas `Series` where each entry is the row label
     """
     if max_only:
         if level_aggregation == "sum":
@@ -1321,18 +1320,14 @@ def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: b
 
 
 def _validate_hdf_store_keys(keys: list):
-    """Validates the SampleSet keys based on whether or not
-    it contains the minimum required set of keys. Used when creating
-    a SampleSet from a file.
+    """Validates the `SampleSet` keys based on whether it contains the minimum required
+    set of keys.
 
     Args:
-        keys: Defines the collection of keys from the dataset being
-            converted to a SampleSet.
+        keys: collection of keys from the dataset being converted to a `SampleSet`
 
     Raises:
-        InvalidSampleSetFileError: Raised when the set of keys provided
-            does not include a required key.
-
+        InvalidSampleSetFileError: when the set of keys provided does not include a required key
     """
     required_keys = [
         "/info",
@@ -1352,18 +1347,16 @@ def _validate_hdf_store_keys(keys: list):
                 raise InvalidSampleSetFileError()
 
 
-def _read_hdf(file_name: str) -> SampleSet:
-    """Reads sampleset class from hdf binary format.
+def _read_hdf(path: str) -> SampleSet:
+    """Read `SampleSet` from an HDF file.
 
     Args:
-        file_name: Defines the string representing the relative
-            path to the HDF file.
+        path: path where HDF file is to be read from
 
     Returns:
-        A SampleSet containing the HDF data.
-
+        `SampleSet` object
     """
-    store = pd.HDFStore(file_name, mode="r")
+    store = pd.HDFStore(path, mode="r")
     store_keys = store.keys()
     _validate_hdf_store_keys(store_keys)
 
@@ -1396,13 +1389,11 @@ def _read_hdf(file_name: str) -> SampleSet:
 
 
 def _write_hdf(ss: SampleSet, output_path: str):
-    """Writes sampleset class to hdf binary format.
+    """Write a `SampleSet` to an HDF file.
 
     Args:
-        ss: Defines the SampleSet object to be written out.
-        output_path: Defines the relative path to the file to
-            be written.
-
+        ss: `SampleSet` object to be written out
+        output_path: path where file is to be written
     """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -1424,18 +1415,15 @@ def _write_hdf(ss: SampleSet, output_path: str):
         store.close()
 
 
-def _ss_to_pcf_dict(ss: SampleSet, verbose=False):
-    """Converts a Sampleset to a dictionary of values.
+def _ss_to_pcf_dict(ss: SampleSet, verbose=False) -> dict:
+    """Convert a `SampleSet` to a dictionary representation.
 
     Args:
-        ss: SampleSet object to be converted.
-        verbose: displays detailed output when True.
+        ss: `SampleSet` object to convert to a dictionary
+        verbose: whether to show detailed output
 
     Returns:
-        A dictionary containing the values from the Sampleset.
-
-    Raises:
-        None.
+        Dictionary containing the values from the Sampleset
     """
     n_channels = int(ss.n_channels)
     n_records_per_spectrum = int((n_channels / 64) + 1)
@@ -1510,32 +1498,19 @@ def _ss_to_pcf_dict(ss: SampleSet, verbose=False):
 
         spectrum = ss.spectra.iloc[i, :].values
         spectra.append({"header": header, "spectrum": spectrum})
+
     return {"header": pcf_header, "spectra": spectra}
 
 
 def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
-    """Converts pcf dictionary into a SampleSet.
-
-    PCF file contains energy calibration terms which are defined as:
-    E_i = a0 + a1*x + a2*x^2 + a3*x^3 + a4 / (1 + 60*x)
-    where:
-        a0 = order_0
-        a1 = order_1
-        a2 = order_2
-        a3 = order_3
-        a4 = low_E
-        x = channel number
-        E_i = Energy value of i-th channel
+    """Convert a PCF dictionary into a `SampleSet`.
 
     Args:
-        pcf_dict: Defines the dictionary of pcf values.
-        verbose: Whether to display output from attempting the conversion.
+        pcf_dict: dictionary representation of a PCF
+        verbose: whether to display detailed output
 
     Returns:
-        A Sampleset object containing the pcf dict values.
-
-    Raises:
-        None.
+        `Sampleset` object containing the PCF dict values
     """
     if not pcf_dict["spectra"]:
         return
@@ -1653,31 +1628,21 @@ def _get_distance_df_from_values(distance_values: np.ndarray,
     return distance_df
 
 
-class RebinningCalculationError(Exception):
-    """An exception indicateing an issue when rebinning a sample or collection of samples.
-    """
-    pass
-
-
 class InvalidSampleSetFileError(Exception):
-    """An exception indicating missing or invalid keys in a file being parsed into a SampleSet.
-    """
+    """Missing or invalid keys in a file being read in as a `SampleSet`."""
     pass
 
 
 class InvalidSampleCountError(Exception):
-    """An exception indicating the wrong number of samples were encountered for some operation.
-    """
+    """Incorrect number of samples encountered for the operation."""
     pass
 
 
 class SpectraStateMismatchError(Exception):
-    """An exception indicating two SampleSets have different SpectraState values.
-    """
+    """Two `SampleSet`s have different `spectra_state` values."""
     pass
 
 
 class ChannelCountMismatchError(Exception):
-    """An exception indicating two SampleSets have different SpectraState values.
-    """
+    """Two `SampleSet`s have different `n_channels` values."""
     pass

@@ -24,5 +24,7 @@ RIID = "riid"
 __version__ = get_distribution(RIID).version
 
 __pdoc__ = {
-    "riid.data.synthetic.seed.SeedMixer.__call__": True
+    "riid.data.synthetic.seed.SeedMixer.__call__": True,
+    "riid.data.synthetic.passby.PassbySynthesizer._generate_single_passby": True,
+    "riid.data.sampleset.SampleSet._channels_to_energies": True,
 }

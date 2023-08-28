@@ -4,6 +4,7 @@
 """This module provides visualization functions primarily for visualizing SampleSets."""
 import hashlib
 from functools import wraps
+from typing import Tuple
 
 import matplotlib
 import matplotlib.pyplot as plt  # noqa: E402
@@ -16,7 +17,7 @@ from sklearn.metrics import confusion_matrix as confusion_matrix_sklearn
 
 from riid.data import SampleSet
 
-# DO NOT TOUCH what is set below, nor should you override them inside a function.
+# DO NOT TOUCH what is set below nor override them inside a function.
 plt.style.use("default")
 rcParams["font.family"] = "serif"
 CM = cm.tab20
@@ -24,13 +25,10 @@ MARKER = "."
 
 
 def save_or_show_plot(func):
-    """Function decorator providing standardized handling of
-    saving and/or showing matplotlib plots.
+    """Function decorator standardizing handling of saving and/or showing matplotlib plots.
 
     Args:
-        func: Defines the function to call that builds the plot and
-            returns a tuple of (Figure, Axes).
-
+        func: function to call that builds the plot and returns a tuple of (Figure, Axes)
     """
     @wraps(func)
     def save_or_show_plot_wrapper(*args, save_file_path=None, show=True,
@@ -61,28 +59,24 @@ def save_or_show_plot(func):
 def confusion_matrix(ss: SampleSet, as_percentage: bool = False, cmap: str = "binary",
                      title: str = None, value_format: str = None, value_fontsize: int = None,
                      figsize=(10, 10), alpha: float = None, target_level="Isotope"):
-    """Generates a confusion matrix for a SampleSet. Prediction and label information is
-    used to distinguish between correct and incorrect classifications using color
-    (green for correct, red for incorrect).
+    """Generate a confusion matrix for a SampleSet.
 
     Args:
-        ss: Defines a SampleSet of events to plot.
-        as_percentage: Scales existing confusion matrix values to the range 0 to 100.
-        cmap: Defines the colormap to use for seaborn colormap function.
-        title: Defines the plot title.
-        value_format: Defines the format string controlling how values are displayed in the matrix
-            cells.
-        value_fontsize: Defines the font size of the values displayed in the matrix cells.
-        figsize: Width, height of figure in inches.
-        alpha: Defines the degree of opacity.
-        target_level: sources level to plot.
+        ss: `SampleSet` of events to plot
+        as_percentage: scales existing confusion matrix values to the range 0 to 100
+        cmap: colormap to use for seaborn colormap function
+        title: plot title
+        value_format: format string controlling how values are displayed in the matrix cells
+        value_fontsize: font size of the values displayed in the matrix cells
+        figsize: with and height of figure in inches
+        alpha: degree of opacity
+        target_level: `SampleSet.sources` column level to use
 
     Returns:
-        A tuple (Figure, Axes) of matplotlib objects.
+        Tuple (Figure, Axes) of matplotlib objects
 
     Raises:
-        EmptyPredictionsArrayError: Raised when the sampleset does not contain any predictions.
-
+        `EmptyPredictionsArrayError` when the `SampleSet` does not contain any predictions
     """
     y_true = ss.get_labels(target_level=target_level)
     y_pred = ss.get_predictions(target_level=target_level)
@@ -136,26 +130,26 @@ def plot_live_time_vs_snr(ss: SampleSet, overlay_ss: SampleSet = None, alpha: fl
                           xlim: tuple = None, ylim: tuple = None,
                           title: str = "Live Time vs. SNR", snr_line_value: float = None,
                           figsize=(6.4, 4.8), target_level: str = "Isotope"):
-    """Plots SNR against live time for all samples in a SampleSet.
+    """Plot `SampleSet.info.snr` against `SampleSet.info.live_time`.
 
     Prediction and label information is used to distinguish between correct and incorrect
-    classifications using color (green for correct, red for incorrect).
+    classifications using color (blue for correct, red for incorrect).
 
     Args:
-        ss: Defines a SampleSet of events to plot.
-        overlay_ss: Defines another SampleSet to color as black.
-        alpha: Defines the degree of opacity (not applied to overlay_ss scatterplot if used).
-        xscale: Defines the x-axis scale.
-        yscale: Defines the y-axis scale.
-        xlim: tuple containing the x-axis min and max values.
-        ylim: tuple containing the y-axis min and max values.
-        title: Defines the plot title.
+        ss: `SampleSet` of events to plot
+        overlay_ss: another `SampleSet` to color as black
+        alpha: degree of opacity (not applied to overlay_ss scatterplot if used)
+        xscale: x-axis scale
+        yscale: y-axis scale
+        xlim: tuple containing the x-axis min and max values
+        ylim: tuple containing the y-axis min and max values
+        title: plot title
         snr_line_value: Plots a vertical line for contextualizing data to threshold
-        figsize: Width, height of figure in inches.
+        figsize: with and height of figure in inches
+        target_level: `SampleSet.sources` column level to use
 
     Returns:
-        A tuple (Figure, Axes) of matplotlib objects.
-
+        Tuple (Figure, Axes) of matplotlib objects
     """
     labels = ss.get_labels(target_level=target_level)
     predictions = ss.get_predictions(target_level=target_level)
@@ -215,26 +209,25 @@ def plot_snr_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float 
                       marker_size=75, xscale: str = "log", yscale: str = "linear",
                       xlim: tuple = (None, None), ylim: tuple = (0, 1.05),
                       title: str = "SNR vs. Score", figsize=(6.4, 4.8), target_level="Isotope"):
-    """Plots SNR against prediction score for all samples in a SampleSet.
+    """Plot `SampleSet.info.snr` against `SampleSet.prediction_probas`.
 
     Prediction and label information is used to distinguish between correct and incorrect
-    classifications using color (green for correct, red for incorrect).
+    classifications using color (blue for correct, red for incorrect).
 
     Args:
-        ss: Defines a SampleSet of events to plot.
-        overlay_ss: Defines another SampleSet to color as blue (correct) and/or black (incorrect).
-        alpha: Defines the degree of opacity (not applied to overlay_ss scatterplot if used).
-        xscale: Defines the x-axis scale.
-        yscale: Defines the y-axis scale.
-        xlim: Defines a tuple containing the x-axis min and max values.
-        ylim: Defines a tuple containing the y-axis min and max values.
-        title: Defines the plot title.
-        figsize: Width, height of figure in inches.
-        target_level: The level of the sources multi index to use for comparing correctness.
+        ss: `SampleSet` of events to plot
+        overlay_ss: another `SampleSet` to color as blue (correct) and/or black (incorrect)
+        alpha: degree of opacity (not applied to overlay_ss scatterplot if used)
+        xscale: x-axis scale
+        yscale: y-axis scale
+        xlim: tuple containing the x-axis min and max values
+        ylim: tuple containing the y-axis min and max values
+        title: plot title
+        figsize: with and height of figure in inches
+        target_level: `SampleSet.sources` column level to use
 
     Returns:
-        A tuple (Figure, Axes) of matplotlib objects.
-
+        Tuple (Figure, Axes) of matplotlib objects
     """
     labels = ss.get_labels(target_level=target_level)
     predictions = ss.get_predictions(target_level=target_level, level_aggregation=None)
@@ -250,7 +243,7 @@ def plot_snr_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float 
     ax.scatter(
         correct_ss.info.snr,
         correct_ss.prediction_probas.max(axis=1),
-        c="green", alpha=alpha, marker=MARKER, label="Correct", s=marker_size
+        c="blue", alpha=alpha, marker=MARKER, label="Correct", s=marker_size
     )
     ax.scatter(
         incorrect_ss.info.snr,
@@ -265,7 +258,7 @@ def plot_snr_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float 
         ax.scatter(
             overlay_correct_ss.info.snr,
             overlay_correct_ss.prediction_probas.max(axis=1),
-            c="blue",
+            c="purple",
             marker="*",
             label="Correct Event" + ("" if overlay_correct_ss.n_samples == 1 else "s"),
             s=marker_size*1.25
@@ -273,7 +266,7 @@ def plot_snr_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float 
         ax.scatter(
             overlay_incorrect_ss.info.snr,
             overlay_incorrect_ss.prediction_probas.max(axis=1),
-            c="black",
+            c="yellow",
             marker="+",
             label="Incorrect Event" + ("" if overlay_incorrect_ss.n_samples == 1 else "s"),
             s=marker_size*1.25
@@ -297,29 +290,29 @@ def plot_spectra(ss: SampleSet, in_energy: bool = False,
                  xlim: tuple = (None, None), ylim: tuple = (None, None),
                  ylabel: str = None, title: str = None, legend_loc: str = None,
                  target_level="Isotope") -> tuple:
-    """Plots the spectra contained with a SampleSet.
+    """Plot spectra in a `SampleSet`.
 
     Args:
-        ss: Defines spectra to plot.
-        in_energy: Determines whether or not to try and use each spectrum's
-            energy calibration to interpet bins in terms of energy.
-        figsize: Width, height of figure in inches.
-        xscale: Defines the x-axis scale.
-        yscale: Defines the y-axis scale.
-        xlim: Defines a tuple containing the x-axis min and max values.
-        ylim: Defines a tuple containing the y-axis min and max values.
-        ylabel: Defines the y-axis label.
-        title: Defines the plot title.
-        legend_loc: Defines the location in which to place the legend. Defaults to None.
-        target_level: The level of the sources multi index to use for legend labels.
+        ss: `SampleSet` with spectra to plot
+        in_energy: whether to try and use each spectrum's e-cal to display bin energy
+        figsize: width and height of figure in inches
+        xscale: x-axis scale
+        yscale: y-axis scale
+        xlim: tuple containing the x-axis min and max values
+        ylim: tuple containing the y-axis min and max values
+        ylabel: y-axis label
+        title: plot title
+        legend_loc: location in which to place the legend
+        target_level: `SampleSet.sources` column level to use in legend
 
     Returns:
-        A tuple (Figure, Axes) of matplotlib objects.
+        Tuple (Figure, Axes) of matplotlib objects
 
     Raises:
-        ValueError: Raised if is_in_energy=True but energy bin centers are missing for any spectra.
-        ValueError: Raised if limit is not None and less than 1.
+        `ValueError` when:
 
+        - `is_in_energy` equals True but energy bin centers are missing for any spectra
+        - `limit` is not None and less than 1
     """
     fig, ax = plt.subplots(figsize=figsize)
     if ss.sources.empty:
@@ -378,25 +371,24 @@ def plot_learning_curve(train_loss: list, validation_loss: list,
                         xlim: tuple = (0, None), ylim: tuple = (0, None),
                         ylabel: str = "Loss", legend_loc: str = "upper right",
                         smooth: bool = False, title: str = None, figsize=(6.4, 4.8)) -> tuple:
-    """Plots training and validation loss curves.
+    """Plot training and validation loss curves.
 
     Args:
-        train_loss: Defines a list of training loss values.
-        validation_loss: Defines a list of validation loss values.
-        xscale: Defines the x-axis scale.
-        yscale: Defines the y-axis scale.
-        xlim: Defines a tuple containing the x-axis min and max values.
-        ylim: Defines a tuple containing the y-axis min and max values.
-        smooth: Determines whether or not to apply smoothing to the loss curves.
-        title: Defines the plot title.
-        figsize: Width, height of figure in inches.
+        train_loss: list of training loss values
+        validation_loss: list of validation loss values
+        xscale: x-axis scale
+        yscale: y-axis scale
+        xlim: tuple containing the x-axis min and max values
+        ylim: tuple containing the y-axis min and max values
+        smooth: whether to apply smoothing to the loss curves
+        title: plot title
+        figsize: with and height of figure in inches
 
     Returns:
-        A tuple (Figure, Axes) of matplotlib objects.
+        Tuple (Figure, Axes) of matplotlib objects
 
     Raises:
-        ValueError: Raised if either list of values is empty.
-
+        `ValueError` when either list of values is empty
     """
     train_loss = np.array(train_loss)
     validation_loss = np.array(validation_loss)
@@ -460,22 +452,21 @@ def plot_learning_curve(train_loss: list, validation_loss: list,
 def plot_count_rate_history(cr_history: list, sample_interval: float,
                             event_duration: float, pre_event_duration: float,
                             ylim: tuple = (0, None), title: str = None, figsize=(6.4, 4.8)):
-    """Plots a count rate history.
+    """Plot a count rate history.
 
     Args:
-        cr_history: Defines a list of count rate values.
-        sample_interval: Defines the time in seconds for which each count rate values was collected.
-        event_duration: Defines the time in seconds during which an anomalous source was present.
-        pre_event_duration: Defines the time in seconds at which the anomalous source appears
-            (i.e., the start of the event).
-        validation_loss: Defines a list of validation loss values.
-        ylim: Defines a tuple containing the y-axis min and max values.
-        title: Defines the plot title.
-        figsize: Width, height of figure in inches.
+        cr_history: list of count rate values
+        sample_interval: time in seconds for which each count rate values was collected
+        event_duration: time in seconds during which an anomalous source was present
+        pre_event_duration: time in seconds at which the anomalous source appear
+            (i.e., the start of the event)
+        validation_loss: list of validation loss values
+        ylim: tuple containing the y-axis min and max values
+        title: plot title
+        figsize: width and height of figure in inches
 
     Returns:
-        A tuple (Figure, Axes) of matplotlib objects.
-
+        Tuple (Figure, Axes) of matplotlib objects
     """
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -511,23 +502,22 @@ def plot_score_distribution(ss: SampleSet, bin_width=None, n_bins=100,
                             xscale="linear", min_bin=0.0, max_bin=1.0,
                             yscale="log", ylim=(1e-1, None),
                             title="Score Distribution", figsize=(6.4, 4.8)):
-    """Plots a histogram of all of the model prediction scores.
+    """Plot a histogram of `SampleSet.prediction_probas`.
 
     Args:
-        ss: SampleSet containing prediction_probas values.
+        ss: `SampleSet` containing prediction_probas values
         bin_width: width of each bin
-        n_bins: number of bins into which to bin scores.
-        xscale: the x-axis scale.
-        min_bin: min value of the bin range; also sets x-axis min.
-        max_bin: max value of the bin range; also sets x-axis max.
-        yscale: the y-axis scale.
-        ylim: a tuple containing the y-axis min and max values.
-        title: the plot title.
-        figsize: Width, height of figure in inches.
+        n_bins: number of bins into which to bin scores
+        xscale: x-axis scale
+        min_bin: min value of the bin range; also sets x-axis min
+        max_bin: max value of the bin range; also sets x-axis max
+        yscale: y-axis scale
+        ylim: tuple containing the y-axis min and max values
+        title: plot title
+        figsize: with and height of figure in inches
 
     Returns:
-        A tuple (Figure, Axes) of matplotlib objects.
-
+        Tuple (Figure, Axes) of matplotlib objects
     """
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -559,18 +549,17 @@ def plot_label_distribution(ss: SampleSet, ylim: tuple = (1, None),
                             yscale: str = "log", figsize: tuple = (12.8, 7.2),
                             title: str = "Label Distribution",
                             target_level: str = "Isotope"):
-    """Plots a histogram of number of ooccurences for each prediction.
+    """Plot a histogram of `SampleSet` labels.
 
     Args:
-        ss: a SampleSet with prediction information filled in.
-        ylim: tuple containing the y-axis min and max values.
-        yscale: scale of y-axis.
-        figsize: width, height of figure in inches.
-        target_level: level of the multi index to use for x-axis labels.
+        ss: `SampleSet` with `sources` values
+        ylim: tuple containing the y-axis min and max values
+        yscale: scale of y-axis
+        figsize: width and height of figure in inches
+        target_level: `SampleSet.sources` column level to use on x-axis
 
     Returns:
-        A tuple (Figure, Axes) of matplotlib objects.
-
+        Tuple (Figure, Axes) of matplotlib objects
     """
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -589,18 +578,17 @@ def plot_prediction_distribution(ss: SampleSet, ylim: tuple = (1, None),
                                  yscale: str = "log", figsize: tuple = (12.8, 7.2),
                                  title: str = "Prediction Distribution",
                                  target_level: str = "Isotope"):
-    """Plots a histogram of number of ooccurences for each prediction.
+    """Plot a histogram of `SampleSet` predictions.
 
     Args:
-        ss: a SampleSet with prediction information filled in.
-        ylim: tuple containing the y-axis min and max values.
-        yscale: scale of y-axis.
-        figsize: width, height of figure in inches.
-        target_level: level of the multi index to use for x-axis labels.
+        ss: `SampleSet` with `prediction_probas` values
+        ylim: tuple containing the y-axis min and max values
+        yscale: scale of y-axis
+        figsize: width and height of figure in inches
+        target_level: `SampleSet.sources` column level to use on x-axis
 
     Returns:
-        A tuple (Figure, Axes) of matplotlib objects.
-
+        Tuple (Figure, Axes) of matplotlib objects
     """
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -619,18 +607,17 @@ def plot_label_and_prediction_distributions(ss: SampleSet, ylim: tuple = (1, Non
                                             yscale: str = "log", figsize: tuple = (12.8, 7.2),
                                             title: str = "Label and Prediction Distribution",
                                             target_level: str = "Isotope"):
-    """Plots a histogram of number of ooccurences for each label and prediction.
+    """Plot a histogram of number of ooccurences for each label and prediction.
 
     Args:
-        ss: a SampleSet with label and prediction information filled in.
-        ylim: tuple containing the y-axis min and max values.
-        yscale: scale of y-axis.
-        figsize: width, height of figure in inches.
-        target_level: level of the multi index to use for x-axis labels.
+        ss: `SampleSet` with label and prediction information filled in
+        ylim: tuple containing the y-axis min and max values
+        yscale: scale of y-axis
+        figsize: with and height of figure in inches
+        target_level: `SampleSet.sources` column level to use on x-axis
 
     Returns:
-        A tuple (Figure, Axes) of matplotlib objects.
-
+        Tuple (Figure, Axes) of matplotlib objects
     """
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -659,18 +646,17 @@ def plot_label_and_prediction_distributions(ss: SampleSet, ylim: tuple = (1, Non
 @save_or_show_plot
 def plot_correlation_between_all_labels(ss: SampleSet, mean: bool = False,
                                         figsize=(6.4, 4.8), target_level: str = "Isotope"):
-    """Plots a correlation matrix of each label against each other label.
+    """Plot a correlation matrix of each label against every other label.
 
     Args:
-        ss: a SampleSet
-        mean: if true, plot the mean correlation of all enumerations of seeds, otherwise plot the
-            max correlation
-        figsize: Width, height of figure in inches.
-        target_level: The level of the sources multi index to use for legend labels.
+        ss: `SampleSet` object
+        mean: when True, plot the mean correlation of all enumerations of seeds,
+            otherwise plot the max correlation
+        figsize: with and height of figure in inches
+        target_level: `SampleSet.sources` column level to use in legend
 
     Returns:
-        A tuple (Figure, Axes) of matplotlib objects.
-
+        Tuple (Figure, Axes) of matplotlib objects
     """
     labels = ss.get_labels(target_level=target_level)
     X = np.zeros((len(labels), len(labels)))
@@ -695,25 +681,26 @@ def plot_correlation_between_all_labels(ss: SampleSet, mean: bool = False,
 def plot_precision_recall(precision, recall, marker="D", lw=2, show_legend=True, fig_ax=None,
                           title="Precision VS Recall", cmap="gist_ncar",
                           label_plot_kwargs_map=None, figsize=(6.4, 4.8)):
-    """Plots the multi-class or multi-label Precision-Recall curve and marks the optimal
+    """Plot the multi-class or multi-label Precision-Recall curve and mark the optimal
     F1 score for each class.
 
-    Per-class average precision (AP) and mean average precision (mAP) are annotated on
-    the plot.
+    Per-class average precision (AP) and mean average precision (mAP) are annotated on the plot.
 
     Args:
         precision: precision dict output of utils.precision_recall_curve()
         recall: precision dict output of utils.precision_recall_curve()
-        marker: the marker to use to mark the optimal F1 score point
-        lw: the plot line width
-        show_legend: whether or not to display a legend
+        marker: marker to use to mark the optimal F1 score point
+        lw: plot line width
+        show_legend: whether to display a legend
         fig_ax: optional tuple of (fig, ax) to plot on, if provided decreasing precision function
-        title: the plot title
-        cmap: the colormap to choose line colors (per label) from
+        title: plot title
+        cmap: colormap to choose line colors (per label) from
         label_plot_kwargs_map: optional dictionary of (label, plot kwargs) mappings
             that will override the plot kwargs for the given label
-        figsize: Width, height of figure in inches.
+        figsize: with and height of figure in inches.
 
+    Returns:
+        Tuple (Figure, Axes) of matplotlib objects
     """
     from riid.models.metrics import average_precision_score, harmonic_mean
 
@@ -755,7 +742,7 @@ def plot_precision_recall(precision, recall, marker="D", lw=2, show_legend=True,
                 dict(
                     label=f"{label} (AP:{average_precision[label]:0.2f} "
                           f"F1*:{optimal_f1:.2f})",
-                    color=_choose_color(label, cmap=cmap)
+                    color=get_label_color(label, cmap=cmap)
                 )
             )
 
@@ -784,17 +771,18 @@ def plot_precision_recall(precision, recall, marker="D", lw=2, show_legend=True,
 def plot_ss_comparison(info_stats1: dict, info_stats2: dict, col_comparisons: dict,
                        target_col: str = None, title: str = None, x_label: str = None,
                        distance_precision: int = 3):
-    """Creates a plot for output from SampleSet.compare_to().
+    """Create a plot for output from `SampleSet.compare_to()`.
+
     Args:
         info_stats1: stats for first SampleSet
         info_stats2: stats for second SampleSet
         col_comparisons: Jensen-Shannon distance for each info column histogram
-        target_col: the SampleSet.info column that will be plotted
-        title: the plot title
+        target_col: SampleSet.info column that will be plotted
+        title: plot title
         distance_precision: number of decimals to include for distance metric value
 
     Returns:
-        A tuple (Figure, Axes) of matplotlib objects.
+        Tuple (Figure, Axes) of matplotlib objects
     """
     fig, ax = plt.subplots()
 
@@ -830,13 +818,25 @@ def plot_ss_comparison(info_stats1: dict, info_stats2: dict, col_comparisons: di
     return fig, ax
 
 
-class EmptyPredictionsArrayError(Exception):
-    pass
+def get_label_color(label, cmap="gist_ncar", hashfunc=hashlib.md5) -> Tuple:
+    """Choose a random color via label hash.
 
+    Ensures the same color is always chosen for a label.
 
-def _choose_color(label, cmap="gist_ncar", hashfunc=hashlib.md5):
-    """Chooses a random color based by hashing the label, such that the same color is
-    always chosen for that label."""
+    Args:
+        label: string to hash
+        cmap: Matplotlib colormap
+        hashfunc: hashing function
+
+    Returns:
+        Tuple of RGBA values
+    """
     colormap = plt.get_cmap(cmap)
     hash_val = int(hashfunc(str(label).encode()).hexdigest(), 16)
+
     return colormap(hash_val % colormap.N)
+
+
+class EmptyPredictionsArrayError(Exception):
+    """`SampleSet.get_predictions()` returned an empty list."""
+    pass
