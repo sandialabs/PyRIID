@@ -46,12 +46,12 @@ def train(model_type, data_path, model_path=None, results_dir_path=None):
 
 
 @click.command(short_help="Identify measurements using a pre-trained classifier or regressor")
-@click.argument('model_path', type=click.Path(exists=True, file_okay=True))
-@click.argument('data_path', type=click.Path(exists=True, file_okay=True))
-@click.option('--results_dir_path', '--results', metavar='',
-              type=click.Path(exists=False, file_okay=True),
+@click.argument('model_path', type=click.Path(exists=True, file_okay=True, dir_okay=False))
+@click.argument('data_path', type=click.Path(exists=True, file_okay=True, dir_okay=False))
+@click.option('-r', '--results_dir', metavar='DIRECTORY',
+              type=click.Path(exists=False, file_okay=False, dir_okay=True, writable=True),
               help="Path to directory where identification results are output")
-def identify(model_path, data_path, results_dir_path=None):
+def identify(model_path, data_path, results_dir=None):
     path_model = Path(model_path)
     path_data = Path(data_path)
 
@@ -62,10 +62,10 @@ def identify(model_path, data_path, results_dir_path=None):
 
     print(f"Identifying measurements with model:        {model_path}")
     print(f"                               data:        {data_path}")
-    if not results_dir_path:
-        results_dir_path = "./identify_results/"
-    if not os.path.exists(results_dir_path):
-        os.mkdir(results_dir_path)
+    if not results_dir:
+        results_dir = "./identify_results"
+    if not os.path.exists(results_dir):
+        os.mkdir(results_dir)
 
     model = MLPClassifier()
     model.load(path_model)
@@ -74,10 +74,10 @@ def identify(model_path, data_path, results_dir_path=None):
         data_ss = read_hdf(path_data)
     else:
         data_ss = read_pcf(path_data)
-        
-    model.predict(data_ss)
 
-    data_ss.prediction_probas.to_csv(results_dir_path + "results.csv")
+    model.predict(data_ss)
+    print(results_dir)
+    data_ss.prediction_probas.to_csv(results_dir + "/results.csv")
 
 
 @cli.command(
