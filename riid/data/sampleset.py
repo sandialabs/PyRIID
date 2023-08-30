@@ -1050,12 +1050,13 @@ class SampleSet():
 
         return fg_seeds_ss, bg_seeds_ss
 
-    def to_hdf(self, path: str, verbose=False):
+    def to_hdf(self, path: str, verbose=False, **kwargs):
         """Write the `SampleSet` to disk as a HDF file.
 
         Args:
             path: file path at which to save as an HDF file
             verbose: whether to display detailed output
+            kwargs: additional arguments to be passed to the `Pandas.HDFStore` constructor
 
         Raises:
             `ValueError` when provided path extension is invalid
@@ -1063,7 +1064,7 @@ class SampleSet():
         if not path.lower().endswith(riid.SAMPLESET_FILE_EXTENSION):
             logging.warning(f"Path does not end in {riid.SAMPLESET_FILE_EXTENSION}")
 
-        _write_hdf(self, path)
+        _write_hdf(self, path, **kwargs)
         if verbose:
             logging.info(f"Saved SampleSet to '{path}'")
 
@@ -1388,21 +1389,33 @@ def _read_hdf(path: str) -> SampleSet:
     return ss
 
 
-def _write_hdf(ss: SampleSet, output_path: str):
+def _write_hdf(ss: SampleSet, output_path: str, **kwargs):
     """Write a `SampleSet` to an HDF file.
 
     Args:
         ss: `SampleSet` object to be written out
         output_path: path where file is to be written
+        kwargs: additional arguments to be passed to the `Pandas.HDFStore` constructor
     """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
 
-        store = pd.HDFStore(output_path, "w")
-        store.put("spectra", ss.spectra)
-        store.put("sources", ss.sources)
-        store.put("info", ss.info)
-        store.put("prediction_probas", ss.prediction_probas)
+        store_kwargs = {
+            "complevel": 3,
+            "complib": "blosc:blosclz",
+        }
+        store_kwargs.update(kwargs)
+
+        store = pd.HDFStore(output_path, "w", **store_kwargs)
+
+        put_kwargs = {
+            "format": "fixed",
+            "track_times": False,
+        }
+        store.put("spectra", ss.spectra, **put_kwargs)
+        store.put("sources", ss.sources, **put_kwargs)
+        store.put("info", ss.info, **put_kwargs)
+        store.put("prediction_probas", ss.prediction_probas, **put_kwargs)
 
         other_info = {
             "spectra_state": ss.spectra_state,
@@ -1411,7 +1424,7 @@ def _write_hdf(ss: SampleSet, output_path: str):
             "synthesis_info": ss.synthesis_info,
             "classified_by": ss.classified_by,
         }
-        store.put("other_info", pd.DataFrame(data=[other_info]))
+        store.put("other_info", pd.DataFrame(data=[other_info]), **put_kwargs)
         store.close()
 
 
