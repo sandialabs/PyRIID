@@ -10,7 +10,7 @@ from typing import Tuple
 import numpy as np
 from numpy.random import Generator
 
-from riid.data.sampleset import SampleSet, SpectraState
+from riid.data.sampleset import SampleSet, SpectraState, SpectraType
 from riid.data.synthetic import Synthesizer, get_distribution_values
 
 
@@ -131,10 +131,11 @@ class StaticSynthesizer(Synthesizer):
 
     # endregion
 
-    def _get_concatenated_batches(self, ss_batches, n_samples_expected):
+    def _get_concatenated_batches(self, ss_batches, n_samples_expected, spectra_type):
         ss = SampleSet()
         ss.measured_or_synthetic = self.SYNTHETIC_STR
         ss.spectra_state = SpectraState.Counts
+        ss.spectra_type = spectra_type
         ss.concat(ss_batches)
         self._verify_n_samples_synthesized(ss.n_samples, n_samples_expected)
         if self.normalize_sources:
@@ -184,9 +185,17 @@ class StaticSynthesizer(Synthesizer):
 
         fg_ss = gross_ss = None
         if self.return_fg:
-            fg_ss = self._get_concatenated_batches(fg_ss_batches, n_samples_per_return)
+            fg_ss = self._get_concatenated_batches(
+                fg_ss_batches,
+                n_samples_per_return,
+                SpectraType.Foreground
+            )
         if self.return_gross:
-            gross_ss = self._get_concatenated_batches(gross_ss_batches, n_samples_per_return)
+            gross_ss = self._get_concatenated_batches(
+                gross_ss_batches,
+                n_samples_per_return,
+                SpectraType.Gross
+            )
 
         return fg_ss, gross_ss
 
@@ -214,7 +223,7 @@ class StaticSynthesizer(Synthesizer):
             verbose: whether to show detailed output
 
         Returns:
-            Tuple of synthetic foreground, background, and gross spectra
+            Tuple of synthetic foreground and gross `SampleSet`s
 
         Raises:
             `ValueError` when a seed spectrum does not sum close to 1

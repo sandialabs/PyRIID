@@ -15,7 +15,7 @@ from matplotlib.colors import ListedColormap
 from seaborn import heatmap
 from sklearn.metrics import confusion_matrix as confusion_matrix_sklearn
 
-from riid.data import SampleSet
+from riid.data.sampleset import SampleSet
 
 # DO NOT TOUCH what is set below nor override them inside a function.
 plt.style.use("default")
@@ -702,7 +702,7 @@ def plot_precision_recall(precision, recall, marker="D", lw=2, show_legend=True,
     Returns:
         Tuple (Figure, Axes) of matplotlib objects
     """
-    from riid.models.metrics import average_precision_score, harmonic_mean
+    from riid.metrics import average_precision_score, harmonic_mean
 
     fig, ax = fig_ax if fig_ax else plt.subplots(figsize=figsize)
 

@@ -9,7 +9,9 @@ import numpy as np
 import pandas as pd
 from numpy.random import Generator
 
-from riid.data.sampleset import SampleSet, SpectraState, _get_utc_timestamp
+from riid.data import get_expected_spectra
+from riid.data.sampleset import (SampleSet, SpectraState, SpectraType,
+                                 _get_utc_timestamp)
 
 
 class Synthesizer():
@@ -205,6 +207,7 @@ def get_fg_sample_set(spectra, sources, ecal, live_times, snrs, total_counts,
         timestamps=timestamps,
         descriptions=descriptions
     )
+    ss.spectra_type = SpectraType.Foreground
     return ss
 
 
@@ -221,6 +224,7 @@ def get_gross_sample_set(spectra, sources, ecal, live_times, snrs, total_counts,
         timestamps=timestamps,
         descriptions=descriptions
     )
+    ss.spectra_type = SpectraType.Gross
     return ss
 
 
@@ -255,40 +259,6 @@ def get_distribution_values(function: str, function_args: Any, n_values: int,
         raise ValueError(f"{function} function not supported for sampling.")
 
     return values
-
-
-def get_expected_spectra(seeds: np.ndarray, expected_counts: np.ndarray) -> np.ndarray:
-    """Multiply a 1-D array of expected counts by either a 1-D array or 2-D
-    matrix of seed spectra.
-
-    The dimension(s) of the seed array(s), `seeds`, is expanded to be `(m, n, 1)` where:
-
-    - m = # of seeds
-    - n = # of channels
-
-    and the final dimension is added in order to facilitate proper broadcasting
-    The dimension of the `expected_counts` must be 1, but the length `p` can be
-    any positive number.
-
-    The resulting expected spectra will be of shape `(m x p, n)`.
-    This representings the same number of channels `n`, but each expected count
-    value, of which there were `p`, will be me multiplied through each seed spectrum,
-    of which there were `m`.
-    All expected spectra matrices for each seed are then concatenated together
-    (stacked), eliminating the 3rd dimension.
-    """
-    if expected_counts.ndim != 1:
-        raise ValueError("Expected counts array must be 1-D.")
-    if expected_counts.shape[0] == 0:
-        raise ValueError("Expected counts array cannot be empty.")
-    if seeds.ndim > 2:
-        raise InvalidSeedError("Seeds array must be 1-D or 2-D.")
-
-    expected_spectra = np.concatenate(
-        seeds * expected_counts[:, np.newaxis, np.newaxis]
-    )
-
-    return expected_spectra
 
 
 def get_merged_sources_samplewise(sources1: pd.DataFrame, sources2: pd.DataFrame) -> pd.DataFrame:
@@ -328,6 +298,8 @@ def get_dummy_seeds(n_channels: int = 512, live_time: float = 600.0,
     """
     ss = SampleSet()
     ss.measured_or_synthetic = "synthetic"
+    ss.spectra_state = SpectraState.Counts
+    ss.spectra_type = SpectraType.BackgroundForeground
     ss.synthesis_info = {
         "subtract_background": True,
     }
@@ -381,8 +353,3 @@ def get_dummy_seeds(n_channels: int = 512, live_time: float = 600.0,
         ss.normalize()
 
     return ss
-
-
-class InvalidSeedError(Exception):
-    """Seed spectra data structure is not 1- or 2-dimensional."""
-    pass

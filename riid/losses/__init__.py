@@ -189,8 +189,8 @@ def mish(x):
     return x * tf.math.tanh(tf.math.softplus(x))
 
 
-def jsd_loss(y_true, y_pred):
+def jensen_shannon_divergence(p, q):
     kld = tf.keras.losses.KLDivergence(reduction=tf.keras.losses.Reduction.NONE)
-    M = 0.5 * (y_true + y_pred)
-    jsd = 0.5 * kld(y_true, M) + 0.5 * kld(y_pred, M)
+    m = (p + q) / 2
+    jsd = (kld(p, m) + kld(q, m)) / 2
     return jsd

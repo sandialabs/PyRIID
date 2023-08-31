@@ -7,7 +7,7 @@ import pandas as pd
 import tensorflow as tf
 import tensorflow_probability as tfp
 
-from riid.data import SampleSet
+from riid.data.sampleset import SampleSet
 from riid.models import TFModelBase
 
 

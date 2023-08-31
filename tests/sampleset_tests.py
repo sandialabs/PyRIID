@@ -11,9 +11,10 @@ import pandas as pd
 from riid.data.sampleset import (ChannelCountMismatchError,
                                  InvalidSampleCountError, SampleSet,
                                  SpectraState, SpectraStateMismatchError,
-                                 _get_row_labels)
-from riid.data.synthetic.static import StaticSynthesizer
+                                 SpectraType, _get_row_labels)
 from riid.data.synthetic import get_dummy_seeds
+from riid.data.synthetic.seed import SeedMixer
+from riid.data.synthetic.static import StaticSynthesizer
 
 
 class TestSampleSet(unittest.TestCase):
@@ -163,6 +164,9 @@ class TestSampleSet(unittest.TestCase):
         ss2.info.total_counts = ss1.spectra.sum(axis=1)
         ss2.info.live_time = 1
 
+        ss1.spectra_type = SpectraType.Foreground
+        ss2.spectra_type = SpectraType.Background
+
         ss3 = ss1 + ss2
         ss4 = ss3 - ss2
 
@@ -182,6 +186,9 @@ class TestSampleSet(unittest.TestCase):
         ss2.info.total_counts = ss1.spectra.sum(axis=1)
         ss2.info.live_time = 4
         ss2.normalize()
+
+        ss1.spectra_type = SpectraType.Foreground
+        ss2.spectra_type = SpectraType.Background
 
         ss3 = ss1 + ss2
         ss4 = ss3 - ss2
@@ -861,6 +868,114 @@ class TestSampleSet(unittest.TestCase):
         self.assertTrue(all(diagonal_values == 0.0))
         self.assertTrue(all(lower_triangle_values == 0.0))
         self.assertTrue(all(upper_triangle_values > 0.0))
+
+    def test_get_confidences(self):
+        random_state = 42
+        rng = np.random.default_rng(random_state)
+        seeds_ss = get_dummy_seeds(rng=rng, n_channels=256)
+        fg_seeds_ss, bg_seeds_ss = seeds_ss.split_fg_and_bg()
+
+        fg_seeds_ss.prediction_probas = pd.DataFrame(
+            data=fg_seeds_ss.sources.values,
+            columns=fg_seeds_ss.sources.columns
+        )
+        perfect_fg_conf = fg_seeds_ss.get_confidences(fg_seeds_ss[:])
+
+        mixer = SeedMixer(fg_seeds_ss, mixture_size=3, random_state=random_state)
+        mixed_fg_seeds_ss = mixer.generate(50)
+        mixed_fg_seeds_ss.prediction_probas = pd.DataFrame(
+            data=mixed_fg_seeds_ss.sources.values,
+            columns=mixed_fg_seeds_ss.sources.columns
+        )
+        perfect_mixed_fg_conf = mixed_fg_seeds_ss.get_confidences(fg_seeds_ss[:], is_lpe=True)
+
+        synth = StaticSynthesizer(
+            samples_per_seed=1,
+            apply_poisson_noise=False,
+            return_fg=False,
+            return_gross=True,
+            rng=rng
+        )
+        _, synthetic_gross_ss = synth.generate(fg_seeds_ss, bg_seeds_ss[0])
+        synthetic_gross_ss.drop_sources(bg_seeds_ss.sources.columns.levels[2])
+        synthetic_gross_ss.sources = synthetic_gross_ss.sources[fg_seeds_ss.sources.columns]
+        synthetic_gross_ss.prediction_probas = pd.DataFrame(
+            data=synthetic_gross_ss.sources.values,
+            columns=synthetic_gross_ss.sources.columns
+        )
+        perfect_gross_conf = synthetic_gross_ss.get_confidences(
+            fg_seeds_ss[:],
+            bg_seed_ss=bg_seeds_ss[0],
+            bg_cps=synth.bg_cps
+        )
+
+        _, synthetic_mixed_gross_ss = synth.generate(mixed_fg_seeds_ss, bg_seeds_ss[0])
+        synthetic_mixed_gross_ss.drop_sources(bg_seeds_ss.sources.columns.levels[2])
+        synthetic_mixed_gross_ss.sources = synthetic_mixed_gross_ss.sources[
+            fg_seeds_ss.sources.columns
+        ]
+        synthetic_mixed_gross_ss.prediction_probas = pd.DataFrame(
+            data=synthetic_mixed_gross_ss.sources.values,
+            columns=synthetic_mixed_gross_ss.sources.columns
+        )
+        perfect_mixed_gross_conf = synthetic_mixed_gross_ss.get_confidences(
+            fg_seeds_ss[:],
+            bg_seed_ss=bg_seeds_ss[0],
+            bg_cps=synth.bg_cps,
+            is_lpe=True
+        )
+
+        self.assertTrue(np.all(np.isclose(perfect_fg_conf, 0.0)))
+        self.assertTrue(np.all(np.isclose(perfect_mixed_fg_conf, 0.0)))
+        self.assertTrue(np.all(np.isclose(perfect_gross_conf, 0.0)))
+        self.assertTrue(np.all(np.isclose(perfect_mixed_gross_conf, 0.0)))
+
+        with self.assertRaises(ValueError):
+            fg_seeds_ss_wrong_type = fg_seeds_ss[:]
+            fg_seeds_ss_wrong_type.spectra_type = SpectraType.Gross
+            fg_seeds_ss.get_confidences(fg_seeds_ss_wrong_type[:])
+        with self.assertRaises(ValueError):
+            synthetic_gross_ss_empty_spectrum = synthetic_gross_ss[:]
+            synthetic_gross_ss_empty_spectrum.info.loc[0, "total_counts"] = 0
+            synthetic_gross_ss_empty_spectrum.get_confidences(
+                fg_seeds_ss[:],
+                bg_seed_ss=bg_seeds_ss[0],
+                bg_cps=synth.bg_cps
+            )
+        with self.assertRaises(ValueError):
+            synthetic_gross_ss_zero_lt = synthetic_gross_ss[:]
+            synthetic_gross_ss_zero_lt.info.loc[0, "live_time"] = 0
+            synthetic_gross_ss_zero_lt.get_confidences(
+                fg_seeds_ss[:],
+                bg_seed_ss=bg_seeds_ss[0],
+                bg_cps=synth.bg_cps
+            )
+        with self.assertRaises(ValueError):
+            synthetic_gross_ss.get_confidences(
+                fg_seeds_ss[:],
+                bg_seed_ss=None,
+                bg_cps=synth.bg_cps
+            )
+        with self.assertRaises(ValueError):
+            synthetic_gross_ss.get_confidences(
+                fg_seeds_ss[:],
+                bg_seed_ss=bg_seeds_ss[0:2],
+                bg_cps=synth.bg_cps
+            )
+        with self.assertRaises(ValueError):
+            bg_seeds_ss_wrong_type = bg_seeds_ss[:]
+            bg_seeds_ss_wrong_type.spectra_type = SpectraType.Foreground
+            synthetic_gross_ss.get_confidences(
+                fg_seeds_ss[:],
+                bg_seed_ss=bg_seeds_ss_wrong_type[0],
+                bg_cps=synth.bg_cps
+            )
+        with self.assertRaises(ValueError):
+            synthetic_gross_ss.get_confidences(
+                fg_seeds_ss[:],
+                bg_seed_ss=bg_seeds_ss[0],
+                bg_cps=None
+            )
 
     def _assert_row_labels(self, level, actual, expected):
         for i, (a, e) in enumerate(zip(actual, expected)):

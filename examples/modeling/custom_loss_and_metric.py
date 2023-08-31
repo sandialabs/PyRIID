@@ -4,8 +4,8 @@
 """This example demonstrates custom loss functions and metrics."""
 import tensorflow as tf
 
-from riid.models.losses import negative_log_f1
-from riid.models.metrics import multi_f1
+from riid.losses import negative_log_f1
+from riid.metrics import multi_f1
 
 y_true = tf.constant([.524, .175, .1, .1, 0, .1])
 y_pred = tf.constant([.2, .2, .2, .1, .2, .1])
