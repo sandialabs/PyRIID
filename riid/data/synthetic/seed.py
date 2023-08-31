@@ -290,6 +290,8 @@ class SeedMixer():
             # Build SampleSet
             batch_ss = SampleSet()
             batch_ss.detector_info = self.seeds_ss.detector_info
+            batch_ss.spectra_state = self.seeds_ss.spectra_state
+            batch_ss.spectra_type = self.seeds_ss.spectra_type
             batch_ss.spectra = pd.DataFrame(spectra)
             batch_ss.info = pd.DataFrame(
                 [self.seeds_ss.info.iloc[0].values] * batch_size,
@@ -319,6 +321,7 @@ class SeedMixer():
         for batch_ss in self(n_samples, max_batch_size=max_batch_size):
             batches.append(batch_ss)
         mixtures_ss = SampleSet()
+        mixtures_ss.spectra_type = self.seeds_ss.spectra_type
         mixtures_ss.concat(batches)
 
         return mixtures_ss

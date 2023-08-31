@@ -18,14 +18,14 @@ from keras.regularizers import L1L2, l1, l2
 from keras.utils import get_custom_objects
 from scipy.interpolate import UnivariateSpline
 
-from riid.data import SampleSet
+from riid.data.sampleset import SampleSet
+from riid.losses import (build_keras_semisupervised_loss_func,
+                         jensen_shannon_divergence, mish, normal_nll_diff,
+                         poisson_nll_diff, reconstruction_error, sse_diff,
+                         weighted_sse_diff)
+from riid.losses.sparsemax import SparsemaxLoss, sparsemax
+from riid.metrics import multi_f1, single_f1
 from riid.models import ModelInput, TFModelBase
-from riid.models.losses import (build_keras_semisupervised_loss_func, jsd_loss,
-                                mish, normal_nll_diff, poisson_nll_diff,
-                                reconstruction_error, sse_diff,
-                                weighted_sse_diff)
-from riid.models.losses.sparsemax import SparsemaxLoss, sparsemax
-from riid.models.metrics import multi_f1, single_f1
 
 tf2onnx.logging.basicConfig(level=tf2onnx.logging.WARNING)
 
@@ -454,7 +454,7 @@ class LabelProportionEstimator(TFModelBase):
         "normal_nll": normal_nll_diff,
         "sse": sse_diff,
         "weighted_sse": weighted_sse_diff,
-        "jsd": jsd_loss,
+        "jsd": jensen_shannon_divergence,
     }
     SUPERVISED_LOSS_FUNCS = {
         "sparsemax": (

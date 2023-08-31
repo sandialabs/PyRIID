@@ -11,10 +11,9 @@ import pandas as pd
 import tensorflow as tf
 
 import riid
-from riid.data import SampleSet
 from riid.data.labeling import label_to_index_element
-from riid.data.sampleset import SpectraState
-from riid.models.metrics import multi_f1, single_f1
+from riid.data.sampleset import SampleSet, SpectraState
+from riid.metrics import multi_f1, single_f1
 
 
 class ModelInput(Enum):

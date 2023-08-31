@@ -14,7 +14,7 @@ import re
 import warnings
 from datetime import datetime
 from enum import Enum
-from typing import Iterable, Tuple, Union
+from typing import Callable, Iterable, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -24,10 +24,12 @@ from scipy.interpolate import interp1d
 from scipy.spatial import distance
 
 import riid
+from riid.data import get_expected_spectra
 from riid.data.labeling import (NO_CATEGORY, NO_ISOTOPE, NO_SEED,
                                 _find_category, _find_isotope)
 from riid.gadras.pcf import (_dict_to_pcf, _pack_compressed_text_buffer,
                              _pcf_to_dict, _unpack_compressed_text_buffer)
+from riid.losses import jensen_shannon_divergence
 
 
 class SpectraState(Enum):
@@ -36,6 +38,15 @@ class SpectraState(Enum):
     Counts = 1
     L1Normalized = 2
     L2Normalized = 3
+
+
+class SpectraType(Enum):
+    """Types for SampleSet spectra."""
+    Unknown = 0
+    Background = 1
+    Foreground = 2
+    Gross = 3
+    BackgroundForeground = 4
 
 
 class SampleSet():
@@ -101,6 +112,7 @@ class SampleSet():
         self._measured_or_synthetic = None
         self.pyriid_version = riid.__version__
         self._spectra_state = SpectraState.Unknown
+        self._spectra_type = SpectraType.Unknown
         self._classified_by = ""
 
     def __bool__(self):
@@ -173,31 +185,31 @@ class SampleSet():
             raise ValueError(f"{self.spectra_state} spectra state not supported for arithmetic!")
             # Don't need to check spectra state of ss2 since they passed the prior equality check
 
-    def _get_scaled_bg_spectra(self, bg_ss: SampleSet) -> np.ndarray:
-        bg_spectrum_in_counts = bg_ss.spectra.iloc[0].values.copy()
-        if bg_ss.spectra_state == SpectraState.L1Normalized:
-            bg_spectrum_in_counts *= bg_ss.info.iloc[0].total_counts
-        bg_live_time = bg_ss.info.iloc[0].live_time
-        bg_spectrum_in_cps = bg_spectrum_in_counts / bg_live_time
-        scaled_bg_spectra = np.concatenate(
-            bg_spectrum_in_cps * self.info.live_time.values[:, np.newaxis, np.newaxis]
+    def _get_scaled_spectra(self, ss: SampleSet) -> np.ndarray:
+        spectra_in_counts = ss.spectra.iloc[0].values.copy()
+        if ss.spectra_state == SpectraState.L1Normalized:
+            spectra_in_counts *= ss.info.iloc[0].total_counts
+        live_times = ss.info.iloc[0].live_time
+        spectra_in_cps = spectra_in_counts / live_times
+        scaled_spectra = np.concatenate(
+            spectra_in_cps * self.info.live_time.values[:, np.newaxis, np.newaxis]
         )
-        return scaled_bg_spectra
+        return scaled_spectra
 
-    def _get_arithmetic_result(self, bg_ss: SampleSet, op) -> SampleSet:
-        self._check_arithmetic_supported(bg_ss)
+    def _get_arithmetic_result(self, ss: SampleSet, op) -> SampleSet:
+        self._check_arithmetic_supported(ss)
 
-        if bg_ss.n_samples == 1:
-            scaled_bg_spectra = self._get_scaled_bg_spectra(bg_ss)
+        if ss.n_samples == 1:
+            scaled_spectra = self._get_scaled_spectra(ss)
         else:
-            scaled_bg_spectra = bg_ss.spectra.values  # Assumed to already be scaled
+            scaled_spectra = ss.spectra.values  # Assumed to already be scaled
         new_ss = self[:]
 
         is_l1_normalized = new_ss.spectra_state == SpectraState.L1Normalized
         if is_l1_normalized:
             new_ss.spectra = new_ss.spectra.multiply(new_ss.info.total_counts, axis=0)
 
-        new_ss.spectra = op(new_ss.spectra, scaled_bg_spectra)
+        new_ss.spectra = op(new_ss.spectra, scaled_spectra)
 
         if is_l1_normalized:
             new_ss.normalize()
@@ -207,12 +219,48 @@ class SampleSet():
     def __add__(self, bg_ss: SampleSet) -> SampleSet:
         """Add the given background spectr(um|a) to the spectra of the current SampleSet.
         """
-        return self._get_arithmetic_result(bg_ss, operator.add)
+        if bg_ss.spectra_type.value != SpectraType.Background.value:
+            msg = (
+                "`bg_ss` argument must have a `spectra_type` of `Background`."
+                f"Its `spectra_type` is `{bg_ss.spectra_type}`."
+            )
+            raise ValueError(msg)
+        if self.spectra_type.value != SpectraType.Gross.value and \
+           self.spectra_type.value != SpectraType.Foreground.value:
+            msg = (
+                "Current `SampleSet` must have a `spectra_type` of `Gross` or `Foreground`. "
+                f"Current `spectra_type` is `{self.spectra_type}`."
+            )
+            raise ValueError(msg)
 
-    def __sub__(self, bg_ss: SampleSet) -> SampleSet:
-        """Subtract the given background spectr(um|a) from the spectra of the current SampleSet.
+        new_ss = self._get_arithmetic_result(bg_ss, operator.add)
+        new_ss.spectra_type = SpectraType.Gross
+        return new_ss
+
+    def __sub__(self, ss: SampleSet) -> SampleSet:
+        """Subtract the given background or foreground spectr(um|a) from the spectra of the current
+        `SampleSet`.
         """
-        return self._get_arithmetic_result(bg_ss, operator.sub)
+        if ss.spectra_type.value != SpectraType.Background.value and \
+           ss.spectra_type.value != SpectraType.Foreground.value:
+            msg = (
+                "`ss` argument must have a `spectra_type` of `Background` of `Foreground`."
+                f"Its `spectra_type` is `{ss.spectra_type}`."
+            )
+            raise ValueError(msg)
+        if self.spectra_type.value != SpectraType.Gross.value:
+            msg = (
+                "Current `SampleSet` must have a `spectra_type` of `Gross`. "
+                f"Current `spectra_type` is `{self.spectra_type}`."
+            )
+            raise ValueError(msg)
+
+        new_ss = self._get_arithmetic_result(ss, operator.sub)
+        if ss.spectra_type == SpectraType.Background:
+            new_ss.spectra_type = SpectraType.Foreground
+        else:
+            new_ss.spectra_type = SpectraType.Background
+        return new_ss
 
     # region Properties
 
@@ -384,6 +432,15 @@ class SampleSet():
     @spectra_state.setter
     def spectra_state(self, value: SpectraState):
         self._spectra_state = value
+
+    @property
+    def spectra_type(self: SpectraType):
+        """Get or set the spectra type."""
+        return self._spectra_type
+
+    @spectra_type.setter
+    def spectra_type(self, value: SpectraType):
+        self._spectra_type = value
 
     @property
     def synthesis_info(self):
@@ -599,6 +656,18 @@ class SampleSet():
             return
         if not isinstance(ss_list, list) and not isinstance(ss_list, tuple):
             ss_list = [ss_list]
+        spectra_types = list(
+            set([self.spectra_type.value] + [x.spectra_type.value for x in ss_list])
+        )
+        n_spectra_types = len(spectra_types)
+        if n_spectra_types == 2:
+            if SpectraType.Background.value in spectra_types and \
+               SpectraType.Foreground.value in spectra_types:
+                self.spectra_type = SpectraType.BackgroundForeground
+            else:
+                self.spectra_type = SpectraType.Unknown
+        elif n_spectra_types == 0 or n_spectra_types > 2:
+            self.spectra_type = SpectraType.Unknown
 
         self._spectra = pd.concat(
             [self._spectra] + [ss.spectra for ss in ss_list],
@@ -662,6 +731,7 @@ class SampleSet():
         """
         idxs = (self.sources != 0).any(axis=0)
         self.sources = self.sources.loc[:, idxs]
+        self.sources.columns = self.sources.columns.remove_unused_levels()
 
         return idxs
 
@@ -864,6 +934,86 @@ class SampleSet():
         sources_values = np.nan_to_num(collapsed_sources)
         return sources_values
 
+    def get_confidences(self, fg_seeds_ss: SampleSet, bg_seed_ss: SampleSet = None,
+                        bg_cps: float = None, is_lpe: bool = False,
+                        confidence_func: Callable = jensen_shannon_divergence,
+                        **confidence_func_kwargs) -> np.ndarray:
+        """Get confidence measure for predictions as a NumPy array.
+
+        Args:
+            fg_seeds_ss: `Sampleset` containing foreground seeds
+            bg_seed_ss: `Sampleset` containing a single background seed
+            bg_cps: count rate used to scale `bg_seed_ss`
+            is_lpe: whether predictions are for multi-class classification or label proportion
+                estimation (LPE)
+            confidence_func: metric function used to compare spectral reconstructions and
+            confidence_func_kwargs: kwargs for confidence metric function
+
+        Returns:
+            Array containing confidence metric for each prediction
+        """
+        if fg_seeds_ss.spectra_type != SpectraType.Foreground:
+            msg = (
+                "`fg_seeds_ss` must have a `spectra_type` of `Foreground`. "
+                f"Its `spectra_type` is `{fg_seeds_ss.spectra_type}`."
+            )
+            raise ValueError(msg)
+        if self.spectra_type == SpectraType.Gross:
+            if self.info.total_counts.isna().any() or (self.info.total_counts <= 0).any():
+                msg = (
+                    "This `SampleSet` must have the `info.total_counts` column filled in "
+                    "with values greater than zero."
+                    "If there are samples with spectra of all zeros, remove them first."
+                )
+                raise ValueError(msg)
+            if self.info.live_time.isna().any() or (self.info.live_time <= 0).any():
+                msg = (
+                    "This `SampleSet` must have the `info.live_time` column filled in "
+                    "with values greater than zero."
+                    "If there are samples with live of zero, remove them first."
+                )
+                raise ValueError(msg)
+            if not bg_seed_ss:
+                raise ValueError("`bg_seed_ss` is required for current `spectra_type` of `Gross`.")
+            if bg_seed_ss.n_samples != 1:
+                raise ValueError("`bg_seed_ss` must have exactly one sample.")
+            if bg_seed_ss.spectra_type != SpectraType.Background:
+                msg = (
+                    "`bg_seed_ss` must have a `spectra_type` of `Background`. "
+                    f"Its `spectra_type` is `{bg_seed_ss.spectra_type}`."
+                )
+                raise ValueError(msg)
+            if not bg_cps or bg_cps <= 0:
+                raise ValueError("Positive background count rate required.")
+
+        if is_lpe:
+            recon_proportions = self.prediction_probas.values
+        else:
+            max_indices = np.argmax(self.prediction_probas.values, axis=1)
+            recon_proportions = np.zeros(self.prediction_probas.values.shape)
+            recon_proportions[np.arange(self.n_samples), max_indices] = 1
+
+        reconstructions = np.dot(recon_proportions, fg_seeds_ss.spectra.values)
+
+        if self.spectra_type == SpectraType.Gross:
+            bg_spectrum = bg_seed_ss.spectra.iloc[0].values
+            normalized_bg_spectrum = bg_spectrum / bg_spectrum.sum()
+
+            bg_counts = bg_cps * self.info.live_time.values
+            fg_counts = (self.info.total_counts.values - bg_counts).clip(1)
+
+            scaled_bg_spectra = get_expected_spectra(normalized_bg_spectrum, bg_counts)
+            scaled_fg_spectra = reconstructions * fg_counts[:, np.newaxis]
+
+            reconstructions = scaled_fg_spectra + scaled_bg_spectra
+
+        confidences = confidence_func(
+            reconstructions.astype(np.float64),
+            self.spectra.values,
+            **confidence_func_kwargs
+        )
+        return np.array(confidences)
+
     def normalize(self, p: float = 1, clip_negatives: bool = True):
         """Apply L-p normalization to `spectra` in place.
 
@@ -1045,8 +1195,10 @@ class SampleSet():
 
         fg_seeds_ss = self[~bg_mask]
         fg_seeds_ss.drop_sources_columns_with_all_zeros()
+        fg_seeds_ss.spectra_type = SpectraType.Foreground
         bg_seeds_ss = self[bg_mask]
         bg_seeds_ss.drop_sources_columns_with_all_zeros()
+        bg_seeds_ss.spectra_type = SpectraType.Background
 
         return fg_seeds_ss, bg_seeds_ss
 

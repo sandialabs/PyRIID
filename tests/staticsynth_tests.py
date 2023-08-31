@@ -7,8 +7,8 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from riid.data.synthetic import (InvalidSeedError, Synthesizer,
-                                 get_dummy_seeds, get_expected_spectra,
+from riid.data import InvalidSeedError, get_expected_spectra
+from riid.data.synthetic import (Synthesizer, get_dummy_seeds,
                                  get_merged_sources_samplewise,
                                  get_samples_per_seed)
 from riid.data.synthetic.seed import SeedMixer
