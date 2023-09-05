@@ -31,7 +31,7 @@ class TFModelBase:
 
     def __init__(self, *args, **kwargs):
         self._info = {}
-        self._temp_file_path = "temp_model_file.h5"
+        self._temp_file_path = "temp_model_file" + riid.SAMPLESET_FILE_EXTENSION
 
     @property
     def seeds(self):
