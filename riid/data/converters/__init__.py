@@ -3,24 +3,32 @@
 # the U.S. Government retains certain rights in this software.
 """This module contains utilities for converting known datasets into `SampleSet`s."""
 import glob
-import os
+from pathlib import Path
+from typing import Callable
 
 import parmap as pm
 
 
-def convert_directory(input_dir_path, conversion_func, output_dir_path=None,
-                      pm_processes=8, pm_chunksize=100, **kwargs):
+def _validate_and_create_output_dir(output_dir: str):
+    output_dir_path = Path(output_dir)
+    output_dir_path.mkdir(exist_ok=True)
+    if not output_dir_path.is_dir:
+        raise ValueError("`output_dir` already exists but is not a directory.")
+
+
+def convert_directory(input_dir_path: str, conversion_func: Callable, file_ext: str,
+                      pm_processes: int = 8, pm_chunksize: int = 1, **kwargs):
     """Convert and save every file in a specified directory in parallel.
 
     Conversion functions can be found in sub-modules:
 
-    - `riid.data.converters.aipt.aipt_file_to_ss()`
-    - `riid.data.converters.topcoder.topcoder_file_to_ss()`
+    - AIPT: `riid.data.converters.aipt.convert_and_save()`
+    - TopCoder: `riid.data.converters.topcoder.convert_and_save()`
 
     Due to usage of parallel processing, be sure to run this function as follows:
 
     ```python
-    if __name__ == '__main__'
+    if __name__ == "__main__":
         convert_directory(...)
     ```
 
@@ -28,34 +36,27 @@ def convert_directory(input_dir_path, conversion_func, output_dir_path=None,
     unfortunately, `pm_chunksize` requires some experimentation to fully optimize.
 
     Args:
-        input_dir_path: directory path containing the input CSVs
+        input_dir_path: directory path containing the input files
         conversion_func: function used to convert a data file to a `SampleSet`
-        output_dir_path: directory path in which to save processed files (in HDF)
+        file_ext: file extension to read in for conversion
         pm_processes: parmap parameter to set the # of processes
         pm_chunksize: parmap parameter to set the chunksize
-        kwargs: keyword-args passed to process_file()
+        kwargs: keyword args passed to underlying conversion_func operations
     """
-    input_file_paths = sorted(glob.glob(f"{input_dir_path}/*.csv"))
-    if not output_dir_path or not os.path.exists(output_dir_path):
-        output_dir_path = input_dir_path
-    output_file_paths = [
-        os.path.join(
-            output_dir_path, os.path.splitext(os.path.basename(x))[0] + ".h5"
-        )
-        for x in input_file_paths
-    ]
+    input_path = Path(input_dir_path)
+    if not input_path.exists() or not input_path.is_dir():
+        print(f"No directory at provided input path: '{input_dir_path}'")
+        return
 
-    def _convert_and_save_func(input_file_path, output_file_path, **kwargs):
-        ss = conversion_func(input_file_path, **kwargs)
-        ss.to_hdf(output_file_path)
+    input_file_paths = sorted(glob.glob(f"{input_dir_path}/*.{file_ext}"))
 
-    args = list(zip(input_file_paths, output_file_paths))
-    _ = pm.starmap(
-        _convert_and_save_func,
-        args,
+    x = pm.map(
+        conversion_func,
+        input_file_paths,
         **kwargs,
         pm_processes=pm_processes,
         pm_chunksize=pm_chunksize,
         pm_parallel=True,
         pm_pbar=True,
     )
+    return x
