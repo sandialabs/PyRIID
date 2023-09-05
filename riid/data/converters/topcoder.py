@@ -8,10 +8,13 @@ https://doi.org/10.1038/s41597-020-00672-2
 import csv
 import logging
 import os
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+from riid import SAMPLESET_FILE_EXTENSION
+from riid.data.converters import _validate_and_create_output_dir
 from riid.data.labeling import label_to_index_element
 from riid.data.sampleset import SampleSet
 
@@ -45,7 +48,7 @@ def _get_answers(answer_file_path: str):
 
 
 def topcoder_file_to_ss(file_path: str, sample_interval: float, n_bins: int = 1024,
-                        max_energy_kev: int = 3000, answers_path: str = None) -> SampleSet:
+                        max_energy_kev: int = 4000, answers_path: str = None) -> SampleSet:
     """Convert a TopCoder CSV file of list-mode data into a SampleSet.
 
     Args:
@@ -78,8 +81,8 @@ def topcoder_file_to_ss(file_path: str, sample_interval: float, n_bins: int = 10
             energy = float(row[1])
             if energy > max_energy_kev:
                 msg = (
-                    f"Encountered energy ({energy:.0f} keV) greater than "
-                    f"specified max energy ({max_energy_kev:.0f})"
+                    f"Encountered energy ({energy:.2f} keV) greater than "
+                    f"specified max energy ({max_energy_kev:.2f})"
                 )
                 logging.warn(msg)
             channel = int(n_bins * energy // max_energy_kev)  # energy to bin
@@ -160,3 +163,28 @@ def topcoder_file_to_ss(file_path: str, sample_interval: float, n_bins: int = 10
         ss.sources = sources_df
 
     return ss
+
+
+def convert_and_save(input_file_path: str, output_dir: str = None,
+                     skip_existing: bool = True, **kwargs):
+    """Convert TopCoder file to SampleSet and save as HDF.
+
+    Output file will have same name with different extension.
+
+    Args:
+        input_file_path: file path of the CSV file
+        output_dir: alternative directory in which to save HDF files
+            (defaults to `input_file_path` parent if not provided)
+        skip_existing: whether to skip conversion if the file already exists
+        kwargs: keyword args passed to `topcoder_file_to_ss()`
+    """
+    input_path = Path(input_file_path)
+    if not output_dir:
+        output_dir = input_path.parent
+    _validate_and_create_output_dir(output_dir)
+    output_file_path = os.path.join(output_dir, input_path.stem + SAMPLESET_FILE_EXTENSION)
+    if skip_existing and os.path.exists(output_file_path):
+        return
+
+    ss = topcoder_file_to_ss(input_file_path, **kwargs)
+    ss.to_hdf(output_file_path)

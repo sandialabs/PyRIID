@@ -5,9 +5,13 @@
 Program Team (AIPT).
 """
 import os
+from pathlib import Path
+from typing import List
 
 import pandas as pd
 
+from riid import SAMPLESET_FILE_EXTENSION
+from riid.data.converters import _validate_and_create_output_dir
 from riid.data.sampleset import SampleSet
 
 ELEMENT_IDS_PER_FILE = [0, 1, 2, 3]
@@ -58,7 +62,7 @@ def _element_to_ss(data_df: pd.DataFrame, eid: int, description) -> SampleSet:
     return ss
 
 
-def aipt_file_to_ss(file_path: str) -> list[SampleSet]:
+def aipt_file_to_ss_list(file_path: str) -> List[SampleSet]:
     """Process an AIPT CSV file into a list of SampleSets.
 
     Each file contains a series of spectra for multiple detectors running simultaneously.
@@ -85,3 +89,34 @@ def aipt_file_to_ss(file_path: str) -> list[SampleSet]:
         ss_list.append(ss)
 
     return ss_list
+
+
+def convert_and_save(input_file_path: str, output_dir: str = None,
+                     skip_existing: bool = True, **kwargs):
+    """Convert AIPT file to SampleSet and save as HDF.
+
+    Output file will have same name but appended with a detector identifier
+    and having a different extension.
+
+    Args:
+        input_file_path: file path of the CSV file
+        output_dir: alternative directory in which to save HDF files
+            (defaults to `input_file_path` parent if not provided)
+        skip_existing: whether to skip conversion if the file already exists
+        kwargs: keyword args passed to `aipt_file_to_ss_list()` (not currently used)
+    """
+    input_path = Path(input_file_path)
+    if not output_dir:
+        output_dir = input_path.parent
+    _validate_and_create_output_dir(output_dir)
+    output_file_paths = [
+        os.path.join(output_dir, input_path.stem + f"-{i}{SAMPLESET_FILE_EXTENSION}")
+        for i in ELEMENT_IDS_PER_FILE
+    ]
+    all_output_files_exist = all([os.path.exists(p) for p in output_file_paths])
+    if skip_existing and all_output_files_exist:
+        return
+
+    ss_list = aipt_file_to_ss_list(input_file_path, **kwargs)
+    for output_file_path, ss in zip(output_file_paths, ss_list):
+        ss.to_hdf(output_file_path)
