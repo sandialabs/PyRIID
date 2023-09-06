@@ -24,7 +24,8 @@ from riid.losses import (build_keras_semisupervised_loss_func,
                          poisson_nll_diff, reconstruction_error, sse_diff,
                          weighted_sse_diff)
 from riid.losses.sparsemax import SparsemaxLoss, sparsemax
-from riid.metrics import multi_f1, single_f1
+from riid.metrics import (build_keras_semisupervised_metric_func, multi_f1,
+                          single_f1)
 from riid.models import ModelInput, TFModelBase
 
 tf2onnx.logging.basicConfig(level=tf2onnx.logging.WARNING)
@@ -446,9 +447,6 @@ class MultiEventClassifier(TFModelBase):
 
 
 class LabelProportionEstimator(TFModelBase):
-    METRICS = {
-        "mae": tf.metrics.MeanAbsoluteError,
-    }
     UNSUPERVISED_LOSS_FUNCS = {
         "poisson_nll": poisson_nll_diff,
         "normal_nll": normal_nll_diff,
@@ -490,6 +488,7 @@ class LabelProportionEstimator(TFModelBase):
         "epsilon",
         "sup_loss",
         "unsup_loss",
+        "metrics",
         "beta",
         "hidden_layer_activation",
         "kernel_l1_regularization",
@@ -500,6 +499,7 @@ class LabelProportionEstimator(TFModelBase):
         "activity_l2_regularization",
         "dropout",
         "ood_fp_rate",
+        "fit_spline",
         "spline_bins",
         "spline_k",
         "spline_s",
@@ -512,12 +512,13 @@ class LabelProportionEstimator(TFModelBase):
     )
 
     def __init__(self, hidden_layers: tuple = (256,), sup_loss="sparsemax", unsup_loss="sse",
-                 beta=0.9, source_dict=None, optimizer: str = "adam", learning_rate: float = 1e-3,
-                 epsilon: float = 0.05, hidden_layer_activation: str = "mish",
-                 kernel_l1_regularization: float = 0.0, kernel_l2_regularization: float = 0.0,
-                 bias_l1_regularization: float = 0.0, bias_l2_regularization: float = 0.0,
-                 activity_l1_regularization: float = 0.0, activity_l2_regularization: float = 0.0,
-                 dropout: float = 0.0, target_level: str = "Seed", ood_fp_rate: float = 0.05,
+                 metrics=("mae", "categorical_crossentropy",), beta=0.9, source_dict=None,
+                 optimizer: str = "adam", learning_rate: float = 1e-3, epsilon: float = 0.05,
+                 hidden_layer_activation: str = "mish", kernel_l1_regularization: float = 0.0,
+                 kernel_l2_regularization: float = 0.0, bias_l1_regularization: float = 0.0,
+                 bias_l2_regularization: float = 0.0, activity_l1_regularization: float = 0.0,
+                 activity_l2_regularization: float = 0.0, dropout: float = 0.0,
+                 target_level: str = "Seed", ood_fp_rate: float = 0.05, fit_spline: bool = True,
                  spline_bins: int = 15, spline_k: int = 3, spline_s: int = 0, spline_snrs=None,
                  spline_recon_errors=None, history=None, _info=None, **base_kwargs):
         """
@@ -527,6 +528,7 @@ class LabelProportionEstimator(TFModelBase):
             unsup_loss: unsupervised loss function to use for training the
                 foreground branch of the network (options: "sse", "poisson_nll",
                 "normal_nll", or "weighted_sse")
+            metrics: list of metrics to be evaluating during training
             beta: tradeoff parameter between the supervised and unsupervised foreground loss
             source_dict: 2D array of pure, long-collect foreground spectra
             optimizer: tensorflow optimizer or optimizer name to use for training
@@ -543,6 +545,7 @@ class LabelProportionEstimator(TFModelBase):
             target_level: `SampleSet.sources` column level to use
             ood_fp_rate: false positive rate used to determine threshold for
                 out-of-distribution (OOD) detection
+            fit_spline: whether or not to fit UnivariateSpline for OOD threshold function
             spline_bins: number of bins used when fitting the UnivariateSpline threshold
                 function for OOD detection
             spline_k: degree of smoothing for the UnivariateSpline
@@ -575,6 +578,7 @@ class LabelProportionEstimator(TFModelBase):
             self.optimizer = optimizer
         self.unsup_loss_func = self._get_unsup_loss_func(unsup_loss)
         self.unsup_loss_func_name = f"unsup_{unsup_loss}_loss"
+        self.metrics = metrics
         self.beta = beta
         self.source_dict = source_dict
         self.semisup_loss_func_name = "semisup_loss"
@@ -589,6 +593,7 @@ class LabelProportionEstimator(TFModelBase):
         self.dropout = dropout
         self.target_level = target_level
         self.ood_fp_rate = ood_fp_rate
+        self.fit_spline = fit_spline
         self.spline_bins = spline_bins
         self.spline_k = spline_k
         self.spline_s = spline_s
@@ -767,9 +772,33 @@ class LabelProportionEstimator(TFModelBase):
             normalize_scaler=normalize_scaler
         )
 
+        semisup_metrics = None
+        if self.metrics:
+            if verbose:
+                print("Building metric functions...")
+            semisup_metrics = []
+            for each in self.metrics:
+                if isinstance(each, str):
+                    semisup_metrics.append(
+                        build_keras_semisupervised_metric_func(
+                            tf.keras.metrics.get(each),
+                            self.activation,
+                            sources.shape[1]
+                        )
+                    )
+                else:
+                    semisup_metrics.append(
+                        build_keras_semisupervised_loss_func(
+                            each,
+                            self.activation,
+                            sources.shape[1]
+                        )
+                    )
+
         self.model.compile(
             loss=self.semisup_loss_func,
             optimizer=self.optimizer,
+            metrics=semisup_metrics
         )
 
         es = EarlyStopping(
@@ -798,21 +827,22 @@ class LabelProportionEstimator(TFModelBase):
         )
         self.history = history.history
 
-        if verbose:
-            print("Finding OOD detection threshold function...")
+        if self.fit_spline:
+            if verbose:
+                print("Finding OOD detection threshold function...")
 
-        train_logits = self.model.predict(spectra)
-        train_lpes = self.activation(tf.convert_to_tensor(train_logits, dtype=tf.float32))
-        self.spline_recon_errors = reconstruction_error(
-            tf.convert_to_tensor(spectra, dtype=tf.float32),
-            train_lpes,
-            self.source_dict,
-            self.unsup_loss_func
-        ).numpy()
+            train_logits = self.model.predict(spectra)
+            train_lpes = self.activation(tf.convert_to_tensor(train_logits, dtype=tf.float32))
+            self.spline_recon_errors = reconstruction_error(
+                tf.convert_to_tensor(spectra, dtype=tf.float32),
+                train_lpes,
+                self.source_dict,
+                self.unsup_loss_func
+            ).numpy()
 
-        self.spline_snrs = self._get_snrs(ss, bg_cps, is_gross)
+            self.spline_snrs = self._get_snrs(ss, bg_cps, is_gross)
 
-        self._fit_spline_threshold_func()
+            self._fit_spline_threshold_func()
 
         self.model_outputs = sources_df.columns.values
 
@@ -862,15 +892,16 @@ class LabelProportionEstimator(TFModelBase):
         ).numpy()
         ss.info[self.unsup_loss_func_name] = recon_errors
 
-        snrs = self._get_snrs(ss, bg_cps, is_gross)
+        if self.fit_spline:
+            snrs = self._get_snrs(ss, bg_cps, is_gross)
 
-        # Generate OOD predictions
-        try:
-            thresholds = self.ood_threshold_func(snrs)
-        except AttributeError:
-            self._fit_spline_threshold_func()
-            thresholds = self.ood_threshold_func(snrs)
-        ss.info["ood"] = recon_errors > thresholds
+            # Generate OOD predictions
+            try:
+                thresholds = self.ood_threshold_func(snrs)
+            except AttributeError:
+                self._fit_spline_threshold_func()
+                thresholds = self.ood_threshold_func(snrs)
+            ss.info["ood"] = recon_errors > thresholds
 
     def save(self, file_path) -> Tuple[str, str]:
         """Save the model in ONNX format.

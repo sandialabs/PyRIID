@@ -244,3 +244,12 @@ def _pr_curve(y_true, y_pred, multiclass, smooth):
         thresholds = thresholds[1:]
 
     return precision, recall, thresholds
+
+
+def build_keras_semisupervised_metric_func(keras_metric_func, activation_func,
+                                           n_labels):
+    def metric_func(y_true, y_pred):
+        return keras_metric_func(y_true[:, :n_labels], activation_func(y_pred))
+    metric_func.__name__ = keras_metric_func.__name__
+
+    return metric_func
