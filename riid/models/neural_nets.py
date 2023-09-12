@@ -120,7 +120,7 @@ class MLPClassifier(TFModelBase):
             raise ValueError("No spectr[a|um] provided!")
 
         x_train = ss.get_samples().astype(float)
-        source_contributions_df = ss.sources.groupby(axis=1, level=target_level).sum()
+        source_contributions_df = ss.sources.groupby(axis=1, level=target_level, sort=False).sum()
         y_train = source_contributions_df.values.astype(float)
         if bg_ss:
             x_bg_train = bg_ss.get_samples().astype(float)
@@ -732,7 +732,7 @@ class LabelProportionEstimator(TFModelBase):
             verbose: whether model training output is printed to the terminal
         """
         spectra = ss.get_samples().astype(float)
-        sources_df = ss.sources.groupby(axis=1, level=self._info["target_level"]).sum()
+        sources_df = ss.sources.groupby(axis=1, level=self._info["target_level"], sort=False).sum()
         sources = sources_df.values.astype(float)
         self.sources_columns = sources_df.columns
 
