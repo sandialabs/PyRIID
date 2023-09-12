@@ -46,7 +46,7 @@ model2.predict(train2b_ss, train2b_bg_ss)
 mec = MultiEventClassifier()
 mec.fit(
     [train2a_ss, train2b_ss],
-    train2a_ss.sources.groupby(axis=1, level="Isotope").sum(),
+    train2a_ss.sources.groupby(axis=1, level="Isotope", sort=False).sum(),
     epochs=50
 )
 

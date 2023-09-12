@@ -122,10 +122,10 @@ def precision_recall_curve(ss: SampleSet, smooth: bool = True, multiclass: bool 
            https://jonathan-hui.medium.com/map-mean-average-precision-for-object-detection-45c121a31173)
 
     """
-    y_true = ss.sources.groupby(axis=1, level=target_level).sum()
+    y_true = ss.sources.groupby(axis=1, level=target_level, sort=False).sum()
     if minimum_contribution is not None:
         y_true = (y_true > minimum_contribution).astype(int)
-    y_pred = ss.prediction_probas.groupby(axis=1, level=target_level).sum()
+    y_pred = ss.prediction_probas.groupby(axis=1, level=target_level, sort=False).sum()
 
     # switch from pandas to numpy
     labels = y_true.columns
