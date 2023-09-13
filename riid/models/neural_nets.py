@@ -682,7 +682,7 @@ class LabelProportionEstimator(TFModelBase):
             labels=False,
         )
         thresholds = [
-            np.quantile(np.array(self.spline_recon_errors)[out == int(i)], self.ood_fp_rate)
+            np.quantile(np.array(self.spline_recon_errors)[out == int(i)], 1-self.ood_fp_rate)
             for i in range(self.spline_bins)
         ]
         avg_snrs = [
