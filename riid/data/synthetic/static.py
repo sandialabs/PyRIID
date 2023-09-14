@@ -152,36 +152,51 @@ class StaticSynthesizer(Synthesizer):
         fg_ss_batches = []
         gross_ss_batches = []
 
+        lt_targets = get_distribution_values(self.live_time_function,
+                                             self.live_time_function_args,
+                                             n_samples_per_return,
+                                             self._rng)
+        snr_targets = get_distribution_values(self.snr_function,
+                                              self.snr_function_args,
+                                              n_samples_per_return,
+                                              self._rng)
+        batch_configs = [
+            (
+                b,
+                f,
+                self.samples_per_seed * (b * fg_seeds_ss.n_samples + f),
+                self.samples_per_seed * (b * fg_seeds_ss.n_samples + f + 1),
+            )
+            for f in range(fg_seeds_ss.n_samples)
+            for b in range(bg_seeds_ss.n_samples)
+        ]
+
         fg_labels = fg_seeds_ss.get_labels(target_level="Seed", max_only=False,
                                            level_aggregation=None)
-        for b in range(bg_seeds_ss.n_samples):
-            lt_targets = get_distribution_values(self.live_time_function,
-                                                 self.live_time_function_args,
-                                                 self.samples_per_seed,
-                                                 self._rng)
-            snr_targets = get_distribution_values(self.snr_function,
-                                                  self.snr_function_args,
-                                                  self.samples_per_seed,
-                                                  self._rng)
+        fg_ss_batches = []
+        gross_ss_batches = []
+        for b, f, batch_begin_idx, batch_end_idx in batch_configs:
             bg_seed = bg_seeds_ss.spectra.iloc[b]
             bg_sources = bg_seeds_ss.sources.iloc[b]
-            for f in range(fg_seeds_ss.n_samples):
-                fg_seed = fg_seeds_ss.spectra.iloc[f]
-                fg_sources = fg_seeds_ss.sources.iloc[f]
-                ecal = fg_seeds_ss.ecal[f]
-                fg_batch_ss, gross_batch_ss = self._get_batch(
-                    fg_seed, fg_sources,
-                    bg_seed, bg_sources,
-                    ecal, lt_targets, snr_targets
-                )
-                fg_ss_batches.append(fg_batch_ss)
-                gross_ss_batches.append(gross_batch_ss)
+            fg_seed = fg_seeds_ss.spectra.iloc[f]
+            fg_sources = fg_seeds_ss.sources.iloc[f]
+            batch_lt_targets = lt_targets[batch_begin_idx:batch_end_idx]
+            batch_snr_targets = snr_targets[batch_begin_idx:batch_end_idx]
 
-                if verbose:
-                    self._report_progress(
-                        n_samples_expected,
-                        fg_labels[f]
-                    )
+            ecal = fg_seeds_ss.ecal[f]
+            fg_batch_ss, gross_batch_ss = self._get_batch(
+                fg_seed, fg_sources,
+                bg_seed, bg_sources,
+                ecal, batch_lt_targets, batch_snr_targets
+            )
+            fg_ss_batches.append(fg_batch_ss)
+            gross_ss_batches.append(gross_batch_ss)
+
+            if verbose:
+                self._report_progress(
+                    n_samples_expected,
+                    fg_labels[f]
+                )
 
         fg_ss = gross_ss = None
         if self.return_fg:
