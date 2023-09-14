@@ -40,9 +40,9 @@ model = LabelProportionEstimator(
     # "sse", or "weighted_sse".
     unsup_loss="poisson_nll",
     # This controls the tradeoff between the sup
-    # and unsup losses.
+    # and unsup losses.,
     beta=1e-4,
-    optimizer="adam",
+    optimizer="RMSprop",
     learning_rate=1e-2,
     hidden_layer_activation="relu",
     l2_alpha=1e-4,

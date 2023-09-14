@@ -513,14 +513,15 @@ class LabelProportionEstimator(TFModelBase):
 
     def __init__(self, hidden_layers: tuple = (256,), sup_loss="sparsemax", unsup_loss="sse",
                  metrics=("mae", "categorical_crossentropy",), beta=0.9, source_dict=None,
-                 optimizer: str = "adam", learning_rate: float = 1e-3, epsilon: float = 0.05,
-                 hidden_layer_activation: str = "mish", kernel_l1_regularization: float = 0.0,
-                 kernel_l2_regularization: float = 0.0, bias_l1_regularization: float = 0.0,
-                 bias_l2_regularization: float = 0.0, activity_l1_regularization: float = 0.0,
-                 activity_l2_regularization: float = 0.0, dropout: float = 0.0,
-                 target_level: str = "Seed", ood_fp_rate: float = 0.05, fit_spline: bool = True,
-                 spline_bins: int = 15, spline_k: int = 3, spline_s: int = 0, spline_snrs=None,
-                 spline_recon_errors=None, history=None, _info=None, **base_kwargs):
+                 optimizer="adam", optimizer_kwargs=None, learning_rate: float = 1e-3,
+                 epsilon: float = 0.05, hidden_layer_activation: str = "mish",
+                 kernel_l1_regularization: float = 0.0, kernel_l2_regularization: float = 0.0,
+                 bias_l1_regularization: float = 0.0, bias_l2_regularization: float = 0.0,
+                 activity_l1_regularization: float = 0.0, activity_l2_regularization: float = 0.0,
+                 dropout: float = 0.0, target_level: str = "Seed", ood_fp_rate: float = 0.05,
+                 fit_spline: bool = True, spline_bins: int = 15, spline_k: int = 3,
+                 spline_s: int = 0, spline_snrs=None, spline_recon_errors=None, history=None,
+                 _info=None, **base_kwargs):
         """
         Args:
             hidden_layers: tuple defining the number and size of dense layers
@@ -532,7 +533,8 @@ class LabelProportionEstimator(TFModelBase):
             beta: tradeoff parameter between the supervised and unsupervised foreground loss
             source_dict: 2D array of pure, long-collect foreground spectra
             optimizer: tensorflow optimizer or optimizer name to use for training
-            learning_rate: learning rate for the foreground optimizer
+            optimizer_kwargs: kwargs for optimizer
+            learning_rate: learning rate for the optimizer
             epsilon: epsilon constant for the Adam optimizer
             hidden_layer_activation: activattion function to use for each dense layer
             kernel_l1_regularization: l1 regularization value for the kernel regularizer
@@ -568,14 +570,15 @@ class LabelProportionEstimator(TFModelBase):
             prefix="sup"
         )
         self.sup_loss_func_name = self.sup_loss_func.name
-        self.optimizer_name = optimizer
-        if self.optimizer_name == "adam":
-            self.optimizer = Adam(
-                learning_rate=learning_rate,
-                epsilon=epsilon
-            )
-        else:
-            self.optimizer = optimizer
+
+        self.optimizer = optimizer
+        if isinstance(optimizer, str):
+            self.optimizer = tf.keras.optimizers.get(optimizer)
+        if optimizer_kwargs is not None:
+            for key, value in optimizer_kwargs.items():
+                setattr(self.optimizer, key, value)
+        self.optimizer.learning_rate = learning_rate
+
         self.unsup_loss_func = self._get_unsup_loss_func(unsup_loss)
         self.unsup_loss_func_name = f"unsup_{unsup_loss}_loss"
         self.metrics = metrics
