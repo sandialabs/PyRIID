@@ -3,7 +3,6 @@
 # the U.S. Government retains certain rights in this software.
 """This module contains utilities for working with the GADRAS API."""
 import json
-import logging
 import os
 import sys
 
@@ -231,8 +230,9 @@ class SourceInjector(BaseInjector):
             worker = self.gadras_api.GetBatchInjectWorker()
 
         injects_exist = False
-        source_configs = tqdm.tqdm(config["sources"], desc="Running injects")
-        for fg in source_configs:
+        pbar = tqdm.tqdm(config["sources"], desc="Running injects")
+        for fg in pbar:
+            pbar.set_description(f"Running inject for '{fg['isotope']}'")
             inject_setups = self._get_inject_setups_for_sources(
                 self.gadras_api,
                 config["gamma_detector"]["parameters"],
@@ -253,7 +253,7 @@ class SourceInjector(BaseInjector):
 
         # Add source name to foreground seeds file
         if verbose:
-            logging.info("Filling in source names...")
+            print("Filling in source names...")
         record_num = 1
         for fg in config["sources"]:
             for source in fg["configurations"]:
@@ -272,7 +272,7 @@ class SourceInjector(BaseInjector):
         )
 
         if verbose:
-            logging.info(f"Sources saved to: {abs_output_path}")
+            print(f"Sources saved to '{abs_output_path}'")
 
         return abs_output_path
 
