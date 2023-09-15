@@ -116,7 +116,7 @@ class SeedSynthesizer():
 
                     # Source injects
                     if verbose:
-                        print("Obtaining sources...")
+                        print(f"Obtaining sources for '{detector_name}'")
                     pcf_abs_path = source_injector.generate(
                         config,
                         rel_output_path,
@@ -127,6 +127,9 @@ class SeedSynthesizer():
                     if normalize_sources:
                         seeds_ss.normalize_sources()
                     source_list.append(seeds_ss)
+
+                    if verbose:
+                        print()
 
                 if dry_run:
                     return None
