@@ -63,7 +63,8 @@ class SeedSynthesizer():
         if not dry_run:
             gadras_api.detectorSaveParameters()
 
-    def generate(self, config: Union[str, dict], normalize_sources=True,
+    def generate(self, config: Union[str, dict],
+                 normalize_spectra: bool = True, normalize_sources: bool = True,
                  dry_run=False, verbose: bool = False) -> SampleSet:
         """Produce a `SampleSet` containing foreground and/or background seeds using GADRAS based
         on the given inject configuration.
@@ -72,6 +73,7 @@ class SeedSynthesizer():
             config: dictionary is treated as the actual config containing the needed information
                 to perform injects via the GADRAS API, while a string is treated as a path to a YAML
                 file which deserialized as a dictionary
+            normalize_spectra: whether to divide each row of `SampleSet.spectra` by each row's sum
             normalize_sources: whether to divide each row of `SampleSet.sources` by each row's sum
             dry_run: when False, actually perform inject(s), otherwise simply report info about
                 what would hypothetically happen
@@ -123,9 +125,10 @@ class SeedSynthesizer():
                         verbose=verbose
                     )
                     seeds_ss = read_pcf(pcf_abs_path)
-                    seeds_ss.normalize()
-                    if normalize_sources:
-                        seeds_ss.normalize_sources()
+                    if not normalize_sources:
+                        seeds_ss.sources *= seeds_ss.spectra.sum(axis=1).values
+                    if normalize_spectra:
+                        seeds_ss.normalize()
                     source_list.append(seeds_ss)
 
                     if verbose:

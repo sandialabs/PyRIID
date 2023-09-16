@@ -1406,26 +1406,24 @@ def _write_hdf(ss: SampleSet, output_path: str, **kwargs):
         }
         store_kwargs.update(kwargs)
 
-        store = pd.HDFStore(output_path, "w", **store_kwargs)
-
         put_kwargs = {
             "format": "fixed",
             "track_times": False,
         }
-        store.put("spectra", ss.spectra, **put_kwargs)
-        store.put("sources", ss.sources, **put_kwargs)
-        store.put("info", ss.info, **put_kwargs)
-        store.put("prediction_probas", ss.prediction_probas, **put_kwargs)
+        with pd.HDFStore(output_path, "w", **store_kwargs) as store:
+            store.put("spectra", ss.spectra, **put_kwargs)
+            store.put("sources", ss.sources, **put_kwargs)
+            store.put("info", ss.info, **put_kwargs)
+            store.put("prediction_probas", ss.prediction_probas, **put_kwargs)
 
-        other_info = {
-            "spectra_state": ss.spectra_state,
-            "measured_or_synthetic": ss.measured_or_synthetic,
-            "detector_info": ss.detector_info,
-            "synthesis_info": ss.synthesis_info,
-            "classified_by": ss.classified_by,
-        }
-        store.put("other_info", pd.DataFrame(data=[other_info]), **put_kwargs)
-        store.close()
+            other_info = {
+                "spectra_state": ss.spectra_state,
+                "measured_or_synthetic": ss.measured_or_synthetic,
+                "detector_info": ss.detector_info,
+                "synthesis_info": ss.synthesis_info,
+                "classified_by": ss.classified_by,
+            }
+            store.put("other_info", pd.DataFrame(data=[other_info]), **put_kwargs)
 
 
 def _ss_to_pcf_dict(ss: SampleSet, verbose=False) -> dict:
@@ -1605,7 +1603,7 @@ def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
     new_index = pd.MultiIndex.from_tuples(sources, names=SampleSet.SOURCES_MULTI_INDEX_NAMES)
     sources_df = pd.DataFrame(np.zeros((n_samples, n_sources)), columns=new_index)
     for i, key in enumerate(sources):
-        sources_df[key].iloc[i] = 1.0
+        sources_df.loc[i, key] = 1.0
 
     ss = SampleSet()
     ss.spectra = pd.DataFrame(data=spectra)
