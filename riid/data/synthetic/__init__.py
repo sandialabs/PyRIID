@@ -250,7 +250,7 @@ def get_distribution_values(function: str, function_args: Any, n_values: int,
     elif function == "discrete":
         values = rng.choice(function_args, size=n_values)
     elif function == "list":
-        values = function_args
+        values = np.array(function_args)
     else:
         raise ValueError(f"{function} function not supported for sampling.")
 
