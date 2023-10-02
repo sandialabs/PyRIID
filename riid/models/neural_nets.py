@@ -20,9 +20,9 @@ from scipy.interpolate import UnivariateSpline
 
 from riid.data.sampleset import SampleSet
 from riid.losses import (build_keras_semisupervised_loss_func,
-                         jensen_shannon_divergence, mish, normal_nll_diff,
-                         poisson_nll_diff, reconstruction_error, sse_diff,
-                         weighted_sse_diff)
+                         chi_squared_diff, jensen_shannon_divergence, mish,
+                         normal_nll_diff, poisson_nll_diff,
+                         reconstruction_error, sse_diff, weighted_sse_diff)
 from riid.losses.sparsemax import SparsemaxLoss, sparsemax
 from riid.metrics import (build_keras_semisupervised_metric_func, multi_f1,
                           single_f1)
@@ -453,6 +453,7 @@ class LabelProportionEstimator(TFModelBase):
         "sse": sse_diff,
         "weighted_sse": weighted_sse_diff,
         "jsd": jensen_shannon_divergence,
+        "chi_squared": chi_squared_diff
     }
     SUPERVISED_LOSS_FUNCS = {
         "sparsemax": (
@@ -528,7 +529,7 @@ class LabelProportionEstimator(TFModelBase):
             sup_loss: supervised loss function to use for training
             unsup_loss: unsupervised loss function to use for training the
                 foreground branch of the network (options: "sse", "poisson_nll",
-                "normal_nll", or "weighted_sse")
+                "normal_nll", "weighted_sse", "jsd", or "chi_squared")
             metrics: list of metrics to be evaluating during training
             beta: tradeoff parameter between the supervised and unsupervised foreground loss
             source_dict: 2D array of pure, long-collect foreground spectra
