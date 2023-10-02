@@ -194,3 +194,24 @@ def jensen_shannon_divergence(p, q):
     m = (p + q) / 2
     jsd = (kld(p, m) + kld(q, m)) / 2
     return jsd
+
+
+def chi_squared_diff(spectra, reconstructed_spectra):
+    """Compute the Chi-Squared test.
+
+    Args:
+        spectra: spectral samples, assumed to be in counts
+        reconstructed_spectra: reconstructed spectra created using a
+            dictionary with label proportion estimates
+    """
+    total_counts = tf.reduce_sum(spectra, axis=1)
+    scaled_reconstructed_spectra = tf.multiply(
+        reconstructed_spectra,
+        tf.reshape(total_counts, (-1, 1))
+    )
+
+    diff = tf.math.subtract(spectra, scaled_reconstructed_spectra)
+    squared_diff = tf.math.square(diff)
+    variances = tf.clip_by_value(spectra, 1, np.inf)
+    chi_squared = tf.math.divide(squared_diff, variances)
+    return tf.reduce_sum(chi_squared, axis=-1)
