@@ -191,9 +191,21 @@ def mish(x):
 
 
 def jensen_shannon_divergence(p, q):
+    p_sum = tf.reduce_sum(p, axis=-1)
+    p_norm = tf.divide(
+        p,
+        tf.reshape(p_sum, (-1, 1))
+    )
+
+    q_sum = tf.reduce_sum(q, axis=-1)
+    q_norm = tf.divide(
+        q,
+        tf.reshape(q_sum, (-1, 1))
+    )
+
     kld = tf.keras.losses.KLDivergence(reduction=tf.keras.losses.Reduction.NONE)
-    m = (p + q) / 2
-    jsd = (kld(p, m) + kld(q, m)) / 2
+    m = (p_norm + q_norm) / 2
+    jsd = (kld(p_norm, m) + kld(q_norm, m)) / 2
     return jsd
 
 
