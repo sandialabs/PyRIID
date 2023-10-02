@@ -88,12 +88,13 @@ def sse_diff(spectra, reconstructed_spectra):
         reconstructed_spectra: reconstructed spectra created using a
             dictionary with label proportion estimates
     """
-    total_counts = tf.reduce_sum(spectra, axis=-1)
-    normalized_spectra = tf.divide(
-        spectra,
+    total_counts = tf.reduce_sum(spectra, axis=1)
+    scaled_reconstructed_spectra = tf.multiply(
+        reconstructed_spectra,
         tf.reshape(total_counts, (-1, 1))
     )
-    diff = normalized_spectra - reconstructed_spectra
+
+    diff = spectra - scaled_reconstructed_spectra
     norm_diff = tf.norm(diff, axis=-1)
     squared_norm_diff = tf.square(norm_diff)
     return squared_norm_diff
