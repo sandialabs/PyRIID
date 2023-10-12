@@ -1364,14 +1364,14 @@ def read_hdf(path: str) -> SampleSet:
     Returns:
         `SampleSet` object
     """
-    ss = None
-    if not os.path.isfile(path):
-        raise FileNotFoundError(f"No file found at location '{path}'.")
+    expanded_path = os.path.expanduser(path)
+    if not os.path.isfile(expanded_path):
+        raise FileNotFoundError(f"No file found at location '{expanded_path}'.")
 
-    ss = _read_hdf(path)
+    ss = _read_hdf(expanded_path)
 
     if not ss:
-        raise FileNotFoundError(f"No data found at location '{path}'.")
+        raise FileNotFoundError(f"No data found at location '{expanded_path}'.")
 
     return ss
 
@@ -1386,7 +1386,8 @@ def read_pcf(path: str, verbose: bool = False) -> SampleSet:
     Returns:
         `Sampleset` object
     """
-    return _pcf_dict_to_ss(_pcf_to_dict(path, verbose), verbose)
+    expanded_path = os.path.expanduser(path)
+    return _pcf_dict_to_ss(_pcf_to_dict(expanded_path, verbose), verbose)
 
 
 def _dict_to_bulleted_list(data_dict: dict, level=0, indent=4, bullet="-") -> str:
