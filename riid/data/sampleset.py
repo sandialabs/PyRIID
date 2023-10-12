@@ -29,7 +29,6 @@ from riid.data.labeling import (NO_CATEGORY, NO_ISOTOPE, NO_SEED,
                                 _find_category, _find_isotope)
 from riid.gadras.pcf import (_dict_to_pcf, _pack_compressed_text_buffer,
                              _pcf_to_dict, _unpack_compressed_text_buffer)
-from riid.losses import jensen_shannon_divergence
 
 
 class SpectraState(Enum):
@@ -936,7 +935,7 @@ class SampleSet():
 
     def get_confidences(self, fg_seeds_ss: SampleSet, bg_seed_ss: SampleSet = None,
                         bg_cps: float = None, is_lpe: bool = False,
-                        confidence_func: Callable = jensen_shannon_divergence,
+                        confidence_func: Callable = None,
                         **confidence_func_kwargs) -> np.ndarray:
         """Get confidence measure for predictions as a NumPy array.
 
@@ -985,6 +984,10 @@ class SampleSet():
                 raise ValueError(msg)
             if not bg_cps or bg_cps <= 0:
                 raise ValueError("Positive background count rate required.")
+
+        if confidence_func is None:
+            from riid.losses import jensen_shannon_divergence
+            confidence_func = jensen_shannon_divergence
 
         if is_lpe:
             recon_proportions = self.prediction_probas.values
