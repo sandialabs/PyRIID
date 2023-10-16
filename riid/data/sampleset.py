@@ -1739,7 +1739,7 @@ def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
             "total_counts": sum(spectrum["spectrum"]),
             "neutron_counts": spectrum["header"]["Total_Neutron_Counts"],
             "distance_cm": distance,
-            "area_density": ad,
+            "areal_density": ad,
             "ecal_order_0": order_0,
             "ecal_order_1": order_1,
             "ecal_order_2": order_2,
