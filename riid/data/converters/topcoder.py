@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from riid import SAMPLESET_FILE_EXTENSION
+from riid import SAMPLESET_HDF_FILE_EXTENSION
 from riid.data.converters import _validate_and_create_output_dir
 from riid.data.labeling import label_to_index_element
 from riid.data.sampleset import SampleSet
@@ -182,7 +182,7 @@ def convert_and_save(input_file_path: str, output_dir: str = None,
     if not output_dir:
         output_dir = input_path.parent
     _validate_and_create_output_dir(output_dir)
-    output_file_path = os.path.join(output_dir, input_path.stem + SAMPLESET_FILE_EXTENSION)
+    output_file_path = os.path.join(output_dir, input_path.stem + SAMPLESET_HDF_FILE_EXTENSION)
     if skip_existing and os.path.exists(output_file_path):
         return
 

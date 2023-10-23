@@ -135,6 +135,8 @@ def _read_header(header_bytes: list, header_def: dict):
     for field, value in zip(header_def["fields"], header_values):
         if isinstance(value, bytes) and field != "last_mod_hash":
             value = value.decode("utf-8", "ignore")
+        elif field == "last_mod_hash":
+            value = str(value)
         header.update({field: value})
     return header
 

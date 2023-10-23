@@ -10,7 +10,7 @@ from typing import List
 
 import pandas as pd
 
-from riid import SAMPLESET_FILE_EXTENSION
+from riid import SAMPLESET_HDF_FILE_EXTENSION
 from riid.data.converters import _validate_and_create_output_dir
 from riid.data.sampleset import SampleSet
 
@@ -110,7 +110,7 @@ def convert_and_save(input_file_path: str, output_dir: str = None,
         output_dir = input_path.parent
     _validate_and_create_output_dir(output_dir)
     output_file_paths = [
-        os.path.join(output_dir, input_path.stem + f"-{i}{SAMPLESET_FILE_EXTENSION}")
+        os.path.join(output_dir, input_path.stem + f"-{i}{SAMPLESET_HDF_FILE_EXTENSION}")
         for i in ELEMENT_IDS_PER_FILE
     ]
     all_output_files_exist = all([os.path.exists(p) for p in output_file_paths])

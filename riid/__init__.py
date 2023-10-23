@@ -17,7 +17,8 @@ MPL_LOGGER = logging.getLogger("matplotlib")
 MPL_LOGGER.setLevel(logging.WARNING)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
 
-SAMPLESET_FILE_EXTENSION = ".h5"
+SAMPLESET_HDF_FILE_EXTENSION = ".h5"
+SAMPLESET_JSON_FILE_EXTENSION = ".json"
 PCF_FILE_EXTENSION = ".pcf"
 RIID = "riid"
 

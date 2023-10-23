@@ -6,7 +6,7 @@ import os
 import tempfile
 import unittest
 
-from riid import SAMPLESET_FILE_EXTENSION
+from riid import SAMPLESET_HDF_FILE_EXTENSION
 from riid.data.labeling import label_to_index_element
 from riid.data.sampleset import SampleSet, _write_hdf, read_hdf
 from riid.data.synthetic import get_dummy_seeds
@@ -22,7 +22,7 @@ class TestData(unittest.TestCase):
     def _get_temp_ss_path(self):
         default_temp_dir = tempfile._get_default_tempdir()
         temp_file_name = next(tempfile._get_candidate_names())
-        return os.path.join(default_temp_dir, temp_file_name + SAMPLESET_FILE_EXTENSION)
+        return os.path.join(default_temp_dir, temp_file_name + SAMPLESET_HDF_FILE_EXTENSION)
 
     def test_to_hdf_and_read_hdf(self):
         """Tests loading of SampleSets saved in hdf format."""
