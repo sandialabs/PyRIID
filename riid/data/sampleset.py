@@ -6,6 +6,7 @@ from __future__ import \
     annotations  # Enables SampleSet hints inside SampleSet itself
 
 import copy
+import json
 import logging
 import operator
 import os
@@ -1216,10 +1217,30 @@ class SampleSet():
         Raises:
             `ValueError` when provided path extension is invalid
         """
-        if not path.lower().endswith(riid.SAMPLESET_FILE_EXTENSION):
-            logging.warning(f"Path does not end in {riid.SAMPLESET_FILE_EXTENSION}")
+        if not path.lower().endswith(riid.SAMPLESET_HDF_FILE_EXTENSION):
+            logging.warning(f"Path does not end in {riid.SAMPLESET_HDF_FILE_EXTENSION}")
 
         _write_hdf(self, path, **kwargs)
+        if verbose:
+            logging.info(f"Saved SampleSet to '{path}'")
+
+    def to_json(self, path: str, verbose=False):
+        """Write the `SampleSet` to disk as a JSON file.
+
+        Warning: it is not recommended that you use this on large `SampleSet` objects.
+        Consider `SampleSet.to_hdf()` instead in such cases.
+
+        Args:
+            path: file path at which to save as an HDF file
+            verbose: whether to display detailed output
+
+        Raises:
+            `ValueError` when provided path extension is invalid
+        """
+        if not path.lower().endswith(riid.SAMPLESET_JSON_FILE_EXTENSION):
+            logging.warning(f"Path does not end in {riid.SAMPLESET_JSON_FILE_EXTENSION}")
+
+        _write_json(self, path)
         if verbose:
             logging.info(f"Saved SampleSet to '{path}'")
 
@@ -1640,7 +1661,7 @@ def _ss_to_pcf_dict(ss: SampleSet, verbose=False) -> dict:
 
     info_timestamps = ss.info.timestamp.fillna("")
     info_tags = ss.info.tag.fillna("")
-    info_zero_fill = ss.info.fillna(0)
+    info_zero_fill = ss.info.fillna(0).astype(float, errors="ignore")
     for i in sample_range:
         title = isotopes[i] if not isotopes.empty else NO_ISOTOPE
         description = ss.info.description.fillna("").iloc[i]
@@ -1663,7 +1684,7 @@ def _ss_to_pcf_dict(ss: SampleSet, verbose=False) -> dict:
             "Total_Neutron_Counts": info_zero_fill.neutron_counts.iloc[i],
         }
 
-        spectrum = ss.spectra.iloc[i, :].values
+        spectrum = ss.spectra.iloc[i, :].values.astype(float).tolist()
         spectra.append({"header": header, "spectrum": spectrum})
 
     return {"header": pcf_header, "spectra": spectra}
@@ -1768,6 +1789,22 @@ def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
     ss.measured_or_synthetic = "synthetic",
     ss.detector_info["pcf_metadata"] = pcf_dict["header"]
 
+    return ss
+
+
+def _write_json(ss: SampleSet, output_path: str):
+    ss_dict = _ss_to_pcf_dict(ss)
+    ss_dict["detector_info"] = ss.detector_info
+    with open(output_path, "w") as fout:
+        json.dump(ss_dict, fout, indent=4)
+
+
+def read_json(path: str) -> SampleSet:
+    expanded_path = os.path.expanduser(path)
+    with open(expanded_path, "r") as fin:
+        ss_dict = json.load(fin)
+    ss = _pcf_dict_to_ss(ss_dict)
+    ss.detector_info = ss_dict["detector_info"]
     return ss
 
 

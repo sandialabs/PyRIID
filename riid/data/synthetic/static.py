@@ -215,7 +215,7 @@ class StaticSynthesizer(Synthesizer):
         return fg_ss, gross_ss
 
     def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet,
-                 verbose: bool = True) -> Tuple[SampleSet, SampleSet, SampleSet]:
+                 verbose: bool = True) -> Tuple[SampleSet, SampleSet]:
         """Generate a `SampleSet` of gamma spectra from the provided config.
 
         Args:
