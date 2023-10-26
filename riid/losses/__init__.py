@@ -209,6 +209,11 @@ def jensen_shannon_divergence(p, q):
     return jsd
 
 
+def jensen_shannon_distance(p, q):
+    divergence = jensen_shannon_divergence(p, q)
+    return tf.math.sqrt(divergence)
+
+
 def chi_squared_diff(spectra, reconstructed_spectra):
     """Compute the Chi-Squared test.
 

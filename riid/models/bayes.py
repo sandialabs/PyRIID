@@ -8,10 +8,10 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 
 from riid.data.sampleset import SampleSet
-from riid.models import TFModelBase
+from riid.models import PyRIIDModel
 
 
-class PoissonBayesClassifier(TFModelBase):
+class PoissonBayesClassifier(PyRIIDModel):
     """This Poisson-Bayes classifier calculates the conditional Poisson log probability of each
     seed spectrum given the measurement.
 
@@ -139,7 +139,7 @@ class PoissonBayesClassifier(TFModelBase):
         bg_spectra = tf.convert_to_tensor(bg_ss.spectra.values, dtype=tf.float32)
         bg_lts = tf.convert_to_tensor(bg_ss.info.live_time.values, dtype=tf.float32)
 
-        prediction_probas = self.model.predict((
+        prediction_probas = self.get_predictions((
             gross_spectra, gross_lts, bg_spectra, bg_lts
         ), batch_size=512, verbose=verbose)
 
