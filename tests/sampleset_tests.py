@@ -881,7 +881,7 @@ class TestSampleSet(unittest.TestCase):
         )
         perfect_fg_conf = fg_seeds_ss.get_confidences(fg_seeds_ss[:])
 
-        mixer = SeedMixer(fg_seeds_ss, mixture_size=3, random_state=random_state)
+        mixer = SeedMixer(fg_seeds_ss, mixture_size=3, rng=rng)
         mixed_fg_seeds_ss = mixer.generate(50)
         mixed_fg_seeds_ss.prediction_probas = pd.DataFrame(
             data=mixed_fg_seeds_ss.sources.values,

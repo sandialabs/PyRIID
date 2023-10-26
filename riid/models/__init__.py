@@ -2,13 +2,17 @@
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
 """This module contains the base TFModel class."""
+import json
 import os
 import uuid
 import warnings
 from enum import Enum
 
+import numpy as np
+import onnxruntime
 import pandas as pd
 import tensorflow as tf
+import tf2onnx
 
 import riid
 from riid.data.labeling import label_to_index_element
@@ -23,10 +27,11 @@ class ModelInput(Enum):
     ForegroundSpectrum = 2
 
 
-class TFModelBase:
+class PyRIIDModel:
     """Base class for TensorFlow models."""
 
     CUSTOM_OBJECTS = {"multi_f1": multi_f1, "single_f1": single_f1}
+    SUPPORTED_SAVE_EXTS = {"H5": ".h5", "ONNX": ".onnx"}
 
     def __init__(self, *args, **kwargs):
         self._info = {}
@@ -107,7 +112,8 @@ class TFModelBase:
         """Save the model to a file.
 
         Args:
-            file_path: file path at which to save the model
+            file_path: file path at which to save the model, can be either .h5 or
+                .onnx format
 
         Raises:
             `ValueError` when the given file path already exists
@@ -115,10 +121,33 @@ class TFModelBase:
         if os.path.exists(file_path):
             raise ValueError("Path already exists.")
 
+        root, ext = os.path.splitext(file_path)
+        if ext.lower() not in self.SUPPORTED_SAVE_EXTS.values():
+            raise NameError("Model must be an .onnx or .h5 file.")
+
         warnings.filterwarnings("ignore")
 
-        self.model.save(file_path, save_format="h5")
-        pd.DataFrame([[v] for v in self.info.values()], self.info.keys()).to_hdf(file_path, "_info")
+        if ext.lower() == self.SUPPORTED_SAVE_EXTS["H5"]:
+            self.model.save(file_path, save_format="h5")
+            pd.DataFrame(
+                [[v] for v in self.info.values()],
+                self.info.keys()
+            ).to_hdf(file_path, "_info")
+        else:
+            model_path = root + self.SUPPORTED_SAVE_EXTS["ONNX"]
+            model_info_path = root + "_info.json"
+
+            model_info_df = pd.DataFrame(
+                [[v] for v in self.info.values()],
+                self.info.keys()
+            )
+            model_info_df[0].to_json(model_info_path, indent=4)
+
+            tf2onnx.convert.from_keras(
+                self.model,
+                input_signature=None,
+                output_path=model_path
+            )
 
         warnings.resetwarnings()
 
@@ -126,17 +155,43 @@ class TFModelBase:
         """Load the model from a file.
 
         Args:
-            file_path: file path from which to load the model
+            file_path: file path from which to load the model, must be either an
+            .h5 or .onnx file
         """
+
+        root, ext = os.path.splitext(file_path)
+        if ext.lower() not in self.SUPPORTED_SAVE_EXTS.values():
+            raise NameError("Model must be an .onnx or .h5 file.")
+
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        self.model = tf.keras.models.load_model(
-            file_path,
-            custom_objects=self.CUSTOM_OBJECTS
-        )
-        self._info = pd.read_hdf(file_path, "_info")[0].to_dict()
+        if ext.lower() == self.SUPPORTED_SAVE_EXTS["H5"]:
+            self.model = tf.keras.models.load_model(
+                file_path,
+                custom_objects=self.CUSTOM_OBJECTS
+            )
+            self._info = pd.read_hdf(file_path, "_info")[0].to_dict()
+        else:
+            model_path = root + self.SUPPORTED_SAVE_EXTS["ONNX"]
+            model_info_path = root + "_info.json"
+            with open(model_info_path) as fin:
+                model_info = json.load(fin)
+                self._info = model_info
+            self.onnx_session = onnxruntime.InferenceSession(model_path)
 
         warnings.resetwarnings()
+
+    def get_predictions(self, x, **kwargs):
+        if self.model is not None:
+            outputs = self.model.predict(x, **kwargs)
+        elif self.onnx_session is not None:
+            outputs = self.onnx_session.run(
+                [self.onnx_session.get_outputs()[0].name],
+                {self.onnx_session.get_inputs()[0].name: x.astype(np.float32)}
+            )[0]
+        else:
+            raise ValueError("No model found with which to obtain predictions.")
+        return outputs
 
     def serialize(self) -> bytes:
         """Convert model to a bytes object.

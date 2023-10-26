@@ -13,15 +13,18 @@ from riid.data.synthetic.seed import SeedMixer
 from riid.data.synthetic.static import StaticSynthesizer
 from riid.models.bayes import (NegativeSpectrumError, PoissonBayesClassifier,
                                ZeroTotalCountsError)
+from riid.models.neural_nets import (LabelProportionEstimator, MLPClassifier,
+                                     MultiEventClassifier)
+from riid.models.neural_nets.arad import ARAD, ARADv1TF, ARADv2TF
 
 
-class TestPoissonBayesClassifier(unittest.TestCase):
-    """Test class for PoissonBayesClassifier."""
+class TestModels(unittest.TestCase):
+    """Test class for PyRIID models."""
     def setUp(self):
         """Test setup."""
         pass
 
-    def test_constructor_errors(self):
+    def test_pb_constructor_errors(self):
         """Testing for constructor errors when different arguments are provided."""
         pb_model = PoissonBayesClassifier()
 
@@ -51,7 +54,7 @@ class TestPoissonBayesClassifier(unittest.TestCase):
         ss.spectra = pd.DataFrame(spectra)
         self.assertRaises(ZeroTotalCountsError, pb_model.fit, ss)
 
-    def test_constructor_and_predict(self):
+    def test_pb_constructor_and_predict(self):
         """Tests the constructor with a valid SampleSet."""
         seeds_ss = get_dummy_seeds()
         fg_seeds_ss, bg_seeds_ss = seeds_ss.split_fg_and_bg()
@@ -79,6 +82,16 @@ class TestPoissonBayesClassifier(unittest.TestCase):
         truth_labels = fg_seeds_ss.get_labels()
         predictions_labels = test_gross_ss.get_predictions()
         assert (truth_labels == predictions_labels).all()
+
+    def test_all_constructors(self):
+        _ = PoissonBayesClassifier()
+        _ = MLPClassifier()
+        _ = LabelProportionEstimator()
+        _ = MultiEventClassifier()
+        arad_v1 = ARADv1TF()
+        _ = ARAD(arad_v1)
+        arad_v2 = ARADv2TF()
+        _ = ARAD(arad_v2)
 
 
 if __name__ == "__main__":
