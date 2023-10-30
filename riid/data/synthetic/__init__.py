@@ -60,8 +60,11 @@ class Synthesizer():
         percent_complete = 100 * self._n_samples_synthesized / n_samples_expected
         msg = (
             f"Synthesizing ... {percent_complete:.0f}% "
-            f"(currently on {batch_name})"
+            f"(currently on {batch_name}"
         )
+        MAX_MSG_LEN = 80
+        msg = (msg[:MAX_MSG_LEN] + "...") if len(msg) > MAX_MSG_LEN else msg
+        msg += ")"
         print("\033[K" + msg, end="\r")
 
     def _report_completion(self, delay):
