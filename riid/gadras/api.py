@@ -151,7 +151,7 @@ DETECTOR_PARAMS = {
     # "MAX_ENERGY_KEV": {"type": "int"},
     # "INBIN": {"type": "int"},
     # "REBIN": {"type": "int"},
-    # "PILEUP": {"type": "int"},
+    "PILEUP": {"type": "int"},
     # "SIDE_SHIELD_PERC_PLUS_X": {"type": "float"},
     # "SIDE_SHIELD_PERC_MINUS_X": {"type": "float"},
     # "SIDE_SHIELD_PERC_PLUS_Y": {"type": "float"},
