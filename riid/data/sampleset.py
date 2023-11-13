@@ -581,44 +581,6 @@ class SampleSet():
         new_ss.info[ecal_cols] = new_ecal
         return new_ss
 
-    def squash(self) -> SampleSet:
-        """Combine all rows of the `SampleSet` into a single row.
-
-        All data suited for summing is summed, otherwise the info from the first
-        sample is used.
-
-        Returns:
-            A flattened `SampleSet`
-        """
-        flat_spectra = self.spectra.sum(axis=0).to_frame().T
-        flat_sources = self.sources.sum(axis=0).to_frame().T
-        flat_prediction_probas = self.prediction_probas.sum(axis=0).to_frame().T
-        flat_info = self.info.iloc[0].to_frame().T
-
-        if "description" in flat_info:
-            flat_info.description = "squashed"
-        if "live_time" in flat_info:
-            flat_info.live_time = self.info.live_time.sum()
-        if "real_time" in flat_info:
-            flat_info.real_time = self.info.real_time.sum()
-        if "total_counts" in flat_info:
-            flat_info.total_counts = self.info.total_counts.sum()
-        if "snr" in flat_info:
-            flat_info.snr = self.info.snr.sum()
-
-        # Create a new SampleSet with the flattened data
-        flat_ss = SampleSet()
-        flat_ss.spectra = flat_spectra
-        flat_ss.sources = flat_sources
-        flat_ss.prediction_probas = flat_prediction_probas
-        flat_ss.info = flat_info
-        # Copy dictionary and other non-DataFrame objects from full ss
-        flat_ss._detector_info = self._detector_info
-        flat_ss._synthesis_info = self._synthesis_info
-        flat_ss._measured_or_synthetic = self._measured_or_synthetic
-
-        return flat_ss
-
     def clip_negatives(self, min_value: float = 0):
         """Clip spectrum values to some minimum value.
 
@@ -626,6 +588,92 @@ class SampleSet():
             min_value: value to which to clip existing spectrum values
         """
         self._spectra = pd.DataFrame(data=self._spectra.clip(min_value))
+
+    def compare_to(self, ss: SampleSet, n_bins: int = 20, density: bool = False) \
+            -> Tuple[dict, dict, dict]:
+        """Compare the current `SampleSet` to another `SampleSet`.
+
+        The function only compares the selected, mutual information of
+        each `SampleSet` by computing the Jensen-Shannon distance between
+        histograms of that information.
+
+        Args:
+            ss: `SampleSet` to compare to
+            n_bins: number of bins we will sort both sample sets by
+            density: whether histograms should be in counts or density
+
+        Returns:
+            Tuple of the following:
+
+            - ss1_stats: dictionary of stats describing the first `SampleSet`
+            - ss2_stats: dictionary of stats describing the second `SampleSet`
+            - col_comparisons: dictionary of distance values comparing each stat
+        """
+        TARGET_SUMMARY_STATS = ["min", "max", "median", "mean", "std"]
+        STAT_PRECISION = 3
+
+        # Get info columns we want to compare
+        info_columns = [x for x in list(self.DEFAULT_INFO_COLUMNS)
+                        if x not in list(self.DEFAULT_EXCLUSIONS_FROM_COMPARISON)]
+
+        # Get both sample sets comparable columns of data
+        info_df1 = self.info[info_columns]
+        info_df2 = ss.info[info_columns]
+
+        # Check valid columns in each sample set (cannot have None or 0)
+        ss1_valid_cols = [
+            c for c in info_df1.columns
+            if pd.to_numeric(info_df1[c], errors="coerce").notnull().all() and any(info_df1[c])
+        ]
+        ss2_valid_cols = [
+            c for c in info_df2.columns
+            if pd.to_numeric(info_df2[c], errors="coerce").notnull().all() and any(info_df2[c])
+        ]
+
+        # Remove non shared column lists
+        for i in ss1_valid_cols:
+            if i not in ss2_valid_cols:
+                ss1_valid_cols.remove(i)
+        for i in ss2_valid_cols:
+            if i not in ss1_valid_cols:
+                ss2_valid_cols.remove(i)
+
+        # Remove non shared column data
+        info_df1 = info_df1[ss1_valid_cols]
+        info_df2 = info_df2[ss2_valid_cols]
+
+        # Bin the data
+        ss1_stats = {}
+        ss2_stats = {}
+        col_comparisons = {}
+        for i in ss1_valid_cols:
+            ss1_stats[i] = {}
+            ss2_stats[i] = {}
+            hist_range = (
+                min(min(info_df1[i]), min(info_df2[i])),
+                max(max(info_df1[i]), max(info_df2[i]))
+            )
+            # Get data in bins and get counts for each bin
+            hist1, bins1 = np.histogram(info_df1[i], bins=n_bins, range=hist_range, density=density)
+            hist2, bins2 = np.histogram(info_df2[i], bins=n_bins, range=hist_range, density=density)
+            ss1_stats[i]["density"] = density
+            ss2_stats[i]["density"] = density
+            ss1_stats[i]["hist"] = hist1
+            ss2_stats[i]["hist"] = hist2
+            ss1_stats[i]["bins"] = bins1
+            ss2_stats[i]["bins"] = bins2
+            ss1_stats[i]["range"] = hist_range
+            ss2_stats[i]["range"] = hist_range
+
+            summary_stats_df1 = info_df1[i].agg(TARGET_SUMMARY_STATS).round(decimals=STAT_PRECISION)
+            ss1_stats[i].update(summary_stats_df1.to_dict())
+            summary_stats_df2 = info_df2[i].agg(TARGET_SUMMARY_STATS).round(decimals=STAT_PRECISION)
+            ss2_stats[i].update(summary_stats_df2.to_dict())
+
+            js_dist = distance.jensenshannon(hist1, hist2, axis=0)
+            col_comparisons[i] = js_dist
+
+        return ss1_stats, ss2_stats, col_comparisons
 
     def concat(self, ss_list: list):
         """Vertically concatenate multiple `SampleSet`s into one `SampleSet`.
@@ -723,6 +771,24 @@ class SampleSet():
             )
         )
         self._spectra[self._spectra < min_frac] = 0
+
+    def drop_sources(self, col_names: Iterable = DEFAULT_BG_SEED_NAMES,
+                     normalize_sources: bool = True,
+                     target_level: str = "Seed"):
+        """Drop columns from `sources`.
+
+        Args:
+            col_names: names of the sources columns to be dropped.
+                The names of background seeds are used by default as removing the
+                ground truth for background sources when dealing with synthetic,
+                gross spectra is a common operation.
+            normalize_sources: whether to normalize the sources DataFrame after dropping
+                the column(s)
+            target_level: `SampleSet.sources` column level to use
+        """
+        self.sources.drop(col_names, axis=1, inplace=True, level=target_level)
+        if normalize_sources:
+            self.normalize_sources()
 
     def drop_sources_columns_with_all_zeros(self):
         """Remove columns from the sources `DataFrame` that contain only zeros.
@@ -836,6 +902,90 @@ class SampleSet():
 
         return channel_energies
 
+    def get_confidences(self, fg_seeds_ss: SampleSet, bg_seed_ss: SampleSet = None,
+                        bg_cps: float = None, is_lpe: bool = False,
+                        confidence_func: Callable = None,
+                        **confidence_func_kwargs) -> np.ndarray:
+        """Get confidence measure for predictions as a NumPy array.
+
+        Args:
+            fg_seeds_ss: `Sampleset` containing foreground seeds
+            bg_seed_ss: `Sampleset` containing a single background seed
+            bg_cps: count rate used to scale `bg_seed_ss`
+            is_lpe: whether predictions are for multi-class classification or label proportion
+                estimation (LPE)
+            confidence_func: metric function used to compare spectral reconstructions and
+            confidence_func_kwargs: kwargs for confidence metric function
+
+        Returns:
+            Array containing confidence metric for each prediction
+        """
+        if fg_seeds_ss.spectra_type != SpectraType.Foreground:
+            msg = (
+                "`fg_seeds_ss` must have a `spectra_type` of `Foreground`. "
+                f"Its `spectra_type` is `{fg_seeds_ss.spectra_type}`."
+            )
+            raise ValueError(msg)
+        if self.spectra_type == SpectraType.Gross:
+            if self.info.total_counts.isna().any() or (self.info.total_counts <= 0).any():
+                msg = (
+                    "This `SampleSet` must have the `info.total_counts` column filled in "
+                    "with values greater than zero."
+                    "If there are samples with spectra of all zeros, remove them first."
+                )
+                raise ValueError(msg)
+            if self.info.live_time.isna().any() or (self.info.live_time <= 0).any():
+                msg = (
+                    "This `SampleSet` must have the `info.live_time` column filled in "
+                    "with values greater than zero."
+                    "If there are samples with live of zero, remove them first."
+                )
+                raise ValueError(msg)
+            if not bg_seed_ss:
+                raise ValueError("`bg_seed_ss` is required for current `spectra_type` of `Gross`.")
+            if bg_seed_ss.n_samples != 1:
+                raise ValueError("`bg_seed_ss` must have exactly one sample.")
+            if bg_seed_ss.spectra_type != SpectraType.Background:
+                msg = (
+                    "`bg_seed_ss` must have a `spectra_type` of `Background`. "
+                    f"Its `spectra_type` is `{bg_seed_ss.spectra_type}`."
+                )
+                raise ValueError(msg)
+            if not bg_cps or bg_cps <= 0:
+                raise ValueError("Positive background count rate required.")
+
+        if confidence_func is None:
+            from riid.losses import jensen_shannon_divergence
+            confidence_func = jensen_shannon_divergence
+
+        if is_lpe:
+            recon_proportions = self.prediction_probas.values
+        else:
+            max_indices = np.argmax(self.prediction_probas.values, axis=1)
+            recon_proportions = np.zeros(self.prediction_probas.values.shape)
+            recon_proportions[np.arange(self.n_samples), max_indices] = 1
+
+        reconstructions = np.dot(recon_proportions, fg_seeds_ss.spectra.values)
+
+        if self.spectra_type == SpectraType.Gross:
+            bg_spectrum = bg_seed_ss.spectra.iloc[0].values
+            normalized_bg_spectrum = bg_spectrum / bg_spectrum.sum()
+
+            bg_counts = bg_cps * self.info.live_time.values
+            fg_counts = (self.info.total_counts.values - bg_counts).clip(1)
+
+            scaled_bg_spectra = get_expected_spectra(normalized_bg_spectrum, bg_counts)
+            scaled_fg_spectra = reconstructions * fg_counts[:, np.newaxis]
+
+            reconstructions = scaled_fg_spectra + scaled_bg_spectra
+
+        confidences = confidence_func(
+            reconstructions.astype(np.float64),
+            self.spectra.values,
+            **confidence_func_kwargs
+        )
+        return np.array(confidences)
+
     def _get_spectral_distances(self, distance_func=distance.jensenshannon) -> np.array:
         n_samples = self.n_samples
         spectra = self.spectra.values.copy()
@@ -934,90 +1084,6 @@ class SampleSet():
         sources_values = np.nan_to_num(collapsed_sources)
         return sources_values
 
-    def get_confidences(self, fg_seeds_ss: SampleSet, bg_seed_ss: SampleSet = None,
-                        bg_cps: float = None, is_lpe: bool = False,
-                        confidence_func: Callable = None,
-                        **confidence_func_kwargs) -> np.ndarray:
-        """Get confidence measure for predictions as a NumPy array.
-
-        Args:
-            fg_seeds_ss: `Sampleset` containing foreground seeds
-            bg_seed_ss: `Sampleset` containing a single background seed
-            bg_cps: count rate used to scale `bg_seed_ss`
-            is_lpe: whether predictions are for multi-class classification or label proportion
-                estimation (LPE)
-            confidence_func: metric function used to compare spectral reconstructions and
-            confidence_func_kwargs: kwargs for confidence metric function
-
-        Returns:
-            Array containing confidence metric for each prediction
-        """
-        if fg_seeds_ss.spectra_type != SpectraType.Foreground:
-            msg = (
-                "`fg_seeds_ss` must have a `spectra_type` of `Foreground`. "
-                f"Its `spectra_type` is `{fg_seeds_ss.spectra_type}`."
-            )
-            raise ValueError(msg)
-        if self.spectra_type == SpectraType.Gross:
-            if self.info.total_counts.isna().any() or (self.info.total_counts <= 0).any():
-                msg = (
-                    "This `SampleSet` must have the `info.total_counts` column filled in "
-                    "with values greater than zero."
-                    "If there are samples with spectra of all zeros, remove them first."
-                )
-                raise ValueError(msg)
-            if self.info.live_time.isna().any() or (self.info.live_time <= 0).any():
-                msg = (
-                    "This `SampleSet` must have the `info.live_time` column filled in "
-                    "with values greater than zero."
-                    "If there are samples with live of zero, remove them first."
-                )
-                raise ValueError(msg)
-            if not bg_seed_ss:
-                raise ValueError("`bg_seed_ss` is required for current `spectra_type` of `Gross`.")
-            if bg_seed_ss.n_samples != 1:
-                raise ValueError("`bg_seed_ss` must have exactly one sample.")
-            if bg_seed_ss.spectra_type != SpectraType.Background:
-                msg = (
-                    "`bg_seed_ss` must have a `spectra_type` of `Background`. "
-                    f"Its `spectra_type` is `{bg_seed_ss.spectra_type}`."
-                )
-                raise ValueError(msg)
-            if not bg_cps or bg_cps <= 0:
-                raise ValueError("Positive background count rate required.")
-
-        if confidence_func is None:
-            from riid.losses import jensen_shannon_divergence
-            confidence_func = jensen_shannon_divergence
-
-        if is_lpe:
-            recon_proportions = self.prediction_probas.values
-        else:
-            max_indices = np.argmax(self.prediction_probas.values, axis=1)
-            recon_proportions = np.zeros(self.prediction_probas.values.shape)
-            recon_proportions[np.arange(self.n_samples), max_indices] = 1
-
-        reconstructions = np.dot(recon_proportions, fg_seeds_ss.spectra.values)
-
-        if self.spectra_type == SpectraType.Gross:
-            bg_spectrum = bg_seed_ss.spectra.iloc[0].values
-            normalized_bg_spectrum = bg_spectrum / bg_spectrum.sum()
-
-            bg_counts = bg_cps * self.info.live_time.values
-            fg_counts = (self.info.total_counts.values - bg_counts).clip(1)
-
-            scaled_bg_spectra = get_expected_spectra(normalized_bg_spectrum, bg_counts)
-            scaled_fg_spectra = reconstructions * fg_counts[:, np.newaxis]
-
-            reconstructions = scaled_fg_spectra + scaled_bg_spectra
-
-        confidences = confidence_func(
-            reconstructions.astype(np.float64),
-            self.spectra.values,
-            **confidence_func_kwargs
-        )
-        return np.array(confidences)
-
     def normalize(self, p: float = 1, clip_negatives: bool = True):
         """Apply L-p normalization to `spectra` in place.
 
@@ -1089,6 +1155,34 @@ class SampleSet():
         random_mask = np.isin(self.spectra.index, random_indices)
         return self[random_mask]
 
+    def shuffle(self, inplace: bool = True, random_state: int = None) -> SampleSet:
+        """Randomly reorder all DataFrames.
+
+        Args:
+            inplace: whether to perform the operation in-place
+            random_state: random seed for reproducing specific shuffles
+
+        Returns:
+            `SampleSet` object when `inplace` is False
+        """
+        new_row_ordering = np.arange(self.n_samples)
+        np.random.default_rng(random_state).shuffle(new_row_ordering)
+
+        new_ss = self if inplace else self[:]
+
+        new_ss.spectra = self.spectra.iloc[new_row_ordering]\
+            .reset_index(drop=True)
+        new_ss.sources = self.sources.iloc[new_row_ordering]\
+            .reset_index(drop=True)
+        new_ss.info = self.info.iloc[new_row_ordering]\
+            .reset_index(drop=True)
+        if not new_ss.prediction_probas.empty:
+            new_ss.prediction_probas = self.prediction_probas.iloc[new_row_ordering]\
+                .reset_index(drop=True)
+
+        if not inplace:
+            return new_ss
+
     def sources_columns_to_dict(self, target_level="Isotope") -> Union[dict, list]:
         """Convert the MultiIndex columns of `sources` to a dictionary.
 
@@ -1132,52 +1226,6 @@ class SampleSet():
 
         return d
 
-    def shuffle(self, inplace: bool = True, random_state: int = None) -> SampleSet:
-        """Randomly reorder all DataFrames.
-
-        Args:
-            inplace: whether to perform the operation in-place
-            random_state: random seed for reproducing specific shuffles
-
-        Returns:
-            `SampleSet` object when `inplace` is False
-        """
-        new_row_ordering = np.arange(self.n_samples)
-        np.random.default_rng(random_state).shuffle(new_row_ordering)
-
-        new_ss = self if inplace else self[:]
-
-        new_ss.spectra = self.spectra.iloc[new_row_ordering]\
-            .reset_index(drop=True)
-        new_ss.sources = self.sources.iloc[new_row_ordering]\
-            .reset_index(drop=True)
-        new_ss.info = self.info.iloc[new_row_ordering]\
-            .reset_index(drop=True)
-        if not new_ss.prediction_probas.empty:
-            new_ss.prediction_probas = self.prediction_probas.iloc[new_row_ordering]\
-                .reset_index(drop=True)
-
-        if not inplace:
-            return new_ss
-
-    def drop_sources(self, col_names: Iterable = DEFAULT_BG_SEED_NAMES,
-                     normalize_sources: bool = True,
-                     target_level: str = "Seed"):
-        """Drop columns from `sources`.
-
-        Args:
-            col_names: names of the sources columns to be dropped.
-                The names of background seeds are used by default as removing the
-                ground truth for background sources when dealing with synthetic,
-                gross spectra is a common operation.
-            normalize_sources: whether to normalize the sources DataFrame after dropping
-                the column(s)
-            target_level: `SampleSet.sources` column level to use
-        """
-        self.sources.drop(col_names, axis=1, inplace=True, level=target_level)
-        if normalize_sources:
-            self.normalize_sources()
-
     def split_fg_and_bg(self, bg_seed_names: Iterable = DEFAULT_BG_SEED_NAMES) \
             -> Tuple[SampleSet, SampleSet]:
         """Split the current `SampleSet` into two new `SampleSet`s, one containing only foreground
@@ -1205,6 +1253,44 @@ class SampleSet():
         bg_seeds_ss.spectra_type = SpectraType.Background
 
         return fg_seeds_ss, bg_seeds_ss
+
+    def squash(self) -> SampleSet:
+        """Combine all rows of the `SampleSet` into a single row.
+
+        All data suited for summing is summed, otherwise the info from the first
+        sample is used.
+
+        Returns:
+            A flattened `SampleSet`
+        """
+        flat_spectra = self.spectra.sum(axis=0).to_frame().T
+        flat_sources = self.sources.sum(axis=0).to_frame().T
+        flat_prediction_probas = self.prediction_probas.sum(axis=0).to_frame().T
+        flat_info = self.info.iloc[0].to_frame().T
+
+        if "description" in flat_info:
+            flat_info.description = "squashed"
+        if "live_time" in flat_info:
+            flat_info.live_time = self.info.live_time.sum()
+        if "real_time" in flat_info:
+            flat_info.real_time = self.info.real_time.sum()
+        if "total_counts" in flat_info:
+            flat_info.total_counts = self.info.total_counts.sum()
+        if "snr" in flat_info:
+            flat_info.snr = self.info.snr.sum()
+
+        # Create a new SampleSet with the flattened data
+        flat_ss = SampleSet()
+        flat_ss.spectra = flat_spectra
+        flat_ss.sources = flat_sources
+        flat_ss.prediction_probas = flat_prediction_probas
+        flat_ss.info = flat_info
+        # Copy dictionary and other non-DataFrame objects from full ss
+        flat_ss._detector_info = self._detector_info
+        flat_ss._synthesis_info = self._synthesis_info
+        flat_ss._measured_or_synthetic = self._measured_or_synthetic
+
+        return flat_ss
 
     def to_hdf(self, path: str, verbose=False, **kwargs):
         """Write the `SampleSet` to disk as a HDF file.
@@ -1288,92 +1374,6 @@ class SampleSet():
             data=np.matmul(
                 self._spectra.values,
                 transformation.T))
-
-    def compare_to(self, ss: SampleSet, n_bins: int = 20, density: bool = False) \
-            -> Tuple[dict, dict, dict]:
-        """Compare the current `SampleSet` to another `SampleSet`.
-
-        The function only compares the selected, mutual information of
-        each `SampleSet` by computing the Jensen-Shannon distance between
-        histograms of that information.
-
-        Args:
-            ss: `SampleSet` to compare to
-            n_bins: number of bins we will sort both sample sets by
-            density: whether histograms should be in counts or density
-
-        Returns:
-            Tuple of the following:
-
-            - ss1_stats: dictionary of stats describing the first `SampleSet`
-            - ss2_stats: dictionary of stats describing the second `SampleSet`
-            - col_comparisons: dictionary of distance values comparing each stat
-        """
-        TARGET_SUMMARY_STATS = ["min", "max", "median", "mean", "std"]
-        STAT_PRECISION = 3
-
-        # Get info columns we want to compare
-        info_columns = [x for x in list(self.DEFAULT_INFO_COLUMNS)
-                        if x not in list(self.DEFAULT_EXCLUSIONS_FROM_COMPARISON)]
-
-        # Get both sample sets comparable columns of data
-        info_df1 = self.info[info_columns]
-        info_df2 = ss.info[info_columns]
-
-        # Check valid columns in each sample set (cannot have None or 0)
-        ss1_valid_cols = [
-            c for c in info_df1.columns
-            if pd.to_numeric(info_df1[c], errors="coerce").notnull().all() and any(info_df1[c])
-        ]
-        ss2_valid_cols = [
-            c for c in info_df2.columns
-            if pd.to_numeric(info_df2[c], errors="coerce").notnull().all() and any(info_df2[c])
-        ]
-
-        # Remove non shared column lists
-        for i in ss1_valid_cols:
-            if i not in ss2_valid_cols:
-                ss1_valid_cols.remove(i)
-        for i in ss2_valid_cols:
-            if i not in ss1_valid_cols:
-                ss2_valid_cols.remove(i)
-
-        # Remove non shared column data
-        info_df1 = info_df1[ss1_valid_cols]
-        info_df2 = info_df2[ss2_valid_cols]
-
-        # Bin the data
-        ss1_stats = {}
-        ss2_stats = {}
-        col_comparisons = {}
-        for i in ss1_valid_cols:
-            ss1_stats[i] = {}
-            ss2_stats[i] = {}
-            hist_range = (
-                min(min(info_df1[i]), min(info_df2[i])),
-                max(max(info_df1[i]), max(info_df2[i]))
-            )
-            # Get data in bins and get counts for each bin
-            hist1, bins1 = np.histogram(info_df1[i], bins=n_bins, range=hist_range, density=density)
-            hist2, bins2 = np.histogram(info_df2[i], bins=n_bins, range=hist_range, density=density)
-            ss1_stats[i]["density"] = density
-            ss2_stats[i]["density"] = density
-            ss1_stats[i]["hist"] = hist1
-            ss2_stats[i]["hist"] = hist2
-            ss1_stats[i]["bins"] = bins1
-            ss2_stats[i]["bins"] = bins2
-            ss1_stats[i]["range"] = hist_range
-            ss2_stats[i]["range"] = hist_range
-
-            summary_stats_df1 = info_df1[i].agg(TARGET_SUMMARY_STATS).round(decimals=STAT_PRECISION)
-            ss1_stats[i].update(summary_stats_df1.to_dict())
-            summary_stats_df2 = info_df2[i].agg(TARGET_SUMMARY_STATS).round(decimals=STAT_PRECISION)
-            ss2_stats[i].update(summary_stats_df2.to_dict())
-
-            js_dist = distance.jensenshannon(hist1, hist2, axis=0)
-            col_comparisons[i] = js_dist
-
-        return ss1_stats, ss2_stats, col_comparisons
 
 
 def read_hdf(path: str) -> SampleSet:
