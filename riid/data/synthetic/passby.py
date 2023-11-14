@@ -240,15 +240,13 @@ class PassbySynthesizer(Synthesizer):
             List of tuples of SampleSets where each tuple represents a pass-by event
 
         Raises:
-            `ValueError` when either foreground of background seeds are not provided and if
-            either contain spectra that do not sum to 1
+            - `ValueError` when either foreground of background seeds are not provided
+            - `AssertionError` if seed health check fails
         """
         if not fg_seeds_ss or not bg_seeds_ss:
             raise ValueError("At least one foreground and background seed must be provided.")
-        if not fg_seeds_ss.all_spectra_sum_to_one():
-            raise ValueError("At least one provided foreground seed does not sum close to 1.")
-        if not bg_seeds_ss.all_spectra_sum_to_one():
-            raise ValueError("At least one provided background seed does not sum close to 1.")
+        fg_seeds_ss.check_seed_health()
+        bg_seeds_ss.check_seed_health()
 
         self._reset_progress()
         if verbose:

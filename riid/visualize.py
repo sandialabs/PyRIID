@@ -309,10 +309,9 @@ def plot_spectra(ss: SampleSet, in_energy: bool = False,
         Tuple (Figure, Axes) of matplotlib objects
 
     Raises:
-        `ValueError` when:
-
-        - `is_in_energy` equals True but energy bin centers are missing for any spectra
-        - `limit` is not None and less than 1
+        - `ValueError` when `is_in_energy` equals True
+          but energy bin centers are missing for any spectra
+        - `ValueError` when `limit` is not None and less than 1
     """
     fig, ax = plt.subplots(figsize=figsize)
     if ss.sources.empty:
