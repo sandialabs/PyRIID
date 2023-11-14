@@ -5,7 +5,9 @@
 [![Python](https://img.shields.io/pypi/pyversions/riid)](https://badge.fury.io/py/riid)
 [![PyPI](https://badge.fury.io/py/riid.svg)](https://badge.fury.io/py/riid)
 
-Welcome to PyRIID! PyRIID is a Python package providing models and data synthesis utilities supporting machine learning-based research into radioisotope-related detection, identification, and quantification.
+Welcome to PyRIID!
+PyRIID is a Python package providing models and data synthesis utilities supporting
+machine learning-based research into radioisotope-related detection, identification, and quantification.
 
 ## Installation
 
@@ -16,12 +18,12 @@ These instructions assume you meet the following requirements:
 
 A virtual environment is recommended.
 
-Tests and examples are ran via Actions on many combinations of Python version and operating system.
+Tests and examples are run via Actions on many combinations of Python version and operating system.
 You can verify support for your platform by checking the workflow files.
 
 ### For Use
 
-To use the latest version on PyPI (note: changes are currently slower to appear here), run:
+To use the latest version on PyPI (note: changes are slower to appear here), run:
 
 ```sh
 pip install riid
@@ -55,7 +57,7 @@ Examples for how to use this package can be found [here](https://github.com/sand
 
 Unit tests for this package can be found [here](https://github.com/sandialabs/PyRIID/blob/main/tests).
 
-Run all unit tests with the following command:
+Run all unit tests with the following:
 
 ```sh
 python -m unittest tests/*.py -v
@@ -67,7 +69,7 @@ You can also run one of the `run_tests.*` scripts, whichever is appropriate for 
 
 API documentation can be found [here](https://sandialabs.github.io/PyRIID).
 
-You can also build the docs with the following commands:
+Build the docs with the following:
 
 ```sh
 pip install -r pdoc/requirements.txt
@@ -87,15 +89,16 @@ Maintainers and authors can be found [here](https://github.com/sandialabs/PyRIID
 
 ## Copyright
 
-Full copyright details are outlined [here](https://github.com/sandialabs/PyRIID/blob/main/NOTICE.md)
+Full copyright details can be found [here](https://github.com/sandialabs/PyRIID/blob/main/NOTICE.md).
 
-## Acknowlegements
+## Acknowledgements
 
 **Thank you** to the U.S. Department of Energy, National Nuclear Security Administration,
 Office of Defense Nuclear Nonproliferation Research and Development (DNN R&D) for funding that has led to version `2.x`.
 
 Additionally, **thank you** to the following individuals who have provided invaluable subject-matter expertise:
 
+- Paul Thelen (also an author)
 - Ben Maestas
 - Greg Thoreson
 - Michael Enghauser
