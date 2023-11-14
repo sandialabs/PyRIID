@@ -180,8 +180,7 @@ class SeedMixer():
         self._check_seeds()
 
     def _check_seeds(self):
-        if self.seeds_ss and not self.seeds_ss.all_spectra_sum_to_one():
-            raise ValueError("At least one provided seed does not sum close to 1.")
+        self.seeds_ss.check_seed_health()
         n_sources_per_row = np.count_nonzero(
             self.seeds_ss.get_source_contributions(),
             axis=1
@@ -372,8 +371,7 @@ def get_choices(choices_so_far: list, options: list, options_probas: np.array,
         rng: NumPy random number generator, useful for experiment repeatability
 
     Raises:
-        ValueError: if the number of choices desired exceeds the number of options available
-
+        `ValueError` when the number of choices desired exceeds the number of options available
     """
     if n_choices_remaining == 0:
         return choices_so_far

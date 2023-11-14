@@ -515,9 +515,18 @@ class SampleSet():
                 f"Acceptable values are: {levels_allowed}."
             ))
 
+    def _get_dead_time_proportions(self):
+        live_times = self.info.live_time.values
+        real_times = self.info.real_time.values
+        dead_time_props = (1.0 - live_times / real_times)
+        dead_time_props = np.nan_to_num(dead_time_props, nan=1.0)
+        return dead_time_props
+
     def all_spectra_sum_to_one(self, rtol: float = 0.0, atol: float = 1e-4) -> bool:
         """Checks if all spectra are normalized to sum to one."""
-        return np.all(np.isclose(self.spectra.sum(axis=1).values, 1, rtol=rtol, atol=atol))
+        spectra_counts = self.spectra.sum(axis=1).values
+        all_sum_to_one = np.all(np.isclose(spectra_counts, 1, rtol=rtol, atol=atol))
+        return all_sum_to_one
 
     def as_ecal(self, new_offset: float, new_gain: float,
                 new_quadratic: float, new_cubic: float,
@@ -580,6 +589,28 @@ class SampleSet():
         new_ss.info.total_counts = new_ss.spectra.sum(axis=1)
         new_ss.info[ecal_cols] = new_ecal
         return new_ss
+
+    def check_seed_health(self, dead_time_threshold=1.0):
+        """Checks health of all spectra and info assuming they are seeds.
+
+        Invalidate states for which we currently check:
+
+        - spectra do not sum to 1
+        - dead time greater than or equal to provided threshold
+
+        Args:
+            dead_time_threshold: value at which seed dead time is unacceptable
+
+        Raises:
+            `AssertionError` if any check fails
+        """
+        all_spectra_sum_to_one = self.all_spectra_sum_to_one()
+        assert all_spectra_sum_to_one
+
+        dead_time_props = self._get_dead_time_proportions()
+        dead = dead_time_props >= dead_time_threshold
+        all_spectra_are_alive = not np.any(dead)
+        assert all_spectra_are_alive
 
     def clip_negatives(self, min_value: float = 0):
         """Clip spectrum values to some minimum value.
@@ -1505,7 +1536,7 @@ def _validate_hdf_store_keys(keys: list):
         keys: collection of keys from the dataset being converted to a `SampleSet`
 
     Raises:
-        InvalidSampleSetFileError: when the set of keys provided does not include a required key
+        `InvalidSampleSetFileError` when the set of keys provided does not include a required key
     """
     required_keys = [
         "/info",
