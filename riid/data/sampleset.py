@@ -51,8 +51,7 @@ class SpectraType(Enum):
 
 class SampleSet():
     """A collection of spectrum samples and their metadata."""
-    # pylint: disable=R0902
-    # pylint: disable=R0904
+    DEAD_TIME_PROP_INFO_KEY = "dead_time_prop"
     SOURCES_MULTI_INDEX_NAMES = (
         "Category",
         "Isotope",
@@ -607,10 +606,11 @@ class SampleSet():
         all_spectra_sum_to_one = self.all_spectra_sum_to_one()
         assert all_spectra_sum_to_one
 
-        dead_time_props = self._get_dead_time_proportions()
-        dead = dead_time_props >= dead_time_threshold
-        all_spectra_are_alive = not np.any(dead)
-        assert all_spectra_are_alive
+        if self.DEAD_TIME_PROP_INFO_KEY not in self.info.columns:
+            self.set_dead_time_proportions()
+        dead_samples = self.info[self.DEAD_TIME_PROP_INFO_KEY] >= dead_time_threshold
+        all_samples_are_alive = not np.any(dead_samples)
+        assert all_samples_are_alive
 
     def clip_negatives(self, min_value: float = 0):
         """Clip spectrum values to some minimum value.
@@ -1185,6 +1185,12 @@ class SampleSet():
         random_indices = random.sample(self.spectra.index.values.tolist(), n_samples)
         random_mask = np.isin(self.spectra.index, random_indices)
         return self[random_mask]
+
+    def set_dead_time_proportions(self):
+        """Computes dead time proportion for each sample and saves it in the `SampleSet` info.
+        """
+        dead_time_props = self._get_dead_time_proportions()
+        self.info[self.DEAD_TIME_PROP_INFO_KEY] = dead_time_props
 
     def shuffle(self, inplace: bool = True, random_state: int = None) -> SampleSet:
         """Randomly reorder all DataFrames.
