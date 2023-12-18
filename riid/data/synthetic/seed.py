@@ -132,6 +132,7 @@ class SeedSynthesizer():
         ss = SampleSet()
         ss.concat(source_list)
         ss.detector_info = deepcopy(config["gamma_detector"])
+        ss.set_dead_time_proportions()
 
         return ss
 
