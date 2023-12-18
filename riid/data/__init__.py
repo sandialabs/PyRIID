@@ -15,14 +15,14 @@ def get_expected_spectra(seeds: np.ndarray, expected_counts: np.ndarray) -> np.n
     - m = # of seeds
     - n = # of channels
 
-    and the final dimension is added in order to facilitate proper broadcasting
+    and the final dimension is added in order to facilitate proper broadcasting.
     The dimension of the `expected_counts` must be 1, but the length `p` can be
     any positive number.
 
     The resulting expected spectra will be of shape `(m x p, n)`.
-    This representings the same number of channels `n`, but each expected count
-    value, of which there were `p`, will be me multiplied through each seed spectrum,
-    of which there were `m`.
+    This represents the same number of channels `n`, but each expected count
+    value, of which there are `p`, will be me multiplied through each seed spectrum,
+    of which there are `m`.
     All expected spectra matrices for each seed are then concatenated together
     (stacked), eliminating the 3rd dimension.
     """
