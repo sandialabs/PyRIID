@@ -225,7 +225,8 @@ class PassbySynthesizer(Synthesizer):
 
         return fg_ss, gross_ss
 
-    def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet, verbose: bool = True) \
+    def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet,
+                 skip_health_check: bool = False, verbose: bool = True) \
             -> List[Tuple[SampleSet, SampleSet, SampleSet]]:
         """Generate a list of `SampleSet`s where each contains a pass-by as a sequence of spectra.
 
@@ -234,6 +235,7 @@ class PassbySynthesizer(Synthesizer):
                 source component(s) of spectra
             bg_seeds_ss: spectra normalized by total counts to be used as the
                 background components of gross spectra
+            skip_health_check: whether to skip seed health checks
             verbose: whether to display output from synthesis
 
         Returns:
@@ -245,8 +247,10 @@ class PassbySynthesizer(Synthesizer):
         """
         if not fg_seeds_ss or not bg_seeds_ss:
             raise ValueError("At least one foreground and background seed must be provided.")
-        fg_seeds_ss.check_seed_health()
-        bg_seeds_ss.check_seed_health()
+
+        if not skip_health_check:
+            fg_seeds_ss.check_seed_health()
+            bg_seeds_ss.check_seed_health()
 
         self._reset_progress()
         if verbose:
