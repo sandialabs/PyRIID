@@ -220,6 +220,7 @@ class StaticSynthesizer(Synthesizer):
         return fg_ss, gross_ss
 
     def generate(self, fg_seeds_ss: SampleSet, bg_seeds_ss: SampleSet,
+                 skip_health_check: bool = False,
                  verbose: bool = True) -> Tuple[SampleSet, SampleSet]:
         """Generate a `SampleSet` of gamma spectra from the provided config.
 
@@ -240,6 +241,7 @@ class StaticSynthesizer(Synthesizer):
                 `bg_seeds_ss`, which represent mixtures of K-U-T, get added on top.
                 Note: this spectrum is not considered part of the `bg_cps` parameter,
                 but is instead added on top of it.
+            skip_health_check: whether to skip seed health checks
             verbose: whether to show detailed output
 
         Returns:
@@ -251,8 +253,9 @@ class StaticSynthesizer(Synthesizer):
         """
         if not fg_seeds_ss or not bg_seeds_ss:
             raise ValueError("At least one foreground and background seed must be provided.")
-        fg_seeds_ss.check_seed_health()
-        bg_seeds_ss.check_seed_health()
+        if not skip_health_check:
+            fg_seeds_ss.check_seed_health()
+            bg_seeds_ss.check_seed_health()
 
         self._reset_progress()
         if verbose:

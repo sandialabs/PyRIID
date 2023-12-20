@@ -166,8 +166,9 @@ class SeedMixer():
 
         self._check_seeds()
 
-    def _check_seeds(self):
-        self.seeds_ss.check_seed_health()
+    def _check_seeds(self, skip_health_check: bool = False):
+        if not skip_health_check:
+            self.seeds_ss.check_seed_health()
         n_sources_per_row = np.count_nonzero(
             self.seeds_ss.get_source_contributions(),
             axis=1
@@ -187,7 +188,8 @@ class SeedMixer():
                     "All seeds must have the same energy calibration."
                 ))
 
-    def __call__(self, n_samples: int, max_batch_size: int = 100) -> Iterator[SampleSet]:
+    def __call__(self, n_samples: int, max_batch_size: int = 100,
+                 skip_health_check: bool = False) -> Iterator[SampleSet]:
         """Yields batches of seeds one at a time until a specified number of samples has
         been reached.
 
@@ -204,12 +206,13 @@ class SeedMixer():
 
         Args:
             n_samples: total number of mixture seeds to produce across all batches
-            max_batch_size: maxmimum size of a batch per yield
+            max_batch_size: maximum size of a batch per yield
+            skip_health_check: whether to skip the seed health check
 
         Returns:
             Generator of `SampleSet`s
         """
-        self._check_seeds()
+        self._check_seeds(skip_health_check)
 
         isotope_to_seeds = self.seeds_ss.sources_columns_to_dict(target_level="Isotope")
         isotopes = list(isotope_to_seeds.keys())
@@ -298,11 +301,17 @@ class SeedMixer():
 
             yield batch_ss
 
-    def generate(self, n_samples: int, max_batch_size: int = 100) -> SampleSet:
+    def generate(self, n_samples: int, max_batch_size: int = 100,
+                 skip_health_check: bool = False) -> SampleSet:
         """Computes random mixtures of seeds at the isotope level.
         """
         batches = []
-        for batch_ss in self(n_samples, max_batch_size=max_batch_size):
+        batch_iterable = self(
+            n_samples,
+            max_batch_size=max_batch_size,
+            skip_health_check=skip_health_check
+        )
+        for batch_ss in batch_iterable:
             batches.append(batch_ss)
         mixtures_ss = SampleSet()
         mixtures_ss.spectra_type = self.seeds_ss.spectra_type
