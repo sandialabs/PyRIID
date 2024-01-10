@@ -82,7 +82,7 @@ class Synthesizer():
             "contain all zeroes.")
 
     def _get_batch(self, fg_seed, fg_sources, bg_seed, bg_sources, ecal,
-                   lt_targets, snr_targets):
+                   lt_targets, snr_targets, rt_targets=None):
         if not (self.return_fg or self.return_gross):
             raise ValueError("Computing to return nothing.")
 
@@ -129,6 +129,7 @@ class Synthesizer():
             snrs = fg_counts / np.sqrt(long_bg_counts.clip(1))
             fg_ss = get_fg_sample_set(fg_spectra, fg_sources, ecal, lt_targets,
                                       snrs=snrs, total_counts=fg_counts,
+                                      real_times=rt_targets,
                                       timestamps=self._synthesis_start_dt)
             self._n_samples_synthesized += fg_ss.n_samples
         if self.return_gross:
@@ -147,6 +148,7 @@ class Synthesizer():
             snrs = fg_counts / np.sqrt(bg_counts.clip(1))
             gross_ss = get_gross_sample_set(gross_spectra, gross_sources, ecal,
                                             lt_targets, snrs, gross_counts,
+                                            real_times=rt_targets,
                                             timestamps=self._synthesis_start_dt)
             self._n_samples_synthesized += gross_ss.n_samples
 
