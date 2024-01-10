@@ -45,7 +45,6 @@ model = LabelProportionEstimator(
     optimizer="RMSprop",
     learning_rate=1e-2,
     hidden_layer_activation="relu",
-    l2_alpha=1e-4,
     dropout=0.05,
 )
 
@@ -54,7 +53,7 @@ model.fit(
     bg_seeds_ss,
     bg_ss,
     batch_size=10,
-    epochs=10,
+    epochs=2,
     validation_split=0.2,
     verbose=True,
     bg_cps=300
@@ -74,8 +73,9 @@ test_meas = mean_absolute_error(
 )
 print(f"Mean Test MAE: {test_meas.mean():.3f}")
 
-# Save model in ONNX format
-model_info_path, model_path = model.save("./model.onnx")
+# Save model
+model_path = "./model.json"
+model.save(model_path, overwrite=True)
 
 loaded_model = LabelProportionEstimator()
 loaded_model.load(model_path)
@@ -89,5 +89,4 @@ test_maes = mean_absolute_error(
 print(f"Mean Test MAE: {test_maes.mean():.3f}")
 
 # Clean up model file - remove this if you want to keep the model
-os.remove(model_info_path)
 os.remove(model_path)

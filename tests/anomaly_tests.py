@@ -61,7 +61,8 @@ class TestAnomaly(unittest.TestCase):
             _ = ed.add_measurement(
                 measurement_id,
                 noisy_bg_measurement,
-                SAMPLE_INTERVAL
+                SAMPLE_INTERVAL,
+                verbose=False
             )
             measurement_id += 1
 
@@ -73,6 +74,7 @@ class TestAnomaly(unittest.TestCase):
                 measurement_id=measurement_id,
                 measurement=gross_spectrum,
                 duration=SAMPLE_INTERVAL,
+                verbose=False
             )
             measurement_id += 1
             if event_result:

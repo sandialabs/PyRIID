@@ -29,7 +29,27 @@ class PoissonBayesClassifier(PyRIIDModel):
     def __init__(self):
         super().__init__()
 
-    def _create_model(self, seeds_ss: SampleSet):
+    def fit(self, seeds_ss: SampleSet):
+        """Construct a TF-based implementation of a poisson-bayes classifier in terms
+        of the given seeds.
+
+        Args:
+            seeds_ss: `SampleSet` of `n` foreground seed spectra where `n` >= 1.
+
+        Raises:
+            - `ValueError` when no seeds are provided
+            - `NegativeSpectrumError` when any seed spectrum has negative counts in any bin
+            - `ZeroTotalCountsError` when any seed spectrum contains zero total counts
+        """
+        if seeds_ss.n_samples <= 0:
+            raise ValueError("Argument 'seeds_ss' must contain at least one seed.")
+        if (seeds_ss.spectra.values < 0).any():
+            msg = "Argument 'seeds_ss' can't contain any spectra with negative values."
+            raise NegativeSpectrumError(msg)
+        if (seeds_ss.spectra.values.sum(axis=1) <= 0).any():
+            msg = "Argument 'seeds_ss' can't contain any spectra with zero total counts."
+            raise ZeroTotalCountsError(msg)
+
         self._seeds = tf.constant(tf.convert_to_tensor(
             seeds_ss.spectra.values,
             dtype=tf.float32
@@ -37,7 +57,7 @@ class PoissonBayesClassifier(PyRIIDModel):
 
         # Inputs
         gross_spectrum_input = tf.keras.layers.Input(
-            shape=self.seeds_ss.n_channels,
+            shape=seeds_ss.n_channels,
             name="gross_spectrum"
         )
         gross_live_time_input = tf.keras.layers.Input(
@@ -45,7 +65,7 @@ class PoissonBayesClassifier(PyRIIDModel):
             name="gross_live_time"
         )
         bg_spectrum_input = tf.keras.layers.Input(
-            shape=self.seeds_ss.n_channels,
+            shape=seeds_ss.n_channels,
             name="bg_spectrum"
         )
         bg_live_time_input = tf.keras.layers.Input(
@@ -96,29 +116,9 @@ class PoissonBayesClassifier(PyRIIDModel):
         self.model = tf.keras.Model(model_inputs, prediction_probas)
         self.model.compile()
 
-    def fit(self, seeds_ss: SampleSet = None):
-        """Construct a TF-based implementation of a poisson-bayes classifier in terms
-        of the given seeds.
-
-        Args:
-            seeds_ss: `SampleSet` of `n` foreground seed spectra where `n` >= 1.
-
-        Raises:
-            - `ValueError` when no seeds are provided
-            - `NegativeSpectrumError` when any seed spectrum has negative counts in any bin
-            - `ZeroTotalCountsError` when any seed spectrum contains zero total counts
-        """
-        if seeds_ss.n_samples <= 0:
-            raise ValueError("Argument 'seeds_ss' must contain at least one seed.")
-        if (seeds_ss.spectra.values < 0).any():
-            msg = "Argument 'seeds_ss' can't contain any spectra with negative values."
-            raise NegativeSpectrumError(msg)
-        if (seeds_ss.spectra.values.sum(axis=1) <= 0).any():
-            msg = "Argument 'seeds_ss' can't contain any spectra with zero total counts."
-            raise ZeroTotalCountsError(msg)
-
-        self.seeds_ss = seeds_ss
-        self._create_model(self.seeds_ss)
+        self.target_level = "Seed"
+        sources_df = seeds_ss.sources.groupby(axis=1, level=self.target_level, sort=False).sum()
+        self.model_outputs = sources_df.columns.values.tolist()
 
     def predict(self, gross_ss: SampleSet, bg_ss: SampleSet,
                 normalize_scores: bool = False, verbose: bool = False):
@@ -139,7 +139,7 @@ class PoissonBayesClassifier(PyRIIDModel):
         bg_spectra = tf.convert_to_tensor(bg_ss.spectra.values, dtype=tf.float32)
         bg_lts = tf.convert_to_tensor(bg_ss.info.live_time.values, dtype=tf.float32)
 
-        prediction_probas = self.get_predictions((
+        prediction_probas = self.model.predict((
             gross_spectra, gross_lts, bg_spectra, bg_lts
         ), batch_size=512, verbose=verbose)
 
@@ -150,7 +150,10 @@ class PoissonBayesClassifier(PyRIIDModel):
 
         gross_ss.prediction_probas = pd.DataFrame(
             prediction_probas,
-            columns=self.seeds_ss.sources.columns
+            columns=pd.MultiIndex.from_tuples(
+                self.get_model_outputs_as_label_tuples(),
+                names=SampleSet.SOURCES_MULTI_INDEX_NAMES
+            )
         )
 
 

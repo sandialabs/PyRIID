@@ -5,22 +5,29 @@
 import json
 import os
 import uuid
-import warnings
+from abc import abstractmethod
 from enum import Enum
 
 import numpy as np
-import onnxruntime
-import pandas as pd
 import tensorflow as tf
 import tf2onnx
+from keras.models import Model
+from keras.utils import get_custom_objects
 
 import riid
 from riid.data.labeling import label_to_index_element
 from riid.data.sampleset import SampleSet, SpectraState
+from riid.losses import mish
 from riid.metrics import multi_f1, single_f1
 
+get_custom_objects().update({
+    "multi_f1": multi_f1,
+    "single_f1": single_f1,
+    "mish": mish,
+})
 
-class ModelInput(Enum):
+
+class ModelInput(int, Enum):
     """Enumerates the potential input sources for a model."""
     GrossSpectrum = 0
     BackgroundSpectrum = 1
@@ -28,14 +35,13 @@ class ModelInput(Enum):
 
 
 class PyRIIDModel:
-    """Base class for TensorFlow models."""
-
-    CUSTOM_OBJECTS = {"multi_f1": multi_f1, "single_f1": single_f1}
-    SUPPORTED_SAVE_EXTS = {"H5": ".h5", "ONNX": ".onnx"}
+    """Base class for PyRIID models."""
 
     def __init__(self, *args, **kwargs):
         self._info = {}
-        self._temp_file_path = "temp_model_file" + riid.SAMPLESET_HDF_FILE_EXTENSION
+        self._temp_file_path = "temp_model.json"
+        self._custom_objects = {}
+        self._initialize_info()
 
     @property
     def seeds(self):
@@ -69,6 +75,22 @@ class PyRIIDModel:
             raise ValueError(msg)
 
     @property
+    def model(self) -> Model:
+        return self._model
+
+    @model.setter
+    def model(self, value: Model):
+        self._model = value
+
+    @property
+    def model_id(self):
+        return self._info["model_id"]
+
+    @model_id.setter
+    def model_id(self, value):
+        self._info["model_id"] = value
+
+    @property
     def model_inputs(self):
         return self._info["model_inputs"]
 
@@ -82,151 +104,136 @@ class PyRIIDModel:
 
     @model_outputs.setter
     def model_outputs(self, value):
-        n_levels = SampleSet.SOURCES_MULTI_INDEX_NAMES.index(self.target_level) + 1
-        if all([len(v) == n_levels for v in value]):
-            self._info["model_outputs"] = value
-        else:
-            self._info["model_outputs"] = [
-                label_to_index_element(v, self.target_level) for v in value
-            ]
+        self._info["model_outputs"] = value
 
-    def to_tflite(self, file_path: str = None, quantize: bool = False):
-        """Convert the model to a TFLite model and optionally save or quantize it.
+    def get_model_outputs_as_label_tuples(self):
+        return [
+            label_to_index_element(v, self.target_level) for v in self.model_outputs
+        ]
 
-        Args:
-            file_path: file path at which to save the model
-            quantize: whether to apply quantization
+    def _get_model_dict(self) -> dict:
+        model_json = self.model.to_json()
+        model_dict = json.loads(model_json)
+        model_weights = self.model.get_weights()
+        model_dict = {
+            "info": self._info,
+            "model": model_dict,
+            "weights": model_weights,
+        }
+        return model_dict
 
-        Returns:
-            bytes object representing the model in TFLite form
-        """
-        converter = tf.lite.TFLiteConverter.from_keras_model(self.model)
-        if quantize:
-            converter.optimizations = [tf.lite.Optimize.OPTIMIZE_FOR_SIZE]
-        tflite_model = converter.convert()
-        if file_path:
-            open(file_path, "wb").write(tflite_model)
-        return tflite_model
+    def _get_model_str(self) -> str:
+        model_dict = self._get_model_dict()
+        model_str = json.dumps(model_dict, indent=4, cls=PyRIIDModelJsonEncoder)
+        return model_str
 
-    def save(self, file_path: str):
-        """Save the model to a file.
-
-        Args:
-            file_path: file path at which to save the model, can be either .h5 or
-                .onnx format
-
-        Raises:
-            `ValueError` when the given file path already exists
-        """
-        if os.path.exists(file_path):
-            raise ValueError("Path already exists.")
-
-        root, ext = os.path.splitext(file_path)
-        if ext.lower() not in self.SUPPORTED_SAVE_EXTS.values():
-            raise NameError("Model must be an .onnx or .h5 file.")
-
-        warnings.filterwarnings("ignore")
-
-        if ext.lower() == self.SUPPORTED_SAVE_EXTS["H5"]:
-            self.model.save(file_path, save_format="h5")
-            pd.DataFrame(
-                [[v] for v in self.info.values()],
-                self.info.keys()
-            ).to_hdf(file_path, "_info")
-        else:
-            model_path = root + self.SUPPORTED_SAVE_EXTS["ONNX"]
-            model_info_path = root + "_info.json"
-
-            model_info_df = pd.DataFrame(
-                [[v] for v in self.info.values()],
-                self.info.keys()
-            )
-            model_info_df[0].to_json(model_info_path, indent=4)
-
-            tf2onnx.convert.from_keras(
-                self.model,
-                input_signature=None,
-                output_path=model_path
-            )
-
-        warnings.resetwarnings()
-
-    def load(self, file_path: str):
-        """Load the model from a file.
-
-        Args:
-            file_path: file path from which to load the model, must be either an
-            .h5 or .onnx file
-        """
-
-        root, ext = os.path.splitext(file_path)
-        if ext.lower() not in self.SUPPORTED_SAVE_EXTS.values():
-            raise NameError("Model must be an .onnx or .h5 file.")
-
-        warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-        if ext.lower() == self.SUPPORTED_SAVE_EXTS["H5"]:
-            self.model = tf.keras.models.load_model(
-                file_path,
-                custom_objects=self.CUSTOM_OBJECTS
-            )
-            self._info = pd.read_hdf(file_path, "_info")[0].to_dict()
-        else:
-            model_path = root + self.SUPPORTED_SAVE_EXTS["ONNX"]
-            model_info_path = root + "_info.json"
-            with open(model_info_path) as fin:
-                model_info = json.load(fin)
-                self._info = model_info
-            self.onnx_session = onnxruntime.InferenceSession(model_path)
-
-        warnings.resetwarnings()
-
-    def get_predictions(self, x, **kwargs):
-        if self.model is not None:
-            outputs = self.model.predict(x, **kwargs)
-        elif self.onnx_session is not None:
-            outputs = self.onnx_session.run(
-                [self.onnx_session.get_outputs()[0].name],
-                {self.onnx_session.get_inputs()[0].name: x.astype(np.float32)}
-            )[0]
-        else:
-            raise ValueError("No model found with which to obtain predictions.")
-        return outputs
-
-    def serialize(self) -> bytes:
-        """Convert model to a bytes object.
-
-        Returns:
-            bytes object representing the model on disk
-        """
-        self.save(self._temp_file_path)
-        try:
-            with open(self._temp_file_path, "rb") as f:
-                data = f.read()
-        finally:
-            os.remove(self._temp_file_path)
-
-        return data
-
-    def deserialize(self, stream: bytes):
-        """Populate the current model with the given bytes object.
-
-        Args:
-            stream: bytes object containing the model information
-        """
-        try:
-            with open(self._temp_file_path, "wb") as f:
-                f.write(stream)
-            self.load(self._temp_file_path)
-        finally:
-            os.remove(self._temp_file_path)
-
-    def initialize_info(self):
-        """Initialize model information with default values."""
-        info = {
+    def _initialize_info(self):
+        init_info = {
             "model_id": str(uuid.uuid4()),
             "model_type": self.__class__.__name__,
             "normalization": SpectraState.Unknown,
             "pyriid_version": riid.__version__,
         }
-        self.info.update(info)
+        self._update_info(**init_info)
+
+    def _update_info(self, **kwargs):
+        self._info.update(kwargs)
+
+    def _update_custom_objects(self, key, value):
+        self._custom_objects.update({key: value})
+
+    def load(self, model_path: str):
+        """Load the model from a path.
+
+        Args:
+            model_path: path from which to load the model.
+        """
+        if not os.path.exists(model_path):
+            raise ValueError("Model file does not exist.")
+
+        with open(model_path) as fin:
+            model = json.load(fin)
+
+        model_str = json.dumps(model["model"])
+        self.model = tf.keras.models.model_from_json(model_str, custom_objects=self._custom_objects)
+        self.model.set_weights([np.array(x) for x in model["weights"]])
+        self.info = model["info"]
+
+    def save(self, model_path: str, overwrite=False):
+        """Save the model to a path.
+
+        Args:
+            model_path: path at which to save the model.
+            overwrite: whether to overwrite an existing file if it already exists.
+
+        Raises:
+            `ValueError` when the given path already exists
+        """
+        if os.path.exists(model_path) and not overwrite:
+            raise ValueError("Model file already exists.")
+
+        model_str = self._get_model_str()
+        with open(model_path, "w") as fout:
+            fout.write(model_str)
+
+    def to_onnx(self, model_path: str = None, **tf2onnx_kwargs: dict):
+        """Convert the model to an ONNX model.
+
+        Args:
+            model_path: path at which to save the model
+            tf2onnx_kwargs: additional kwargs to pass to the conversion
+        """
+        if not model_path.endswith(riid.ONNX_MODEL_FILE_EXTENSION):
+            raise ValueError(f"ONNX file path must end with {riid.ONNX_MODEL_FILE_EXTENSION}")
+        if os.path.exists(model_path):
+            raise ValueError("Model file already exists.")
+
+        tf2onnx.convert.from_keras(
+            self.model,
+            output_path=model_path,
+            **tf2onnx_kwargs
+        )
+
+    def to_tflite(self, model_path: str, quantize: bool = False, prune: bool = False):
+        """Convert the model to a TFLite model and optionally applying quantization or pruning.
+
+        Args:
+            model_path: file path at which to save the model
+            quantize: whether to apply quantization
+            prune: whether to apply pruning
+        """
+        if not model_path.endswith(riid.TFLITE_MODEL_FILE_EXTENSION):
+            raise ValueError(f"TFLite file path must end with {riid.TFLITE_MODEL_FILE_EXTENSION}")
+        if os.path.exists(model_path):
+            raise ValueError("Model file already exists.")
+
+        optimizations = []
+        if quantize:
+            optimizations.append(tf.lite.Optimize.DEFAULT)
+        if prune:
+            optimizations.append(tf.lite.Optimize.EXPERIMENTAL_SPARSITY)
+
+        converter = tf.lite.TFLiteConverter.from_keras_model(self.model)
+        converter.optimizations = optimizations
+        tflite_model = converter.convert()
+
+        with open(model_path, "wb") as fout:
+            fout.write(tflite_model)
+
+    @abstractmethod
+    def fit(self):
+        pass
+
+    @abstractmethod
+    def predict(self):
+        pass
+
+
+class PyRIIDModelJsonEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, np.ndarray):
+            return o.tolist()
+        elif isinstance(o, np.float32):
+            return o.astype(float)
+        else:
+            return super().default(o)

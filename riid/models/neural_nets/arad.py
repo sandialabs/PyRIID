@@ -2,8 +2,11 @@
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
 """This module contains implementations of the ARAD model architecture."""
+from typing import List
+
+import pandas as pd
 import tensorflow as tf
-from keras.activations import sigmoid
+from keras.activations import sigmoid, softplus
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from keras.initializers import GlorotNormal, HeNormal
 from keras.layers import (BatchNormalization, Concatenate, Conv1D,
@@ -65,17 +68,21 @@ class ARADv1TF(Model):
         b3 = self._get_branch(encoder_input, b3_config, 0.1, "softplus", "B3", 5)
         x = Concatenate(axis=1)([b1, b2, b3])
         x = Reshape((15,), name="reshape")(x)
-        latent_space = Dense(units=latent_dim, name="D1_latent_space")(x)
+        latent_space = Dense(
+            units=latent_dim,
+            name="D1_latent_space",
+            activation=softplus
+        )(x)
         encoder_output = BatchNormalization(name="D1_batch_norm")(latent_space)
         encoder = Model(encoder_input, encoder_output, name="encoder")
 
         # Decoder
         decoder_input = Input(shape=(latent_dim,), name="decoder_input")
-        x = Dense(units=40, name="D2")(decoder_input)
+        x = Dense(units=40, name="D2", activation=softplus)(decoder_input)
         x = Dropout(rate=0.1, name="D2_dropout")(x)
         decoder_output = Dense(
             units=128,
-            activation=sigmoid,  # unclear from paper, seems to be necessary
+            activation=softplus,
             name="D3"
         )(x)
         decoder = Model(decoder_input, decoder_output, name="decoder")
@@ -116,7 +123,11 @@ class ARADv1TF(Model):
             x = BatchNormalization(name=f"{layer_name}_batch_norm")(x)
             x = Dropout(rate=dropout_rate, name=f"{layer_name}_dropout")(x)
         x = Flatten(name=f"{branch_name}_flatten")(x)
-        x = Dense(units=dense_units, name=f"{branch_name}_D1")(x)
+        x = Dense(
+            units=dense_units,
+            name=f"{branch_name}_D1",
+            activation=activation
+        )(x)
         x = BatchNormalization(name=f"{branch_name}_batch_norm")(x)
         return x
 
@@ -184,7 +195,7 @@ class ARADv2TF(Model):
 
         # Decoder
         decoder_input = Input(shape=latent_dim, name="decoder_input")
-        x = Dense(units=32, name="D2")(decoder_input)
+        x = Dense(units=32, name="D2", activation=mish)(decoder_input)
         x = BatchNormalization(name="D2_batch_norm")(x)
         x = Reshape((4, 8), name="reshape")(x)
         reversed_config = enumerate(reversed(config[1:]), start=1)
@@ -235,32 +246,19 @@ class ARADv2TF(Model):
         return decoded
 
 
-class ARAD(PyRIIDModel):
-    """PyRIID-compatible ARAD model to work with SampleSets.
+class ARADv1(PyRIIDModel):
+    """PyRIID-compatible ARAD v1 model supporting SampleSets.
     """
-    def __init__(self, model: Model = ARADv2TF()):
+    def __init__(self, model: ARADv1TF = None):
         """
         Args:
-            model: instantiated model of the desired version of ARAD to use.
+            model: a previously initialized TF implementation of ARADv1
         """
         super().__init__()
 
         self.model = model
 
-    def _check_spectra(self, ss):
-        """Checks if SampleSet spectra are compatible with ARAD models."""
-        if ss.n_samples <= 0:
-            raise ValueError("No spectr[a|um] provided!")
-        if not ss.all_spectra_sum_to_one():
-            raise ValueError("All spectra must sum to one.")
-        if not ss.spectra_state == SpectraState.L1Normalized:
-            raise ValueError(
-                f"SpectraState must be L1Normalzied, provided SpectraState is {ss.spectra_state}."
-            )
-        if not ss.n_channels == 128:
-            raise ValueError(
-                f"Spectra must have 128 channels, provided spectra have {ss.n_channels} channels."
-            )
+        self._update_custom_objects("ARADv1TF", ARADv1TF)
 
     def fit(self, ss: SampleSet, epochs: int = 300, validation_split=0.2,
             es_verbose: int = 0, verbose: bool = False):
@@ -276,70 +274,52 @@ class ARAD(PyRIIDModel):
         Returns:
             reconstructed_spectra: output of ARAD model
         """
-        self._check_spectra(ss)
+        _check_spectra(ss)
 
         x = ss.get_samples().astype(float)
 
-        is_v1 = isinstance(self.model, ARADv1TF)
-        is_v2 = isinstance(self.model, ARADv2TF)
-        if is_v1:
-            optimizer = tf.keras.optimizers.Nadam(
-                learning_rate=1e-4
-            )
-            loss_func = None
-            es_patience = 5
-            es_min_delta = 1e-7
-            lr_sched_patience = 3
-            lr_sched_min_delta = 1e-8
-            batch_size = 64
-            y = None
-        elif is_v2:
-            optimizer = tf.keras.optimizers.Adam(
-                learning_rate=0.01,
-                epsilon=0.05
-            )
-            loss_func = jensen_shannon_distance
-            es_patience = 6
-            es_min_delta = 1e-4
-            lr_sched_patience = 3
-            lr_sched_min_delta = 1e-4
-            batch_size = 32
-            y = x
-        else:
-            raise ValueError("Invalid model provided, must be ARADv1TF or ARADv2TF.")
+        optimizer = tf.keras.optimizers.Nadam(
+            learning_rate=1e-4
+        )
 
+        if not self.model:
+            self.model = ARADv1TF()
         self.model.compile(
-            loss=loss_func,
+            loss=None,
             optimizer=optimizer
         )
+
         callbacks = [
             EarlyStopping(
                 monitor="val_loss",
-                patience=es_patience,
+                patience=5,
                 verbose=es_verbose,
                 restore_best_weights=True,
                 mode="min",
-                min_delta=es_min_delta
+                min_delta=1e-7
             ),
             ReduceLROnPlateau(
                 monitor="val_loss",
                 factor=0.1,
-                patience=lr_sched_patience,
-                min_delta=lr_sched_min_delta
+                patience=3,
+                min_delta=1e-8
             )
         ]
 
         history = self.model.fit(
             x=x,
-            y=y,
+            y=None,
             epochs=epochs,
             verbose=verbose,
             validation_split=validation_split,
             callbacks=callbacks,
             shuffle=True,
-            batch_size=batch_size
+            batch_size=64
         )
-        self.history = history.history
+
+        self._update_info(
+            normalization=ss.spectra_state,
+        )
 
         return history
 
@@ -352,21 +332,339 @@ class ARAD(PyRIIDModel):
         Returns:
             reconstructed_spectra: output of ARAD model
         """
-        self._check_spectra(ss)
+        _check_spectra(ss)
 
         x = ss.get_samples().astype(float)
 
-        reconstructed_spectra = self.get_predictions(x, verbose=verbose)
-
-        is_v1 = isinstance(self.model, ARADv1TF)
-        is_v2 = isinstance(self.model, ARADv2TF)
-        if is_v1:
-            # Entropy is equivalent to KL Divergence with how it is used here
-            reconstruction_metric = entropy
-        elif is_v2:
-            reconstruction_metric = jensenshannon
-
-        reconstruction_errors = reconstruction_metric(x, reconstructed_spectra, axis=1)
+        reconstructed_spectra = self.model.predict(x, verbose=verbose)
+        reconstruction_errors = entropy(x, reconstructed_spectra, axis=1)
         ss.info["recon_error"] = reconstruction_errors
 
         return reconstructed_spectra
+
+
+class ARADv2(PyRIIDModel):
+    """PyRIID-compatible ARAD v2 model supporting SampleSets.
+    """
+    def __init__(self, model: ARADv2TF = None):
+        """
+        Args:
+            model: a previously initialized TF implementation of ARADv1
+        """
+        super().__init__()
+
+        self.model = model
+
+        self._update_custom_objects("ARADv2TF", ARADv2TF)
+
+    def fit(self, ss: SampleSet, epochs: int = 300, validation_split=0.2,
+            es_verbose: int = 0, verbose: bool = False):
+        """Fit a model to the given `SampleSet`.
+
+        Args:
+            ss: `SampleSet` of `n` spectra where `n` >= 1
+            epochs: maximum number of training epochs
+            validation_split: percentage of the training data to use as validation data
+            es_verbose: verbosity level for `tf.keras.callbacks.EarlyStopping`
+            verbose: whether to show detailed model training output
+
+        Returns:
+            reconstructed_spectra: output of ARAD model
+        """
+        _check_spectra(ss)
+
+        x = ss.get_samples().astype(float)
+
+        optimizer = tf.keras.optimizers.Adam(
+            learning_rate=0.01,
+            epsilon=0.05
+        )
+
+        if not self.model:
+            self.model = ARADv2TF()
+        self.model.compile(
+            loss=jensen_shannon_distance,
+            optimizer=optimizer
+        )
+
+        callbacks = [
+            EarlyStopping(
+                monitor="val_loss",
+                patience=6,
+                verbose=es_verbose,
+                restore_best_weights=True,
+                mode="min",
+                min_delta=1e-4
+            ),
+            ReduceLROnPlateau(
+                monitor="val_loss",
+                factor=0.1,
+                patience=3,
+                min_delta=1e-4
+            )
+        ]
+
+        history = self.model.fit(
+            x=x,
+            y=x,
+            epochs=epochs,
+            verbose=verbose,
+            validation_split=validation_split,
+            callbacks=callbacks,
+            shuffle=True,
+            batch_size=32
+        )
+
+        self._update_info(
+            normalization=ss.spectra_state,
+        )
+
+        return history
+
+    def predict(self, ss: SampleSet, verbose=False):
+        """Generate reconstructions for given `SampleSet`.
+
+        Args:
+            ss: `SampleSet` of `n` spectra where `n` >= 1
+
+        Returns:
+            reconstructed_spectra: output of ARAD model
+        """
+        _check_spectra(ss)
+
+        x = ss.get_samples().astype(float)
+
+        reconstructed_spectra = self.model.predict(x, verbose=verbose)
+        reconstruction_errors = jensenshannon(x, reconstructed_spectra, axis=1)
+        ss.info["recon_error"] = reconstruction_errors
+
+        return reconstructed_spectra
+
+
+class ARADLatentPredictor(PyRIIDModel):
+    """PyRIID-compatible model for branching from the latent space of a pre-trained
+    ARAD latent space for a separate prediction task.
+    """
+    def __init__(self, hidden_layers: tuple = (8, 4,),
+                 hidden_activation: str = "relu", final_activation: str = "linear",
+                 loss: str = "mse", optimizer="adam", optimizer_kwargs=None,
+                 learning_rate: float = 1e-3, metrics: tuple = ("mse", ),
+                 kernel_l1_regularization: float = 0.0, kernel_l2_regularization: float = 0.0,
+                 bias_l1_regularization: float = 0.0, bias_l2_regularization: float = 0.0,
+                 activity_l1_regularization: float = 0.0, activity_l2_regularization: float = 0.0,
+                 dropout: float = 0.0, **base_kwargs):
+        """
+        Args:
+            hidden_layers: tuple defining the number and size of dense layers
+            hidden_activation: activation function to use for each dense layer
+            final_activation: activation function to use for final layer
+            loss: loss function to use for training
+            optimizer: tensorflow optimizer or optimizer name to use for training
+            optimizer_kwargs: kwargs for optimizer
+            learning_rate: optional learning rate for the optimizer
+            metrics: list of metrics to be evaluating during training
+            kernel_l1_regularization: l1 regularization value for the kernel regularizer
+            kernel_l2_regularization: l2 regularization value for the kernel regularizer
+            bias_l1_regularization: l1 regularization value for the bias regularizer
+            bias_l2_regularization: l2 regularization value for the bias regularizer
+            activity_l1_regularization: l1 regularization value for the activity regularizer
+            activity_l2_regularization: l2 regularization value for the activity regularizer
+            dropout: amount of dropout to apply to each dense layer
+        """
+        super().__init__(**base_kwargs)
+
+        self.hidden_layers = hidden_layers
+        self.hidden_activation = hidden_activation
+        self.final_activation = final_activation
+        self.loss = loss
+        self.optimizer = optimizer
+        if isinstance(optimizer, str):
+            self.optimizer = tf.keras.optimizers.get(optimizer)
+        if optimizer_kwargs is not None:
+            for key, value in optimizer_kwargs.items():
+                setattr(self.optimizer, key, value)
+        self.optimizer.learning_rate = learning_rate
+        self.metrics = metrics
+        self.kernel_l1_regularization = kernel_l1_regularization
+        self.kernel_l2_regularization = kernel_l2_regularization
+        self.bias_l1_regularization = bias_l1_regularization
+        self.bias_l2_regularization = bias_l2_regularization
+        self.activity_l1_regularization = activity_l1_regularization
+        self.activity_l2_regularization = activity_l2_regularization
+        self.dropout = dropout
+        self.model = None
+        self.encoder = None
+
+    def _initialize_model(self, arad: Model, output_size: int):
+        """Build Keras MLP model.
+        """
+        encoder = arad.get_layer("encoder")
+        encoder_input = encoder.get_layer(index=0).input
+        encoder_output = encoder.get_layer(index=-1).output
+        encoder_output_shape = encoder_output.shape
+
+        predictor_input = Input(shape=encoder_output_shape, name="predictor_input")
+        x = predictor_input
+        for layer, nodes in enumerate(self.hidden_layers):
+            x = tf.keras.layers.Dense(
+                nodes,
+                activation=self.hidden_activation,
+                kernel_regularizer=L1L2(
+                    l1=self.kernel_l1_regularization,
+                    l2=self.kernel_l2_regularization
+                ),
+                bias_regularizer=L1L2(
+                    l1=self.bias_l1_regularization,
+                    l2=self.bias_l2_regularization
+                ),
+                activity_regularizer=L1L2(
+                    l1=self.activity_l1_regularization,
+                    l2=self.activity_l2_regularization
+                ),
+                name=f"dense_{layer}"
+            )(x)
+            if self.dropout > 0:
+                x = tf.keras.layers.Dropout(self.dropout)(x)
+        predictor_output = tf.keras.layers.Dense(
+            output_size,
+            activation=self.final_activation,
+            name="output"
+        )(x)
+        predictor = Model(predictor_input, predictor_output, name="predictor")
+
+        encoded_spectrum = encoder(encoder_input)
+        predictions = predictor(encoded_spectrum)
+        self.model = Model(encoder_input, predictions, name="predictor")
+        # Freeze the layers corresponding to the autoencoder
+        # Note: setting trainable to False is recursive to sub-layers per TF docs:
+        # https://www.tensorflow.org/guide/keras/transfer_learning#recursive_setting_of_the_trainable_attribute
+        for layer in self.model.layers[:-1]:
+            layer.trainable = False
+
+    def _check_targets(self, target_info_columns, target_level):
+        """Check that valid target options are provided."""
+        if target_info_columns and target_level:
+            raise ValueError((
+                "You have specified both target_info_columns (regression task) and "
+                "a target_level (classification task), but only one can be set."
+            ))
+        if not target_info_columns and not target_level:
+            raise ValueError((
+                "You must specify either target_info_columns (regression task) or "
+                "a target_level (classification task)."
+            ))
+
+    def fit(self, arad: Model, ss: SampleSet, target_info_columns: List[str] = None,
+            target_level: str = None, batch_size: int = 10, epochs: int = 20,
+            validation_split: float = 0.2, callbacks=None, patience: int = 15,
+            es_monitor: str = "val_loss", es_mode: str = "min", es_verbose=0,
+            es_min_delta: float = 0.0, verbose: bool = False):
+        """Fit a model to the given SampleSet(s).
+
+        Args:
+            arad: a pretrained ARAD model (a TensorFlow Model object, not a PyRIIDModel wrapper)
+            ss: `SampleSet` of `n` spectra where `n` >= 1
+            target_info_columns: list of columns names from SampleSet info dataframe which
+                denote what values the model should target
+            target_level: `SampleSet.sources` column level to target for classification
+            batch_size: number of samples per gradient update
+            epochs: maximum number of training iterations
+            validation_split: proportion of training data to use as validation data
+            callbacks: list of callbacks to be passed to TensorFlow Model.fit() method
+            patience: number of epochs to wait for tf.keras.callbacks.EarlyStopping object
+            es_monitor: quantity to be monitored for tf.keras.callbacks.EarlyStopping object
+            es_mode: mode for tf.keras.callbacks.EarlyStopping object
+            es_verbose: verbosity level for tf.keras.callbacks.EarlyStopping object
+            es_min_delta: minimum change to count as an improvement for early stopping
+            verbose: whether model training output is printed to the terminal
+        """
+        self._check_targets(target_info_columns, target_level)
+
+        x_train = ss.get_samples().astype(float)
+        if target_info_columns:
+            y_train = ss.info[target_info_columns].values.astype(float)
+        else:
+            source_contributions_df = ss.sources.groupby(
+                axis=1,
+                level=target_level,
+                sort=False
+            ).sum()
+            y_train = source_contributions_df.values.astype(float)
+
+        if not self.model:
+            self._initialize_model(arad=arad, output_size=y_train.shape[1])
+
+        self.model.compile(
+            loss=self.loss,
+            optimizer=self.optimizer,
+            metrics=self.metrics
+        )
+        es = EarlyStopping(
+            monitor=es_monitor,
+            patience=patience,
+            verbose=es_verbose,
+            restore_best_weights=True,
+            mode=es_mode,
+            min_delta=es_min_delta
+        )
+        if callbacks:
+            callbacks.append(es)
+        else:
+            callbacks = [es]
+        history = self.model.fit(
+            x_train,
+            y_train,
+            epochs=epochs,
+            verbose=verbose,
+            validation_split=validation_split,
+            callbacks=callbacks,
+            shuffle=True,
+            batch_size=batch_size
+        )
+
+        self._update_info(
+            normalization=ss.spectra_state,
+            target_level=target_level,
+            model_outputs=target_info_columns,
+        )
+        if target_level:
+            self._update_info(
+                model_outputs=source_contributions_df.columns.values.tolist(),
+            )
+
+        return history
+
+    def predict(self, ss: SampleSet, verbose=False):
+        spectra = ss.get_samples().astype(float)
+        predictions = self.model.predict(spectra, verbose=verbose)
+
+        if self.target_level:
+            col_level_idx = SampleSet.SOURCES_MULTI_INDEX_NAMES.index(self.target_level)
+            col_level_subset = SampleSet.SOURCES_MULTI_INDEX_NAMES[:col_level_idx+1]
+            ss.prediction_probas = pd.DataFrame(
+                data=predictions,
+                columns=pd.MultiIndex.from_tuples(
+                    self.get_model_outputs_as_label_tuples(),
+                    names=col_level_subset
+                )
+            )
+
+        ss.classified_by = self.model_id
+
+        return predictions
+
+
+def _check_spectra(ss: SampleSet):
+    """Checks if SampleSet spectra are compatible with ARAD models."""
+    if ss.n_samples <= 0:
+        raise ValueError("No spectr[a|um] provided!")
+    if not ss.all_spectra_sum_to_one():
+        raise ValueError("All spectra must sum to one.")
+    if not ss.spectra_state == SpectraState.L1Normalized:
+        raise ValueError(
+            f"SpectraState must be L1Normalzied, provided SpectraState is {ss.spectra_state}."
+        )
+    if not ss.n_channels == 128:
+        raise ValueError(
+            f"Spectra must have 128 channels, provided spectra have {ss.n_channels} channels."
+        )
