@@ -32,7 +32,7 @@ from riid.gadras.pcf import (_dict_to_pcf, _pack_compressed_text_buffer,
                              _pcf_to_dict, _unpack_compressed_text_buffer)
 
 
-class SpectraState(Enum):
+class SpectraState(int, Enum):
     """States in which SampleSet spectra can exist."""
     Unknown = 0
     Counts = 1
@@ -40,7 +40,7 @@ class SpectraState(Enum):
     L2Normalized = 3
 
 
-class SpectraType(Enum):
+class SpectraType(int, Enum):
     """Types for SampleSet spectra."""
     Unknown = 0
     Background = 1

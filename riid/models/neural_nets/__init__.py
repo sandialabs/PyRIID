@@ -2,49 +2,26 @@
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
 """This module contains multi-layer perceptron classifiers and regressors."""
-import json
-import os
-from typing import Any, List, Tuple
+from typing import Any, List
 
 import numpy as np
-import onnxruntime
 import pandas as pd
 import tensorflow as tf
-import tf2onnx
 from keras.callbacks import EarlyStopping
-from keras.layers import Activation, Dense, Dropout
+from keras.layers import Dense, Dropout
 from keras.optimizers import Adam
 from keras.regularizers import L1L2, l1, l2
-from keras.utils import get_custom_objects
 from scipy.interpolate import UnivariateSpline
 
 from riid.data.sampleset import SampleSet
 from riid.losses import (build_keras_semisupervised_loss_func,
-                         chi_squared_diff, jensen_shannon_divergence, mish,
+                         chi_squared_diff, jensen_shannon_divergence,
                          normal_nll_diff, poisson_nll_diff,
                          reconstruction_error, sse_diff, weighted_sse_diff)
 from riid.losses.sparsemax import SparsemaxLoss, sparsemax
 from riid.metrics import (build_keras_semisupervised_metric_func, multi_f1,
                           single_f1)
 from riid.models import ModelInput, PyRIIDModel
-
-tf2onnx.logging.basicConfig(level=tf2onnx.logging.WARNING)
-
-get_custom_objects().update({"mish": Activation(mish)})
-
-
-def _get_reordered_spectra(old_spectra_df: pd.DataFrame, old_sources_df: pd.DataFrame,
-                           new_sources_columns, target_level) -> pd.DataFrame:
-    collapsed_sources_df = old_sources_df\
-        .groupby(axis=1, level=target_level)\
-        .sum()
-    reordered_spectra_df = old_spectra_df.iloc[
-        collapsed_sources_df[
-            new_sources_columns
-        ].idxmax()
-    ].reset_index(drop=True)
-
-    return reordered_spectra_df
 
 
 class MLPClassifier(PyRIIDModel):
@@ -221,12 +198,12 @@ class MLPClassifier(PyRIIDModel):
             batch_size=batch_size,
         )
 
-        # Initialize model information
-        self.target_level = target_level
-        self.model_outputs = source_contributions_df.columns.values
-        self.initialize_info()
-        # TODO: get rid of the following line in favor of a normalization layer
-        self._info["normalization"] = ss.spectra_state
+        # Update model information
+        self._update_info(
+            target_level=target_level,
+            model_outputs=source_contributions_df.columns.values.tolist(),
+            normalization=ss.spectra_state,
+        )
 
         return history
 
@@ -246,29 +223,26 @@ class MLPClassifier(PyRIIDModel):
         else:
             X = x_test
 
-        results = self.get_predictions(X, verbose=verbose)
+        results = self.model.predict(X, verbose=verbose)
 
         col_level_idx = SampleSet.SOURCES_MULTI_INDEX_NAMES.index(self.target_level)
         col_level_subset = SampleSet.SOURCES_MULTI_INDEX_NAMES[:col_level_idx+1]
         ss.prediction_probas = pd.DataFrame(
             data=results,
             columns=pd.MultiIndex.from_tuples(
-               self.model_outputs, names=col_level_subset
+                self.get_model_outputs_as_label_tuples(),
+                names=col_level_subset
             )
         )
 
-        ss.classified_by = self.info["model_id"]
+        ss.classified_by = self.model_id
 
 
 class MultiEventClassifier(PyRIIDModel):
     """A classifier for spectra from multiple detectors observing the same event."""
-
     def __init__(self, hidden_layers: tuple = (512,), activation: str = "relu",
                  loss: str = "categorical_crossentropy",
-                 optimizer: Any = Adam(
-                    learning_rate=0.01,
-                    clipnorm=0.001
-                 ),
+                 optimizer: Any = Adam(learning_rate=0.01, clipnorm=0.001),
                  metrics: list = ["accuracy", "categorical_crossentropy", multi_f1, single_f1],
                  l2_alpha: float = 1e-4, activity_regularizer: tf.keras.regularizers = l1(0),
                  dropout: float = 0.0, learning_rate: float = 0.01):
@@ -415,11 +389,15 @@ class MultiEventClassifier(PyRIIDModel):
         )
 
         # Initialize model info, update output/input information
-        self.target_level = target_level
-        self.model_outputs = target_contributions.columns.values
-        self.initialize_info()
-        self.info["model_inputs"] = tuple(
-            [(ss.classified_by, ss.prediction_probas.shape[1]) for ss in list_of_ss]
+        self._update_info(
+            target_level=target_level,
+            model_outputs=target_contributions.columns.values.tolist(),
+            model_inputs=tuple(
+                [(ss.classified_by, ss.prediction_probas.shape[1]) for ss in list_of_ss]
+            ),
+            normalization=tuple(
+                [(ss.classified_by, ss.spectra_state) for ss in list_of_ss]
+            ),
         )
 
         return history
@@ -434,15 +412,15 @@ class MultiEventClassifier(PyRIIDModel):
             `DataFrame` of predicted results for the `Sampleset`(s)
         """
         X = [ss.prediction_probas for ss in list_of_ss]
-        # output size will be n_samples by n_labels
-        results = self.get_predictions(X, verbose=verbose)
+        results = self.model.predict(X, verbose=verbose)
 
         col_level_idx = SampleSet.SOURCES_MULTI_INDEX_NAMES.index(self.target_level)
         col_level_subset = SampleSet.SOURCES_MULTI_INDEX_NAMES[:col_level_idx+1]
         results_df = pd.DataFrame(
             data=results,
             columns=pd.MultiIndex.from_tuples(
-               self.model_outputs, names=col_level_subset
+               self.get_model_outputs_as_label_tuples(),
+               names=col_level_subset
             )
         )
         return results_df
@@ -483,8 +461,6 @@ class LabelProportionEstimator(PyRIIDModel):
         )
     }
     INFO_KEYS = (
-        # model metadata
-        "_info",
         # model architecture
         "hidden_layers",
         "learning_rate",
@@ -509,7 +485,6 @@ class LabelProportionEstimator(PyRIIDModel):
         # dictionaries
         "source_dict",
         # populated when loading model
-        "history",
         "spline_snrs",
         "spline_recon_errors",
     )
@@ -517,14 +492,13 @@ class LabelProportionEstimator(PyRIIDModel):
     def __init__(self, hidden_layers: tuple = (256,), sup_loss="sparsemax", unsup_loss="sse",
                  metrics=("mae", "categorical_crossentropy",), beta=0.9, source_dict=None,
                  optimizer="adam", optimizer_kwargs=None, learning_rate: float = 1e-3,
-                 epsilon: float = 0.05, hidden_layer_activation: str = "mish",
+                 hidden_layer_activation: str = "mish",
                  kernel_l1_regularization: float = 0.0, kernel_l2_regularization: float = 0.0,
                  bias_l1_regularization: float = 0.0, bias_l2_regularization: float = 0.0,
                  activity_l1_regularization: float = 0.0, activity_l2_regularization: float = 0.0,
-                 dropout: float = 0.0, target_level: str = "Seed", ood_fp_rate: float = 0.05,
+                 dropout: float = 0.0, ood_fp_rate: float = 0.05,
                  fit_spline: bool = True, spline_bins: int = 15, spline_k: int = 3,
-                 spline_s: int = 0, spline_snrs=None, spline_recon_errors=None, history=None,
-                 _info=None, **base_kwargs):
+                 spline_s: int = 0, spline_snrs=None, spline_recon_errors=None):
         """
         Args:
             hidden_layers: tuple defining the number and size of dense layers
@@ -538,8 +512,7 @@ class LabelProportionEstimator(PyRIIDModel):
             optimizer: tensorflow optimizer or optimizer name to use for training
             optimizer_kwargs: kwargs for optimizer
             learning_rate: learning rate for the optimizer
-            epsilon: epsilon constant for the Adam optimizer
-            hidden_layer_activation: activattion function to use for each dense layer
+            hidden_layer_activation: activation function to use for each dense layer
             kernel_l1_regularization: l1 regularization value for the kernel regularizer
             kernel_l2_regularization: l2 regularization value for the kernel regularizer
             bias_l1_regularization: l1 regularization value for the bias regularizer
@@ -547,7 +520,6 @@ class LabelProportionEstimator(PyRIIDModel):
             activity_l1_regularization: l1 regularization value for the activity regularizer
             activity_l2_regularization: l2 regularization value for the activity regularizer
             dropout: amount of dropout to apply to each dense layer
-            target_level: `SampleSet.sources` column level to use
             ood_fp_rate: false positive rate used to determine threshold for
                 out-of-distribution (OOD) detection
             fit_spline: whether or not to fit UnivariateSpline for OOD threshold function
@@ -560,10 +532,8 @@ class LabelProportionEstimator(PyRIIDModel):
             spline_snrs: SNRs from training used as the x-values to fit the UnivariateSpline
             spline_recon_errors: reconstruction errors from training used as the y-values to
                 fit the UnivariateSpline
-            history: dictionary of training/val history, automatically filled when loading model
-            _info: internal dictionary uses to store target level and output columns
         """
-        super().__init__(**base_kwargs)
+        super().__init__()
 
         self.hidden_layers = hidden_layers
         self.sup_loss = sup_loss
@@ -588,7 +558,6 @@ class LabelProportionEstimator(PyRIIDModel):
         self.beta = beta
         self.source_dict = source_dict
         self.semisup_loss_func_name = "semisup_loss"
-        self.model = None
         self.hidden_layer_activation = hidden_layer_activation
         self.kernel_l1_regularization = kernel_l1_regularization
         self.kernel_l2_regularization = kernel_l2_regularization
@@ -597,17 +566,24 @@ class LabelProportionEstimator(PyRIIDModel):
         self.activity_l1_regularization = activity_l1_regularization
         self.activity_l2_regularization = activity_l2_regularization
         self.dropout = dropout
-        self.target_level = target_level
         self.ood_fp_rate = ood_fp_rate
         self.fit_spline = fit_spline
         self.spline_bins = spline_bins
         self.spline_k = spline_k
         self.spline_s = spline_s
-        self.history = history
         self.spline_snrs = spline_snrs
         self.spline_recon_errors = spline_recon_errors
-        if _info:
-            self.info = _info
+        self.model = None
+
+        self._update_custom_objects("L1NormLayer", L1NormLayer)
+
+    @property
+    def source_dict(self) -> dict:
+        return self.info["source_dict"]
+
+    @source_dict.setter
+    def source_dict(self, value: dict):
+        self.info["source_dict"] = value
 
     def _get_sup_loss_func(self, loss_func_str, prefix):
         if loss_func_str not in self.SUPERVISED_LOSS_FUNCS:
@@ -623,10 +599,7 @@ class LabelProportionEstimator(PyRIIDModel):
 
     def _initialize_model(self, input_size, output_size):
         spectra_input = tf.keras.layers.Input(input_size, name="input_spectrum")
-
-        spectra_norm = tf.keras.layers.Lambda(_l1_norm, name="normalized_input_spectrum")(
-            spectra_input
-        )
+        spectra_norm = L1NormLayer(name="normalized_input_spectrum")(spectra_input)
         x = spectra_norm
         for layer, nodes in enumerate(self.hidden_layers):
             x = tf.keras.layers.Dense(
@@ -661,20 +634,23 @@ class LabelProportionEstimator(PyRIIDModel):
         )
 
     def _get_info_as_dict(self):
-        info_dict = {k: v for k, v in vars(self).items() if k in self.INFO_KEYS}
+        info_dict = {}
+        for k, v in vars(self).items():
+            if k not in self.INFO_KEYS:
+                continue
+            if isinstance(v, np.ndarray):
+                info_dict[k] = v.tolist()
+            else:
+                info_dict[k] = v
         return info_dict
 
-    def _get_model_file_paths(self, save_path):
-        SUPPORTED_ONNX_EXT = ".onnx"
-
-        root, ext = os.path.splitext(save_path)
-        if ext.lower() != SUPPORTED_ONNX_EXT:
-            raise NameError("Model must be an .onnx file.")
-
-        model_path = root + SUPPORTED_ONNX_EXT
-        model_info_path = root + "_info.json"
-
-        return model_info_path, model_path
+    def _get_spline_threshold_func(self):
+        return UnivariateSpline(
+            self.info["avg_snrs"],
+            self.info["thresholds"],
+            k=self.spline_k,
+            s=self.spline_s
+        )
 
     def _fit_spline_threshold_func(self):
         out = pd.qcut(
@@ -689,11 +665,11 @@ class LabelProportionEstimator(PyRIIDModel):
         avg_snrs = [
             np.mean(np.array(self.spline_snrs)[out == int(i)]) for i in range(self.spline_bins)
         ]
-        self.ood_threshold_func = UnivariateSpline(
-            avg_snrs,
-            thresholds,
-            k=self.spline_k,
-            s=self.spline_s
+        self._update_info(
+            avg_snrs=avg_snrs,
+            thresholds=thresholds,
+            spline_k=self.spline_k,
+            spline_s=self.spline_s,
         )
 
     def _get_snrs(self, ss: SampleSet, bg_cps: float, is_gross: bool) -> np.ndarray:
@@ -709,7 +685,7 @@ class LabelProportionEstimator(PyRIIDModel):
             callbacks=None, patience: int = 15, es_monitor: str = "val_loss",
             es_mode: str = "min", es_verbose=0, es_min_delta: float = 0.0,
             normalize_sup_loss: bool = True, normalize_func=tf.math.tanh,
-            normalize_scaler: float = 1.0, verbose: bool = False):
+            normalize_scaler: float = 1.0, target_level="Isotope", verbose: bool = False):
         """Fit a model to the given SampleSet(s).
 
         Args:
@@ -730,10 +706,11 @@ class LabelProportionEstimator(PyRIIDModel):
             normalize_sup_loss: whether to normalize the supervised loss term
             normalize_func: normalization function used for supervised loss term
             normalize_scaler: scalar that sets the steepness of the normalization function
+            target_level: source level to target for model output
             verbose: whether model training output is printed to the terminal
         """
         spectra = ss.get_samples().astype(float)
-        sources_df = ss.sources.groupby(axis=1, level=self._info["target_level"], sort=False).sum()
+        sources_df = ss.sources.groupby(axis=1, level=target_level, sort=False).sum()
         sources = sources_df.values.astype(float)
         self.sources_columns = sources_df.columns
 
@@ -745,7 +722,7 @@ class LabelProportionEstimator(PyRIIDModel):
                 seeds_ss.spectra,
                 seeds_ss.sources,
                 self.sources_columns,
-                target_level=self._info["target_level"]
+                target_level=target_level
             ).values
 
         if not self.model:
@@ -826,7 +803,6 @@ class LabelProportionEstimator(PyRIIDModel):
             shuffle=True,
             batch_size=batch_size
         )
-        self.history = history.history
 
         if self.fit_spline:
             if verbose:
@@ -840,17 +816,20 @@ class LabelProportionEstimator(PyRIIDModel):
                 self.source_dict,
                 self.unsup_loss_func
             ).numpy()
-
             self.spline_snrs = self._get_snrs(ss, bg_cps, is_gross)
-
             self._fit_spline_threshold_func()
 
-        self.model_outputs = sources_df.columns.values
+        info = self._get_info_as_dict()
+        self._update_info(
+            target_level=target_level,
+            model_outputs=sources_df.columns.values.tolist(),
+            normalization=ss.spectra_state,
+            **info,
+        )
 
         return history
 
-    def predict(self, ss: SampleSet, bg_cps: int = 300, is_gross: bool = False,
-                verbose=False):
+    def predict(self, ss: SampleSet, bg_cps: int = 300, is_gross: bool = False, verbose=False):
         """Estimate the proportions of counts present in each sample of the provided SampleSet.
 
         Results are stored inside the SampleSet's prediction_probas property.
@@ -864,16 +843,15 @@ class LabelProportionEstimator(PyRIIDModel):
         """
         test_spectra = ss.get_samples().astype(float)
 
-        logits = self.get_predictions(test_spectra, verbose=verbose)
-
+        logits = self.model.predict(test_spectra, verbose=verbose)
         lpes = self.activation(tf.convert_to_tensor(logits, dtype=tf.float32))
 
-        col_level_idx = SampleSet.SOURCES_MULTI_INDEX_NAMES.index(self._info["target_level"])
+        col_level_idx = SampleSet.SOURCES_MULTI_INDEX_NAMES.index(self.target_level)
         col_level_subset = SampleSet.SOURCES_MULTI_INDEX_NAMES[:col_level_idx+1]
         ss.prediction_probas = pd.DataFrame(
             data=lpes,
             columns=pd.MultiIndex.from_tuples(
-               self._info["model_outputs"],
+               self.get_model_outputs_as_label_tuples(),
                names=col_level_subset
             )
         )
@@ -885,67 +863,35 @@ class LabelProportionEstimator(PyRIIDModel):
             self.source_dict,
             self.unsup_loss_func
         ).numpy()
-        ss.info[self.unsup_loss_func_name] = recon_errors
 
         if self.fit_spline:
             snrs = self._get_snrs(ss, bg_cps, is_gross)
+            thresholds = self._get_spline_threshold_func()(snrs)
+            is_ood = recon_errors > thresholds
+            ss.info["ood"] = is_ood
 
-            # Generate OOD predictions
-            try:
-                thresholds = self.ood_threshold_func(snrs)
-            except AttributeError:
-                self._fit_spline_threshold_func()
-                thresholds = self.ood_threshold_func(snrs)
-            ss.info["ood"] = recon_errors > thresholds
-
-    def save(self, file_path) -> Tuple[str, str]:
-        """Save the model in ONNX format.
-
-        Args:
-            file_path: file path at which to save the model
-
-        Returns:
-            Tuple containing path to model and additional info
-        """
-        model_info_path, model_path = \
-            self._get_model_file_paths(file_path)
-
-        dir_path = os.path.dirname(model_path)
-        if not os.path.exists(dir_path):
-            os.mkdir(dir_path)
-
-        model_info = self._get_info_as_dict()
-        model_info_df = pd.DataFrame(
-            [[v] for v in model_info.values()],
-            model_info.keys()
-        )
-        model_info_df[0].to_json(model_info_path, indent=4)
-
-        tf2onnx.convert.from_keras(
-            self.model,
-            input_signature=None,
-            output_path=model_path
-        )
-
-        return model_info_path, model_path
-
-    def load(self, file_path):
-        """Load the model from ONNX format in place.
-
-        Args:
-            file_path: path from which to load the model
-        """
-        model_info_path, model_path = \
-            self._get_model_file_paths(file_path)
-
-        with open(model_info_path) as fin:
-            model_info = json.load(fin)
-        self.__init__(**model_info)
-
-        self.onnx_session = onnxruntime.InferenceSession(model_path)
+        ss.info["recon_error"] = recon_errors
 
 
-def _l1_norm(x):
-    sums = tf.reduce_sum(x, axis=-1)
-    l1_norm = x / tf.reshape(sums, (-1, 1))
-    return l1_norm
+def _get_reordered_spectra(old_spectra_df: pd.DataFrame, old_sources_df: pd.DataFrame,
+                           new_sources_columns, target_level) -> pd.DataFrame:
+    collapsed_sources_df = old_sources_df\
+        .groupby(axis=1, level=target_level)\
+        .sum()
+    reordered_spectra_df = old_spectra_df.iloc[
+        collapsed_sources_df[
+            new_sources_columns
+        ].idxmax()
+    ].reset_index(drop=True)
+
+    return reordered_spectra_df
+
+
+class L1NormLayer(tf.keras.layers.Layer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def call(self, inputs):
+        sums = tf.reduce_sum(inputs, axis=-1)
+        l1_norm = inputs / tf.reshape(sums, (-1, 1))
+        return l1_norm

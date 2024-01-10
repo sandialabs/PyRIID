@@ -20,6 +20,8 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
 SAMPLESET_HDF_FILE_EXTENSION = ".h5"
 SAMPLESET_JSON_FILE_EXTENSION = ".json"
 PCF_FILE_EXTENSION = ".pcf"
+ONNX_MODEL_FILE_EXTENSION = ".onnx"
+TFLITE_MODEL_FILE_EXTENSION = ".tflite"
 RIID = "riid"
 
 __version__ = get_distribution(RIID).version

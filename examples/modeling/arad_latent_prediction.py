@@ -1,26 +1,26 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
-"""This example demonstrates how to use the PyRIID implementations of ARAD.
+"""This example demonstrates how to train a regressor or classifier branch
+from an ARAD latent space.
 """
 import numpy as np
-import pandas as pd
+from sklearn.metrics import f1_score, mean_squared_error
 
 from riid.data.synthetic import get_dummy_seeds
 from riid.data.synthetic.seed import SeedMixer
 from riid.data.synthetic.static import StaticSynthesizer
-from riid.models.neural_nets.arad import ARADv1, ARADv2
+from riid.models.neural_nets.arad import ARADv2, ARADLatentPredictor
 
 # Config
 rng = np.random.default_rng(42)
-OOD_QUANTILE = 0.99
 VERBOSE = True
 # Some of the following parameters are set low because this example runs on GitHub Actions and
 #   we don't want it taking a bunch of time.
 # When running this locally, change the values per their corresponding comment, otherwise
 #   the results likely will not be meaningful.
 EPOCHS = 5  # Change this to 20+
-N_MIXTURES = 50  # Changes this to 1000+
+N_MIXTURES = 50  # Change this to 1000+
 TRAIN_SAMPLES_PER_SEED = 5  # Change this to 20+
 TEST_SAMPLES_PER_SEED = 5
 
@@ -42,28 +42,41 @@ static_synth.samples_per_seed = TEST_SAMPLES_PER_SEED
 _, test_ss = static_synth.generate(fg_seeds_ss[0], mixed_bg_seed_ss)
 test_ss.normalize()
 
-# Train the models
-results = {}
-models = [ARADv1, ARADv2]
-for model_class in models:
-    arad = model_class()
-    model_name = arad.__class__.__name__
+# Train ARAD model
+print("Training ARAD")
+arad_v2 = ARADv2()
+arad_v2.fit(gross_train_ss, epochs=EPOCHS, verbose=VERBOSE)
 
-    print(f"Training and testing {model_name}...")
-    arad.fit(gross_train_ss, epochs=EPOCHS, verbose=VERBOSE)
-    arad.predict(gross_train_ss)
-    ood_threshold = np.quantile(gross_train_ss.info.recon_error, OOD_QUANTILE)
+# Train regressor to predict SNR
+print("Training Regressor")
+arad_regressor = ARADLatentPredictor()
+_ = arad_regressor.fit(
+    arad_v2.model,
+    gross_train_ss,
+    target_info_columns=["live_time"],
+    epochs=10,
+    batch_size=5,
+    verbose=VERBOSE,
+)
+regression_predictions = arad_regressor.predict(test_ss)
+regression_score = mean_squared_error(gross_train_ss.info.live_time, regression_predictions)
+print("Regressor MSE: {:.3f}".format(regression_score))
 
-    reconstructions = arad.predict(test_ss, verbose=True)
-    ood = test_ss.info.recon_error.values > ood_threshold
-    false_positive_rate = ood.mean()
-    mean_recon_error = test_ss.info.recon_error.values.mean()
-
-    results[model_name] = {
-        "ood_threshold": f"{ood_threshold:.4f}",
-        "mean_recon_error": mean_recon_error,
-        "false_positive_rate": false_positive_rate,
-    }
-
-print(f"Target False Positive Rate: {1-OOD_QUANTILE:.4f}")
-print(pd.DataFrame.from_dict(results))
+# Train classifier to predict isotope
+print("Training Classifier")
+arad_classifier = ARADLatentPredictor(
+    loss="categorical_crossentropy",
+    metrics=("accuracy", "categorical_crossentropy"),
+    final_activation="softmax"
+)
+arad_classifier.fit(
+    arad_v2.model,
+    gross_train_ss,
+    target_level="Isotope",
+    epochs=10,
+    batch_size=5,
+    verbose=VERBOSE,
+)
+arad_classifier.predict(test_ss)
+classification_score = f1_score(test_ss.get_labels(), test_ss.get_predictions(), average="micro")
+print("Classification F1 Score: {:.3f}".format(classification_score))
