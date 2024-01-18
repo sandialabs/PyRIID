@@ -221,6 +221,7 @@ class TestStaticSynthesis(unittest.TestCase):
         ecal = (0, 3000, 100, 0, 0)
         lts = np.array([4.2]).astype(float)
         snrs = np.array([63.2]).astype(float)
+        distance_cm = 50
 
         fg_ss, gross_ss = synth._get_batch(
             fg_seed=fg_seed,
@@ -230,6 +231,7 @@ class TestStaticSynthesis(unittest.TestCase):
             ecal=ecal,
             lt_targets=lts,
             snr_targets=snrs,
+            distance_cm=distance_cm
         )
 
         self.assertTrue(np.allclose(

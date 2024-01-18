@@ -185,12 +185,14 @@ class StaticSynthesizer(Synthesizer):
             batch_lt_targets = lt_targets[batch_begin_idx:batch_end_idx]
             batch_rt_targets = lt_targets[batch_begin_idx:batch_end_idx] * (fg_seed_rt / fg_seed_lt)
             batch_snr_targets = snr_targets[batch_begin_idx:batch_end_idx]
+            distance_cm = fg_seeds_ss.info.distance_cm.iloc[f]
 
             ecal = fg_seeds_ss.ecal[f]
             fg_batch_ss, gross_batch_ss = self._get_batch(
                 fg_seed, fg_sources,
                 bg_seed, bg_sources,
-                ecal, batch_lt_targets, batch_snr_targets, batch_rt_targets
+                ecal, batch_lt_targets, batch_snr_targets, batch_rt_targets,
+                distance_cm
             )
             fg_ss_batches.append(fg_batch_ss)
             gross_ss_batches.append(gross_batch_ss)
