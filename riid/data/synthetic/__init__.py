@@ -82,7 +82,7 @@ class Synthesizer():
             "contain all zeroes.")
 
     def _get_batch(self, fg_seed, fg_sources, bg_seed, bg_sources, ecal,
-                   lt_targets, snr_targets, rt_targets=None):
+                   lt_targets, snr_targets, rt_targets=None, distance_cm=None):
         if not (self.return_fg or self.return_gross):
             raise ValueError("Computing to return nothing.")
 
@@ -129,7 +129,7 @@ class Synthesizer():
             snrs = fg_counts / np.sqrt(long_bg_counts.clip(1))
             fg_ss = get_fg_sample_set(fg_spectra, fg_sources, ecal, lt_targets,
                                       snrs=snrs, total_counts=fg_counts,
-                                      real_times=rt_targets,
+                                      real_times=rt_targets, distance_cm=distance_cm,
                                       timestamps=self._synthesis_start_dt)
             self._n_samples_synthesized += fg_ss.n_samples
         if self.return_gross:
@@ -148,7 +148,7 @@ class Synthesizer():
             snrs = fg_counts / np.sqrt(bg_counts.clip(1))
             gross_ss = get_gross_sample_set(gross_spectra, gross_sources, ecal,
                                             lt_targets, snrs, gross_counts,
-                                            real_times=rt_targets,
+                                            real_times=rt_targets, distance_cm=distance_cm,
                                             timestamps=self._synthesis_start_dt)
             self._n_samples_synthesized += gross_ss.n_samples
 
@@ -156,7 +156,8 @@ class Synthesizer():
 
 
 def get_sample_set(spectra, sources, ecal, live_times, snrs, total_counts=None,
-                   real_times=None, timestamps=None, descriptions=None) -> SampleSet:
+                   real_times=None, distance_cm=None, timestamps=None,
+                   descriptions=None) -> SampleSet:
     n_samples = spectra.shape[0]
 
     ss = SampleSet()
@@ -176,6 +177,7 @@ def get_sample_set(spectra, sources, ecal, live_times, snrs, total_counts=None,
     ss.info.ecal_low_e = ecal[4]
     ss.info.live_time = live_times
     ss.info.real_time = real_times if real_times is not None else live_times
+    ss.info.distance_cm = distance_cm
     ss.info.occupancy_flag = 0
     ss.info.tag = " "  # TODO: test if this can be empty string
 
@@ -195,7 +197,8 @@ def _tile_sources_and_scale(sources, n_samples, scalars) -> pd.DataFrame:
 
 
 def get_fg_sample_set(spectra, sources, ecal, live_times, snrs, total_counts,
-                      real_times=None, timestamps=None, descriptions=None) -> SampleSet:
+                      real_times=None, distance_cm=None, timestamps=None,
+                      descriptions=None) -> SampleSet:
     tiled_sources = _tile_sources_and_scale(
         sources,
         spectra.shape[0],
@@ -209,6 +212,7 @@ def get_fg_sample_set(spectra, sources, ecal, live_times, snrs, total_counts,
         snrs=snrs,
         total_counts=total_counts,
         real_times=real_times,
+        distance_cm=distance_cm,
         timestamps=timestamps,
         descriptions=descriptions
     )
@@ -217,7 +221,8 @@ def get_fg_sample_set(spectra, sources, ecal, live_times, snrs, total_counts,
 
 
 def get_gross_sample_set(spectra, sources, ecal, live_times, snrs, total_counts,
-                         real_times=None, timestamps=None, descriptions=None) -> SampleSet:
+                         real_times=None, distance_cm=None, timestamps=None,
+                         descriptions=None) -> SampleSet:
     ss = get_sample_set(
         spectra=spectra,
         sources=sources,
@@ -226,6 +231,7 @@ def get_gross_sample_set(spectra, sources, ecal, live_times, snrs, total_counts,
         snrs=snrs,
         total_counts=total_counts,
         real_times=real_times,
+        distance_cm=distance_cm,
         timestamps=timestamps,
         descriptions=descriptions
     )
