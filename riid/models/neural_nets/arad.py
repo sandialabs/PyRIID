@@ -1,7 +1,7 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
-"""This module contains implementations of the ARAD model architecture."""
+"""This module contains implementations of the ARAD deep learning architecture."""
 from typing import List
 
 import pandas as pd
@@ -247,7 +247,7 @@ class ARADv2TF(Model):
 
 
 class ARADv1(PyRIIDModel):
-    """PyRIID-compatible ARAD v1 model supporting SampleSets.
+    """PyRIID-compatible ARAD v1 model supporting `SampleSet`s.
     """
     def __init__(self, model: ARADv1TF = None):
         """
@@ -344,7 +344,7 @@ class ARADv1(PyRIIDModel):
 
 
 class ARADv2(PyRIIDModel):
-    """PyRIID-compatible ARAD v2 model supporting SampleSets.
+    """PyRIID-compatible ARAD v2 model supporting `SampleSet`s.
     """
     def __init__(self, model: ARADv2TF = None):
         """
@@ -443,7 +443,7 @@ class ARADv2(PyRIIDModel):
 
 class ARADLatentPredictor(PyRIIDModel):
     """PyRIID-compatible model for branching from the latent space of a pre-trained
-    ARAD latent space for a separate prediction task.
+    ARAD model for a separate, arbitrary prediction task.
     """
     def __init__(self, hidden_layers: tuple = (8, 4,),
                  hidden_activation: str = "relu", final_activation: str = "linear",

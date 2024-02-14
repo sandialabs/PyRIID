@@ -1,7 +1,7 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
-"""This module contains multi-layer perceptron classifiers and regressors."""
+"""This module contains neural network-based classifiers and regressors."""
 from typing import Any, List
 
 import numpy as np
@@ -239,7 +239,7 @@ class MLPClassifier(PyRIIDModel):
 
 
 class MultiEventClassifier(PyRIIDModel):
-    """A classifier for spectra from multiple detectors observing the same event."""
+    """Classifier for spectra from multiple detectors observing the same event."""
     def __init__(self, hidden_layers: tuple = (512,), activation: str = "relu",
                  loss: str = "categorical_crossentropy",
                  optimizer: Any = Adam(learning_rate=0.01, clipnorm=0.001),
@@ -427,6 +427,11 @@ class MultiEventClassifier(PyRIIDModel):
 
 
 class LabelProportionEstimator(PyRIIDModel):
+    """Regressor for predicting label proportions that uses a semi-supervised loss.
+
+    Optionally, a U-spline-based out-of-distribution detection model can be fit to target a desired
+    false positive rate.
+    """
     UNSUPERVISED_LOSS_FUNCS = {
         "poisson_nll": poisson_nll_diff,
         "normal_nll": normal_nll_diff,
@@ -873,6 +878,26 @@ class LabelProportionEstimator(PyRIIDModel):
         ss.info["recon_error"] = recon_errors
 
 
+class L1NormLayer(tf.keras.layers.Layer):
+    """Keras layer applying an L1 norm (dividing by total counts) to input data.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def call(self, inputs):
+        """This is where the layer's logic lives.
+
+        Args:
+            inputs: input tensor, or dict/list/tuple of input tensors.
+
+        Returns:
+            A tensor or list/tuple of tensors.
+        """
+        sums = tf.reduce_sum(inputs, axis=-1)
+        l1_norm = inputs / tf.reshape(sums, (-1, 1))
+        return l1_norm
+
+
 def _get_reordered_spectra(old_spectra_df: pd.DataFrame, old_sources_df: pd.DataFrame,
                            new_sources_columns, target_level) -> pd.DataFrame:
     collapsed_sources_df = old_sources_df\
@@ -885,13 +910,3 @@ def _get_reordered_spectra(old_spectra_df: pd.DataFrame, old_sources_df: pd.Data
     ].reset_index(drop=True)
 
     return reordered_spectra_df
-
-
-class L1NormLayer(tf.keras.layers.Layer):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def call(self, inputs):
-        sums = tf.reduce_sum(inputs, axis=-1)
-        l1_norm = inputs / tf.reshape(sums, (-1, 1))
-        return l1_norm

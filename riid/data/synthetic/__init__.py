@@ -293,7 +293,14 @@ def get_samples_per_seed(columns: pd.MultiIndex, min_samples_per_seed: int, bala
 def get_dummy_seeds(n_channels: int = 512, live_time: float = 600.0,
                     count_rate: float = 1000.0, normalize: bool = True,
                     rng: Generator = np.random.default_rng()) -> SampleSet:
-    """Get a random, dummy `SampleSet` for demonstration or test purposes.
+    """Get a random, dummy `SampleSet` of ideal seeds.
+
+    WARNING: the spectra returned by this function each contain one gaussian peak that does
+    not overlap with the peaks of other spectra.  Such data is about as *ideal* as one
+    could hope to be working with and does not represent anything real.
+    Therefore, **do not** use this data for any purpose other than testing, debugging, or
+    examples where code, not results, is being demonstrated. Any use in scientific studies
+    does not make sense.
 
     Args:
         n_channels: number of channels in the spectra DataFrame
