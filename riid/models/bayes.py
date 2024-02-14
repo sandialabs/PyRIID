@@ -12,7 +12,7 @@ from riid.models import PyRIIDModel
 
 
 class PoissonBayesClassifier(PyRIIDModel):
-    """This Poisson-Bayes classifier calculates the conditional Poisson log probability of each
+    """Poisson-Bayes classifier calculating the conditional Poisson log probability of each
     seed spectrum given the measurement.
 
     This implementation is an adaptation of a naive Bayes classifier, a formal description of

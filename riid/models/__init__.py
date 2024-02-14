@@ -1,7 +1,7 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
-"""This module contains the base TFModel class."""
+"""This module contains functionality shared across all PyRIID models."""
 import json
 import os
 import uuid
@@ -230,10 +230,14 @@ class PyRIIDModel:
 
 
 class PyRIIDModelJsonEncoder(json.JSONEncoder):
+    """Custom JSON encoder for saving models.
+    """
     def default(self, o):
+        """Converts certain types to JSON-compatible types.
+        """
         if isinstance(o, np.ndarray):
             return o.tolist()
         elif isinstance(o, np.float32):
             return o.astype(float)
-        else:
-            return super().default(o)
+
+        return super().default(o)

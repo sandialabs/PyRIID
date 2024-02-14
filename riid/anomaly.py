@@ -49,22 +49,24 @@ class PoissonNChannelEventDetector():
             post_event_duration: duration (in seconds) that determines the number of
                 consecutive, insignificant measurements (i.e., measurements which are not considered
                 anomalies) that must be observed in order to end an event.
-            tolerable_false_alarms_per_day: DESIRED maximum number of allowable false
+            tolerable_false_alarms_per_day: desired maximum number of allowable false
                 positive events per day for all spectrum channels.  The actual observed outcome of
                 this parameter primarily depends on the long-term duration (although other
                 parameters such as the short-term duration and limit update frequency also play a
                 part).  Long-term duration influences the number of actual false alarms per day in
                 the following ways:
-                    (1) if the long-term buffer is not long enough to incorporate long-term
-                        background fluctuations, such fluctuations can be interpreted as anomalies;
-                        and
-                    (2) if the long-term buffer is too short for the desired false alarm rate, it
-                        cannot accurately model the anomaly probability distribution
-                        (more specifically, to achieve a very low false alarm rate, this algorithm
-                        must witness a sufficiently large number of measurements around the tail of
-                        the anomaly probability distribution where the false alarm threshold exists,
-                        and measurements in that region do not happen very often, hence you must
-                        wait a long time to see enough).
+
+                1. if the long-term buffer is not long enough to incorporate long-term
+                   background fluctuations, such fluctuations can be interpreted as anomalies;
+                   and
+                2. if the long-term buffer is too short for the desired false alarm rate, it
+                   cannot accurately model the anomaly probability distribution
+                   (more specifically, to achieve a very low false alarm rate, this algorithm
+                   must witness a sufficiently large number of measurements around the tail of
+                   the anomaly probability distribution where the false alarm threshold exists,
+                   and measurements in that region do not happen very often, hence you must
+                   wait a long time to see enough).
+
                 To give an idea of the challenge here, empirical evidence has shown that to
                 accurately achieve 1 false alarm per day requires 6 or more hours of long-term
                 duration for a 1024-channel, 3"x3" NaI detector at a sample interval of 0.25s.
@@ -76,7 +78,8 @@ class PoissonNChannelEventDetector():
             anomaly_threshold_update_interval: time (in seconds) between updates to the anomaly
                 probability thresholds.  Since this calculation is expensive relative to the other
                 computations going on, and because background itself usually does not significantly
-                between measurements, this parameter can be used to relax computation.
+                change between consecutive measurements, this parameter can be used to relax
+                computation.
 
         """
         self._event_in_progress = False
