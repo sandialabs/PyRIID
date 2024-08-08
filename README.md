@@ -5,13 +5,11 @@
 [![Python](https://img.shields.io/pypi/pyversions/riid)](https://badge.fury.io/py/riid)
 [![PyPI](https://badge.fury.io/py/riid.svg)](https://badge.fury.io/py/riid)
 
-Welcome to PyRIID!
-PyRIID is a Python package providing models and data synthesis utilities supporting
-machine learning-based research into radioisotope-related detection, identification, and quantification.
+PyRIID is a Python package providing modeling and data synthesis utilities for machine learning-based research and development of radioisotope-related detection, identification, and quantification.
 
 ## Installation
 
-These instructions assume you meet the following requirements:
+Requirements:
 
 - Python version: 3.8 to 3.10
 - Operating systems: Windows, Mac, or Ubuntu
@@ -43,12 +41,6 @@ If you are developing PyRIID, clone this repository and run:
 pip install -e ".[dev]"
 ```
 
-**If you have trouble with Pylance resolving imports for an editable install, try this:**
-
-```sh
-pip install -e ".[dev]" --config-settings editable_mode=compat
-```
-
 ## Examples
 
 Examples for how to use this package can be found [here](https://github.com/sandialabs/PyRIID/blob/main/examples).
@@ -69,7 +61,7 @@ You can also run one of the `run_tests.*` scripts, whichever is appropriate for 
 
 API documentation can be found [here](https://sandialabs.github.io/PyRIID).
 
-Build the docs with the following:
+Docs can be built locally with the following:
 
 ```sh
 pip install -r pdoc/requirements.txt
@@ -103,3 +95,20 @@ Additionally, **thank you** to the following individuals who have provided inval
 - Greg Thoreson
 - Michael Enghauser
 - Elliott Leonard
+
+## Citing
+
+When citing PyRIID, please reference the U.S. Department of Energy Office of Science and Technology Information (OSTI) record here:
+[10.11578/dc.20221017.2](https://doi.org/10.11578/dc.20221017.2)
+
+## Related Reports, Publications, and Projects
+
+1. Alan Van Omen, *"A Semi-Supervised Model for Multi-Label Radioisotope Classification and Out-of-Distribution Detection."* Diss. 2023. doi: [10.7302/7200](https://dx.doi.org/10.7302/7200).
+2. Tyler Morrow, *"Questionnaire for Radioisotope Identification and Estimation from Gamma Spectra using PyRIID v2."* United States: N. p., 2023. Web. doi: [10.2172/2229893](https://doi.org/10.2172/2229893).
+3. Aaron Fjeldsted, Tyler Morrow, and Douglas Wolfe, *"Identifying Signal-to-Noise Ratios Representative of Gamma Detector Response in Realistic Scenarios,"* 2023 IEEE Nuclear Science Symposium, Medical Imaging Conference and International Symposium on Room-Temperature Semiconductor Detectors (NSS MIC RTSD), Vancouver, BC, Canada, 2023. doi: [10.1109/NSSMICRTSD49126.2023.10337860](https://doi.org/10.1109/NSSMICRTSD49126.2023.10337860).
+4. Alan Van Omen and Tyler Morrow, *"A Semi-supervised Learning Method to Produce Explainable Radioisotope Proportion Estimates for NaI-based Synthetic and Measured Gamma Spectra."* United States: N. p., 2024. Web. doi: [10.2172/2335904](https://doi.org/10.2172/2335904).
+    - [Code, data, and best model](https://zenodo.org/doi/10.5281/zenodo.10223445)
+5. Alan Van Omen and Tyler Morrow, *"Controlling Radioisotope Proportions When Randomly Sampling from Dirichlet Distributions in PyRIID."* United States: N. p., 2024. Web. doi: [10.2172/2335905](https://doi.org/10.2172/2335905).
+6. Alan Van Omen, Tyler Morrow, et al., *"Multilabel Proportion Prediction and Out-of-distribution Detection on Gamma Spectra of Short-lived Fission Products."* Annals of Nuclear Energy 208 (2024): 110777. doi: [10.1016/j.anucene.2024.110777](https://doi.org/10.1016/j.anucene.2024.110777).
+    - [Code, data, and best models](https://zenodo.org/doi/10.5281/zenodo.12796964)
+7. Aaron Fjeldsted, Tyler Morrow, et al., *"A Novel Methodology for Gamma-Ray Spectra Dataset Procurement over Varying Standoff Distances and Source Activities,"* Nuclear Instruments and Methods in Physics Research Section A (2024): 169681. doi: [10.1016/j.nima.2024.169681](https://doi.org/10.1016/j.nima.2024.169681).
