@@ -12,7 +12,7 @@ namespaces = false
 [project]
 name = "riid"
 description = "Machine learning-based models and utilities for radioisotope identification"
-version = "2.0.0"
+version = "2.1.0"
 maintainers = [
     {name="Tyler Morrow", email="tmorro@sandia.gov"},
 ]
