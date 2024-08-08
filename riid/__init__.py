@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 
-from pkg_resources import get_distribution
+from importlib.metadata import version
 
 HANDLER = logging.StreamHandler(sys.stdout)
 logging.root.addHandler(HANDLER)
@@ -24,7 +24,7 @@ ONNX_MODEL_FILE_EXTENSION = ".onnx"
 TFLITE_MODEL_FILE_EXTENSION = ".tflite"
 RIID = "riid"
 
-__version__ = get_distribution(RIID).version
+__version__ = version(RIID)
 
 __pdoc__ = {
     "riid.data.synthetic.seed.SeedMixer.__call__": True,
