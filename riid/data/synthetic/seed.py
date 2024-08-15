@@ -292,10 +292,13 @@ class SeedMixer():
                 )
                 sources_df = pd.DataFrame([r], columns=sources_cols)
                 batch_sources_dfs.append(sources_df)
-            empty_sources_df = pd.DataFrame([], columns=self.seeds_ss.sources.columns)
-            batch_ss.sources = pd\
-                .concat([empty_sources_df] + batch_sources_dfs)\
+            sources_df = pd\
+                .concat(batch_sources_dfs)\
                 .fillna(0.0)
+            batch_ss.sources = sources_df.reindex(
+                columns=self.seeds_ss.sources.columns,
+                fill_value=0.0
+            )
 
             n_samples_produced += batch_size
 

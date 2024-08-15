@@ -36,8 +36,8 @@ static_synth = StaticSynthesizer(
 train_fg_ss, _ = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss, verbose=False)
 train_fg_ss.normalize()
 
-model_nn = MLPClassifier(hidden_layers=(5,))
-model_nn.fit(train_fg_ss, epochs=10, patience=5, verbose=1)
+model_nn = MLPClassifier()
+model_nn.fit(train_fg_ss, epochs=10, patience=5)
 
 # Create PB model
 model_pb = PoissonBayesClassifier()

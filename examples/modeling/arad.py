@@ -14,7 +14,7 @@ from riid.models.neural_nets.arad import ARADv1, ARADv2
 # Config
 rng = np.random.default_rng(42)
 OOD_QUANTILE = 0.99
-VERBOSE = True
+VERBOSE = False
 # Some of the following parameters are set low because this example runs on GitHub Actions and
 #   we don't want it taking a bunch of time.
 # When running this locally, change the values per their corresponding comment, otherwise
@@ -54,7 +54,7 @@ for model_class in models:
     arad.predict(gross_train_ss)
     ood_threshold = np.quantile(gross_train_ss.info.recon_error, OOD_QUANTILE)
 
-    reconstructions = arad.predict(test_ss, verbose=True)
+    reconstructions = arad.predict(test_ss, verbose=VERBOSE)
     ood = test_ss.info.recon_error.values > ood_threshold
     false_positive_rate = ood.mean()
     mean_recon_error = test_ss.info.recon_error.values.mean()

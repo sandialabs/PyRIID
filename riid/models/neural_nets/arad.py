@@ -4,22 +4,27 @@
 """This module contains implementations of the ARAD deep learning architecture."""
 from typing import List
 
+import keras
 import pandas as pd
 import tensorflow as tf
-from keras.activations import sigmoid, softplus
-from keras.callbacks import EarlyStopping, ReduceLROnPlateau
-from keras.initializers import GlorotNormal, HeNormal
-from keras.layers import (BatchNormalization, Concatenate, Conv1D,
-                          Conv1DTranspose, Dense, Dropout, Flatten, Input,
-                          MaxPool1D, Reshape, UpSampling1D)
-from keras.models import Model
-from keras.regularizers import L1L2, L2
+from keras.api.activations import sigmoid, softplus
+from keras.api.callbacks import EarlyStopping, ReduceLROnPlateau
+from keras.api.initializers import GlorotNormal, HeNormal
+from keras.api.layers import (BatchNormalization, Concatenate, Conv1D,
+                              Conv1DTranspose, Dense, Dropout, Flatten, Input,
+                              MaxPool1D, Reshape, UpSampling1D)
+from keras.api.losses import kl_divergence, log_cosh
+from keras.api.metrics import MeanSquaredError
+from keras.api.models import Model
+from keras.api.optimizers import Adam, Nadam
+from keras.api.regularizers import L1L2, L2
 from scipy.spatial.distance import jensenshannon
 from scipy.stats import entropy
 
 from riid.data.sampleset import SampleSet, SpectraState
-from riid.losses import jensen_shannon_distance, mish
+from riid.losses import mish
 from riid.models import PyRIIDModel
+from riid.models.bayes import ExpandDimsLayer
 
 
 class ARADv1TF(Model):
@@ -31,15 +36,15 @@ class ARADv1TF(Model):
     - Ghawaly Jr, James M. "A Datacentric Algorithm for Gamma-ray Radiation Anomaly Detection
       in Unknown Background Environments." (2020).
     """
-    def __init__(self, latent_dim: int = 5):
+    def __init__(self, latent_dim: int = 5, **kwargs):
         """
         Args:
             latent_dim: dimension of internal latent represention.
                 5 was the final one in the paper, but 4 to 8 were found to work well.
         """
-        super().__init__()
+        super().__init__(**kwargs)
 
-        input_size = (128, 1)
+        input_size = (128,)
         # Encoder
         b1_config = (
             (5, 1, 32),
@@ -63,9 +68,10 @@ class ARADv1TF(Model):
             (1, 1, 2),
         )
         encoder_input = Input(shape=input_size, name="encoder_input")
-        b1 = self._get_branch(encoder_input, b1_config, 0.1, "softplus", "B1", 5)
-        b2 = self._get_branch(encoder_input, b2_config, 0.1, "softplus", "B2", 5)
-        b3 = self._get_branch(encoder_input, b3_config, 0.1, "softplus", "B3", 5)
+        expanded_encoder_input = ExpandDimsLayer()(encoder_input, axis=-1)
+        b1 = self._get_branch(expanded_encoder_input, b1_config, 0.1, "softplus", "B1", 5)
+        b2 = self._get_branch(expanded_encoder_input, b2_config, 0.1, "softplus", "B2", 5)
+        b3 = self._get_branch(expanded_encoder_input, b3_config, 0.1, "softplus", "B3", 5)
         x = Concatenate(axis=1)([b1, b2, b3])
         x = Reshape((15,), name="reshape")(x)
         latent_space = Dense(
@@ -92,27 +98,11 @@ class ARADv1TF(Model):
         decoded_spectrum = decoder(encoded_spectrum)
         autoencoder = Model(encoder_input, decoded_spectrum, name="autoencoder")
 
-        def logcosh_with_kld_penalty(input_spectrum, decoded_spectrum,
-                                     latent_space, sparsities,
-                                     penalty_weight=0.5):
-            squeezed_input = tf.squeeze(input_spectrum)
-            logcosh_loss = tf.keras.losses.log_cosh(squeezed_input, decoded_spectrum)
-            kld_loss = tf.keras.losses.kld(sparsities, latent_space)
-            loss = logcosh_loss + penalty_weight * kld_loss
-            return loss
-
-        sparsities = [0.001] * latent_dim
-        loss_func = logcosh_with_kld_penalty(
-            encoder_input,
-            decoded_spectrum,
-            latent_space,
-            sparsities,
-        )
-        autoencoder.add_loss(loss_func)
-
         self.encoder = encoder
         self.decoder = decoder
         self.autoencoder = autoencoder
+        self.sparsities = [0.001] * latent_dim
+        self.penalty_weight = 0.5
 
     def _get_branch(self, input_layer, config, dropout_rate, activation, branch_name, dense_units):
         x = input_layer
@@ -132,7 +122,15 @@ class ARADv1TF(Model):
         return x
 
     def call(self, x):
-        decoded = self.autoencoder(x)
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+
+        # Compute loss
+        logcosh_loss = log_cosh(x, decoded)
+        kld_loss = kl_divergence(self.sparsities, encoded)
+        loss = logcosh_loss + self.penalty_weight * kld_loss
+        self.add_loss(loss)
+
         return decoded
 
 
@@ -145,15 +143,15 @@ class ARADv2TF(Model):
     - Ghawaly Jr, James M., et al. "Characterization of the Autoencoder Radiation Anomaly Detection
       (ARAD) model." Engineering Applications of Artificial Intelligence 111 (2022): 104761.
     """
-    def __init__(self, latent_dim: int = 8):
+    def __init__(self, latent_dim: int = 8, **kwargs):
         """
         Args:
             latent_dim: dimension of internal latent represention.
                 5 was the final one in the paper, but 4 to 8 were found to work well.
         """
-        super().__init__()
+        super().__init__(**kwargs)
 
-        input_size = (128, 1)
+        input_size = (128,)
         # Encoder
         config = (
             (7, 1, 8, 2),
@@ -163,7 +161,8 @@ class ARADv2TF(Model):
             (3, 1, 8, 2),
         )
         encoder_input = Input(shape=input_size, name="encoder_input")
-        x = encoder_input
+        expanded_encoder_input = ExpandDimsLayer()(encoder_input, axis=-1)
+        x = expanded_encoder_input
         for i, (kernel_size, strides, filters, max_pool_size) in enumerate(config, start=1):
             conv_name = f"conv{i}"
             x = Conv1D(
@@ -194,7 +193,7 @@ class ARADv2TF(Model):
         encoder = Model(encoder_input, encoder_output, name="encoder")
 
         # Decoder
-        decoder_input = Input(shape=latent_dim, name="decoder_input")
+        decoder_input = Input(shape=(latent_dim,), name="decoder_input")
         x = Dense(units=32, name="D2", activation=mish)(decoder_input)
         x = BatchNormalization(name="D2_batch_norm")(x)
         x = Reshape((4, 8), name="reshape")(x)
@@ -242,7 +241,25 @@ class ARADv2TF(Model):
         self.autoencoder = autoencoder
 
     def call(self, x):
-        decoded = self.autoencoder(x)
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+
+        # Compute loss
+        p_sum = tf.reduce_sum(x, axis=-1)
+        p_norm = tf.divide(
+            x,
+            tf.reshape(p_sum, (-1, 1))
+        )
+        q_sum = tf.reduce_sum(decoded, axis=-1)
+        q_norm = tf.divide(
+            decoded,
+            tf.reshape(q_sum, (-1, 1))
+        )
+        m = (p_norm + q_norm) / 2
+        js_divergence = (kl_divergence(p_norm, m) + kl_divergence(q_norm, m)) / 2
+        loss = tf.math.sqrt(js_divergence)
+        self.add_loss(loss)
+
         return decoded
 
 
@@ -278,16 +295,12 @@ class ARADv1(PyRIIDModel):
 
         x = ss.get_samples().astype(float)
 
-        optimizer = tf.keras.optimizers.Nadam(
-            learning_rate=1e-4
-        )
+        optimizer = Nadam(learning_rate=1e-4)
 
         if not self.model:
             self.model = ARADv1TF()
-        self.model.compile(
-            loss=None,
-            optimizer=optimizer
-        )
+
+        self.model.compile(optimizer=optimizer)
 
         callbacks = [
             EarlyStopping(
@@ -375,17 +388,12 @@ class ARADv2(PyRIIDModel):
 
         x = ss.get_samples().astype(float)
 
-        optimizer = tf.keras.optimizers.Adam(
-            learning_rate=0.01,
-            epsilon=0.05
-        )
+        optimizer = Adam(learning_rate=0.01, epsilon=0.05)
 
         if not self.model:
             self.model = ARADv2TF()
-        self.model.compile(
-            loss=jensen_shannon_distance,
-            optimizer=optimizer
-        )
+
+        self.model.compile(optimizer=optimizer)
 
         callbacks = [
             EarlyStopping(
@@ -448,7 +456,7 @@ class ARADLatentPredictor(PyRIIDModel):
     def __init__(self, hidden_layers: tuple = (8, 4,),
                  hidden_activation: str = "relu", final_activation: str = "linear",
                  loss: str = "mse", optimizer="adam", optimizer_kwargs=None,
-                 learning_rate: float = 1e-3, metrics: tuple = ("mse", ),
+                 learning_rate: float = 1e-3, metrics=None,
                  kernel_l1_regularization: float = 0.0, kernel_l2_regularization: float = 0.0,
                  bias_l1_regularization: float = 0.0, bias_l2_regularization: float = 0.0,
                  activity_l1_regularization: float = 0.0, activity_l2_regularization: float = 0.0,
@@ -479,12 +487,14 @@ class ARADLatentPredictor(PyRIIDModel):
         self.loss = loss
         self.optimizer = optimizer
         if isinstance(optimizer, str):
-            self.optimizer = tf.keras.optimizers.get(optimizer)
+            self.optimizer = keras.optimizers.get(optimizer)
         if optimizer_kwargs is not None:
             for key, value in optimizer_kwargs.items():
                 setattr(self.optimizer, key, value)
         self.optimizer.learning_rate = learning_rate
         self.metrics = metrics
+        if self.metrics is None:
+            self.metrics = [MeanSquaredError()]
         self.kernel_l1_regularization = kernel_l1_regularization
         self.kernel_l2_regularization = kernel_l2_regularization
         self.bias_l1_regularization = bias_l1_regularization
@@ -498,15 +508,15 @@ class ARADLatentPredictor(PyRIIDModel):
     def _initialize_model(self, arad: Model, output_size: int):
         """Build Keras MLP model.
         """
-        encoder = arad.get_layer("encoder")
-        encoder_input = encoder.get_layer(index=0).input
-        encoder_output = encoder.get_layer(index=-1).output
-        encoder_output_shape = encoder_output.shape
+        encoder: Model = arad.get_layer("encoder")
+        encoder_input = encoder.input
+        encoder_output = encoder.output
+        encoder_output_shape = encoder_output.shape[-1]
 
-        predictor_input = Input(shape=encoder_output_shape, name="predictor_input")
+        predictor_input = Input(shape=(encoder_output_shape,), name="inner_predictor_input")
         x = predictor_input
         for layer, nodes in enumerate(self.hidden_layers):
-            x = tf.keras.layers.Dense(
+            x = Dense(
                 nodes,
                 activation=self.hidden_activation,
                 kernel_regularizer=L1L2(
@@ -521,19 +531,19 @@ class ARADLatentPredictor(PyRIIDModel):
                     l1=self.activity_l1_regularization,
                     l2=self.activity_l2_regularization
                 ),
-                name=f"dense_{layer}"
+                name=f"inner_predictor_dense_{layer}"
             )(x)
             if self.dropout > 0:
-                x = tf.keras.layers.Dropout(self.dropout)(x)
-        predictor_output = tf.keras.layers.Dense(
+                x = Dropout(self.dropout)(x)
+        predictor_output = Dense(
             output_size,
             activation=self.final_activation,
-            name="output"
+            name="inner_predictor_output"
         )(x)
-        predictor = Model(predictor_input, predictor_output, name="predictor")
+        inner_predictor = Model(predictor_input, predictor_output, name="inner_predictor")
 
         encoded_spectrum = encoder(encoder_input)
-        predictions = predictor(encoded_spectrum)
+        predictions = inner_predictor(encoded_spectrum)
         self.model = Model(encoder_input, predictions, name="predictor")
         # Freeze the layers corresponding to the autoencoder
         # Note: setting trainable to False is recursive to sub-layers per TF docs:

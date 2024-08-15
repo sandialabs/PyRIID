@@ -24,7 +24,7 @@ _, train_ss = static_synth.generate(fg_seeds_ss, mixed_bg_seed_ss)
 train_ss.normalize()
 
 model = MLPClassifier()
-model.fit(train_ss, epochs=10, patience=5, verbose=1)
+model.fit(train_ss, epochs=10, patience=5)
 
 # Generate some test data
 static_synth.samples_per_seed = 50

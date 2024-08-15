@@ -26,7 +26,7 @@ train_ss, _ = StaticSynthesizer(**SYNTHETIC_DATA_CONFIG)\
     .generate(fg_seeds_ss, mixed_bg_seed_ss)
 train_ss.normalize()
 
-model = MLPClassifier(hidden_layers=(8,))
+model = MLPClassifier()
 model.fit(train_ss, verbose=0, epochs=50)
 
 # Generate some test data

@@ -2,88 +2,90 @@
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
 """This module contains neural network-based classifiers and regressors."""
-from typing import Any, List
-
+import keras
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from keras.callbacks import EarlyStopping
-from keras.layers import Dense, Dropout
-from keras.optimizers import Adam
-from keras.regularizers import L1L2, l1, l2
+from keras.api.activations import sigmoid, softmax
+from keras.api.callbacks import EarlyStopping
+from keras.api.layers import Dense, Dropout, Input
+from keras.api.losses import CategoricalCrossentropy, MeanSquaredError
+from keras.api.metrics import F1Score, Precision, Recall
+from keras.api.models import Model
+from keras.api.optimizers import Adam
+from keras.api.regularizers import L1L2, l1, l2
+from keras.api.utils import split_dataset
 from scipy.interpolate import UnivariateSpline
 
-from riid.data.sampleset import SampleSet
+from riid.data.sampleset import SampleSet, SpectraType
 from riid.losses import (build_keras_semisupervised_loss_func,
                          chi_squared_diff, jensen_shannon_divergence,
                          normal_nll_diff, poisson_nll_diff,
                          reconstruction_error, sse_diff, weighted_sse_diff)
 from riid.losses.sparsemax import SparsemaxLoss, sparsemax
-from riid.metrics import (build_keras_semisupervised_metric_func, multi_f1,
-                          single_f1)
+from riid.metrics import build_keras_semisupervised_metric_func
 from riid.models import ModelInput, PyRIIDModel
+from riid.models.layers import L1NormLayer
 
 
 class MLPClassifier(PyRIIDModel):
     """Multi-layer perceptron classifier."""
-    def __init__(self, hidden_layers: tuple = (512,), activation: str = "relu",
-                 loss: str = "categorical_crossentropy",
-                 optimizer: Any = Adam(learning_rate=0.01, clipnorm=0.001),
-                 metrics: tuple = ("accuracy", "categorical_crossentropy", multi_f1, single_f1),
-                 l2_alpha: float = 1e-4, activity_regularizer=l1(0), dropout: float = 0.0,
-                 learning_rate: float = 0.01, final_activation: str = "softmax"):
+    def __init__(self, activation=None, loss=None, optimizer=None,
+                 metrics=None, l2_alpha: float = 1e-4,
+                 activity_regularizer=None, final_activation=None):
         """
         Args:
-            hidden_layers: tuple defining the number and size of dense layers
             activation: activate function to use for each dense layer
             loss: loss function to use for training
             optimizer: tensorflow optimizer or optimizer name to use for training
             metrics: list of metrics to be evaluating during training
             l2_alpha: alpha value for the L2 regularization of each dense layer
             activity_regularizer: regularizer function applied each dense layer output
-            dropout: amount of dropout to apply to each dense layer
-            learning_rate: learning rate to use for an Adam optimizer
+            final_activation: final activation function to apply to model output
         """
         super().__init__()
 
-        self.hidden_layers = hidden_layers
         self.activation = activation
-        self.final_activation = final_activation
         self.loss = loss
-        if optimizer == "adam":
-            self.optimizer = Adam(learning_rate=learning_rate)
-        else:
-            self.optimizer = optimizer
         self.optimizer = optimizer
+        self.final_activation = final_activation
         self.metrics = metrics
         self.l2_alpha = l2_alpha
         self.activity_regularizer = activity_regularizer
-        self.dropout = dropout
-        self.model = None
+        self.final_activation = final_activation
 
-    def fit(self, ss: SampleSet, bg_ss: SampleSet = None,
-            ss_input_type: ModelInput = ModelInput.GrossSpectrum,
-            bg_ss_input_type: ModelInput = ModelInput.BackgroundSpectrum,
-            batch_size: int = 200, epochs: int = 20,
-            validation_split: float = 0.2, callbacks=None, val_ss: SampleSet = None,
-            val_bg_ss: SampleSet = None, patience: int = 15, es_monitor: str = "val_loss",
+        if self.activation is None:
+            self.activation = "relu"
+        if self.loss is None:
+            self.loss = CategoricalCrossentropy()
+        if optimizer is None:
+            self.optimizer = Adam(learning_rate=0.01, clipnorm=0.001)
+        if self.metrics is None:
+            self.metrics = [F1Score(), Precision(), Recall()]
+        if self.activity_regularizer is None:
+            self.activity_regularizer = l1(0.0)
+        if self.final_activation is None:
+            self.final_activation = "softmax"
+        self.model = None
+        self._predict_fn = None
+
+    def fit(self, ss: SampleSet, batch_size: int = 200, epochs: int = 20,
+            validation_split: float = 0.2, callbacks=None,
+            patience: int = 15, es_monitor: str = "val_loss",
             es_mode: str = "min", es_verbose=0, target_level="Isotope", verbose: bool = False):
         """Fit a model to the given `SampleSet`(s).
 
         Args:
             ss: `SampleSet` of `n` spectra where `n` >= 1 and the spectra are either
                 foreground (AKA, "net") or gross.
-            bg_ss: `SampleSet` of `n` spectra where `n` >= 1 and the spectra are background
             batch_size: number of samples per gradient update
             epochs: maximum number of training iterations
             validation_split: percentage of the training data to use as validation data
             callbacks: list of callbacks to be passed to the TensorFlow `Model.fit()` method
-            val_ss: validation set to be used instead of taking a portion of the training data
-            val_bg_ss: validation set to be used as background for `val_ss`
-            patience: number of epochs to wait for `tf.keras.callbacks.EarlyStopping`
-            es_monitor: quantity to be monitored for `tf.keras.callbacks.EarlyStopping`
-            es_mode: mode for `tf.keras.callbacks.EarlyStopping`
-            es_verbose: verbosity level for `tf.keras.callbacks.EarlyStopping`
+            patience: number of epochs to wait for `EarlyStopping` object
+            es_monitor: quantity to be monitored for `EarlyStopping` object
+            es_mode: mode for `EarlyStopping` object
+            es_verbose: verbosity level for `EarlyStopping` object
             target_level: `SampleSet.sources` column level to use
             verbose: whether to show detailed model training output
 
@@ -96,75 +98,44 @@ class MLPClassifier(PyRIIDModel):
         if ss.n_samples <= 0:
             raise ValueError("No spectr[a|um] provided!")
 
-        x_train = ss.get_samples().astype(float)
-        source_contributions_df = ss.sources.groupby(axis=1, level=target_level, sort=False).sum()
-        y_train = source_contributions_df.values.astype(float)
-        if bg_ss:
-            x_bg_train = bg_ss.get_samples().astype(float)
-
-        if val_ss:
-            if val_bg_ss:
-                val_data = (
-                    [val_ss.get_samples().astype(float), val_bg_ss.get_samples().astype(float)],
-                    val_ss.get_source_contributions().astype(float),
-                )
-            else:
-                val_data = (
-                    val_ss.get_samples().astype(float),
-                    val_ss.get_source_contributions().astype(float),
-                )
-            validation_split = None
+        if ss.spectra_type == SpectraType.Gross:
+            self.model_inputs = (ModelInput.GrossSpectrum,)
+        elif ss.spectra_type == SpectraType.Foreground:
+            self.model_inputs = (ModelInput.ForegroundSpectrum,)
+        elif ss.spectra_type == SpectraType.Background:
+            self.model_inputs = (ModelInput.BackgroundSpectrum,)
         else:
-            val_data = None
-            row_order = np.arange(x_train.shape[0])
-            np.random.shuffle(row_order)
-            # Enforce random validation split through shuffling
-            x_train = x_train[row_order]
-            y_train = y_train[row_order]
+            raise ValueError(f"{ss.spectra_type} is not supported in this model.")
 
-            if bg_ss:
-                x_bg_train = x_bg_train[row_order]
+        X = ss.get_samples()
+        source_contributions_df = ss.sources.T.groupby(target_level, sort=False).sum().T
+        model_outputs = source_contributions_df.columns.values.tolist()
+        Y = source_contributions_df.values
+
+        spectra_tensor = tf.convert_to_tensor(X, dtype=tf.float32)
+        labels_tensor = tf.convert_to_tensor(Y, dtype=tf.float32)
+        training_dataset = tf.data.Dataset.from_tensor_slices((spectra_tensor, labels_tensor))
+        training_dataset, validation_dataset = split_dataset(
+            training_dataset,
+            left_size=validation_split,
+            shuffle=True
+        )
+        training_dataset = training_dataset.batch(batch_size=batch_size)
+        validation_dataset = validation_dataset.batch(batch_size=batch_size)
 
         if not self.model:
-            spectra_input = tf.keras.layers.Input(
-                x_train.shape[1],
-                name=ss_input_type.name
-            )
-            inputs = [spectra_input]
-
-            if bg_ss:
-                background_spectra_input = tf.keras.layers.Input(
-                    x_bg_train.shape[1],
-                    name=bg_ss_input_type.name
-                )
-                inputs.append(background_spectra_input)
-
-            if len(inputs) > 1:
-                x = tf.keras.layers.Concatenate()(inputs)
-            else:
-                x = inputs[0]
-
-            for layer, nodes in enumerate(self.hidden_layers):
-                if layer == 0:
-                    x = Dense(
-                        nodes,
-                        activation=self.activation,
-                        activity_regularizer=self.activity_regularizer,
-                        kernel_regularizer=l2(self.l2_alpha),
-                    )(x)
-                else:
-                    x = Dense(
-                        nodes,
-                        activation=self.activation,
-                        activity_regularizer=self.activity_regularizer,
-                        kernel_regularizer=l2(self.l2_alpha),
-                    )(x)
-                if self.dropout > 0:
-                    x = Dropout(self.dropout)(x)
-
-            output = Dense(y_train.shape[1], activation=self.final_activation)(x)
-            self.model = tf.keras.models.Model(inputs, output)
-            self.model.compile(loss=self.loss, optimizer=self.optimizer, metrics=self.metrics)
+            inputs = Input(shape=(X.shape[1],), name="Spectrum")
+            dense_layer_size = X.shape[1] // 2
+            dense_layer = Dense(
+                dense_layer_size,
+                activation=self.activation,
+                activity_regularizer=self.activity_regularizer,
+                kernel_regularizer=l2(self.l2_alpha),
+            )(inputs)
+            outputs = Dense(Y.shape[1], activation=self.final_activation)(dense_layer)
+            self.model = Model(inputs, outputs)
+            self.model.compile(loss=self.loss, optimizer=self.optimizer,
+                               metrics=self.metrics)
 
         es = EarlyStopping(
             monitor=es_monitor,
@@ -173,41 +144,39 @@ class MLPClassifier(PyRIIDModel):
             restore_best_weights=True,
             mode=es_mode,
         )
-
         if callbacks:
             callbacks.append(es)
         else:
             callbacks = [es]
 
-        if bg_ss:
-            X_data = [x_train, x_bg_train]
-            self.model_inputs = (ss_input_type, bg_ss_input_type)
-        else:
-            X_data = x_train
-            self.model_inputs = (ss_input_type,)
-
         history = self.model.fit(
-            X_data,
-            y_train,
+            training_dataset,
             epochs=epochs,
             verbose=verbose,
-            validation_split=validation_split,
-            validation_data=val_data,
+            validation_data=validation_dataset,
             callbacks=callbacks,
-            shuffle=True,
-            batch_size=batch_size,
-        )
+         )
 
         # Update model information
         self._update_info(
             target_level=target_level,
-            model_outputs=source_contributions_df.columns.values.tolist(),
+            model_outputs=model_outputs,
             normalization=ss.spectra_state,
+        )
+
+        # Define the predict function with tf.function and input_signature
+        self._predict_fn = tf.function(
+            self._predict,
+            # input_signature=[tf.TensorSpec(shape=[None, X.shape[1]], dtype=tf.float32)]
+            experimental_relax_shapes=True
         )
 
         return history
 
-    def predict(self, ss: SampleSet, bg_ss: SampleSet = None, verbose=False):
+    def _predict(self, input_tensor):
+        return self.model(input_tensor, training=False)
+
+    def predict(self, ss: SampleSet, bg_ss: SampleSet = None):
         """Classify the spectra in the provided `SampleSet`(s).
 
         Results are stored inside the first SampleSet's prediction-related properties.
@@ -223,7 +192,8 @@ class MLPClassifier(PyRIIDModel):
         else:
             X = x_test
 
-        results = self.model.predict(X, verbose=verbose)
+        spectra_tensor = tf.convert_to_tensor(X, dtype=tf.float32)
+        results = self._predict_fn(spectra_tensor)
 
         col_level_idx = SampleSet.SOURCES_MULTI_INDEX_NAMES.index(self.target_level)
         col_level_subset = SampleSet.SOURCES_MULTI_INDEX_NAMES[:col_level_idx+1]
@@ -236,194 +206,6 @@ class MLPClassifier(PyRIIDModel):
         )
 
         ss.classified_by = self.model_id
-
-
-class MultiEventClassifier(PyRIIDModel):
-    """Classifier for spectra from multiple detectors observing the same event."""
-    def __init__(self, hidden_layers: tuple = (512,), activation: str = "relu",
-                 loss: str = "categorical_crossentropy",
-                 optimizer: Any = Adam(learning_rate=0.01, clipnorm=0.001),
-                 metrics: list = ["accuracy", "categorical_crossentropy", multi_f1, single_f1],
-                 l2_alpha: float = 1e-4, activity_regularizer: tf.keras.regularizers = l1(0),
-                 dropout: float = 0.0, learning_rate: float = 0.01):
-        """
-        Args:
-            hidden_layers: tuple containing the number and size of dense layers
-            activation: activate function to use for each dense layer
-            loss: string name of the loss function to use for training
-            optimizer: string name of the optimizer to use for training
-            metrics: list of metrics to be evaluating during training
-            l2_alpha: alpha value for the L2 regularization of each dense layer
-            activity_regularizer: regularizer function applied each dense layer output
-            dropout: amount of dropout to apply to each dense layer
-            learning_rate: learning rate to use for an Adam optimizer
-        """
-        super().__init__()
-
-        self.hidden_layers = hidden_layers
-        self.activation = activation
-        self.loss = loss
-        if optimizer == "adam":
-            self.optimizer = Adam(learning_rate=learning_rate)
-        else:
-            self.optimizer = optimizer
-        self.metrics = metrics
-        self.l2_alpha = l2_alpha
-        self.activity_regularizer = activity_regularizer
-        self.dropout = dropout
-        self.model = None
-
-    def fit(self, list_of_ss: List[SampleSet], target_contributions: pd.DataFrame,
-            batch_size: int = 200, epochs: int = 20,
-            validation_split: float = 0.2, callbacks: list = None,
-            val_model_ss_list: SampleSet = None,
-            val_model_target_contributions: pd.DataFrame = None,
-            patience: int = 15, es_monitor: str = "val_loss", es_mode: str = "min",
-            es_verbose: bool = False, target_level="Isotope", verbose: bool = False):
-        """Fit a model to the given SampleSet(s).
-
-        Args:
-            list_of_ss: list of `SampleSet`s which have prediction_probas populated from
-                single-event classifiers
-            target_contributions: DataFrame of the contributions for each
-                observation. Column titles are the desired label strings.
-            batch_size: number of samples per gradient update
-            epochs: maximum number of training iterations
-            validation_split: percentage of the training data to use as validation data
-            callbacks: list of callbacks to be passed to TensorFlow Model.fit() method
-            val_model_ss_list: validation set to be used instead of taking a portion of the
-                training data
-            val_model_target_contributions: target contributions to the model for each sample
-            patience: number of epochs to wait for `tf.keras.callbacks.EarlyStopping` object
-            es_monitor: quantity to be monitored for `tf.keras.callbacks.EarlyStopping` object
-            es_mode: mode for `tf.keras.callbacks.EarlyStopping` object
-            es_verbose: verbosity level for `tf.keras.callbacks.EarlyStopping` object
-            target_level: source level to target for model output
-            verbose: whether to show detailed training output
-
-        Returns:
-            `tf.History` object
-
-        Raises:
-            `ValueError` when no predictions are provided with `list_of_ss` input
-        """
-        if len(list_of_ss) <= 0:
-            raise ValueError("No model predictions provided!")
-
-        x_train = [ss.prediction_probas.values for ss in list_of_ss]
-        y_train = target_contributions.values
-
-        if val_model_ss_list and val_model_target_contributions:
-            val_data = (
-                    [ss.prediction_probas.values for ss in val_model_ss_list],
-                    val_model_target_contributions.values,
-                )
-            validation_split = None
-        else:
-            val_data = None
-            row_order = np.arange(x_train[0].shape[0])
-            np.random.shuffle(row_order)
-            # Enforce random validation split through shuffling
-            x_train = [i[row_order] for i in x_train]
-            y_train = y_train[row_order]
-
-        if not self.model:
-            inputs = []
-            for ss in list_of_ss:
-                input_from_single_event_model = tf.keras.layers.Input(
-                    ss.prediction_probas.shape[1],
-                    name=ss.classified_by
-                )
-                inputs.append(input_from_single_event_model)
-
-            if len(inputs) > 1:
-                x = tf.keras.layers.Concatenate()(inputs)
-            else:
-                x = inputs[0]
-
-            for layer, nodes in enumerate(self.hidden_layers):
-                if layer == 0:
-                    x = Dense(
-                            nodes,
-                            activation=self.activation,
-                            activity_regularizer=self.activity_regularizer,
-                            kernel_regularizer=l2(self.l2_alpha),
-                        )(x)
-                else:
-                    x = Dense(
-                            nodes,
-                            activation=self.activation,
-                            activity_regularizer=self.activity_regularizer,
-                            kernel_regularizer=l2(self.l2_alpha),
-                        )(x)
-                if self.dropout > 0:
-                    x = Dropout(self.dropout)(x)
-
-            output = Dense(y_train.shape[1], activation="softmax")(x)
-            self.model = tf.keras.models.Model(inputs, output)
-            self.model.compile(loss=self.loss, optimizer=self.optimizer, metrics=self.metrics)
-
-        es = EarlyStopping(
-            monitor=es_monitor,
-            patience=patience,
-            verbose=es_verbose,
-            restore_best_weights=True,
-            mode=es_mode,
-        )
-
-        if callbacks:
-            callbacks.append(es)
-        else:
-            callbacks = [es]
-
-        history = self.model.fit(
-            x_train,
-            y_train,
-            epochs=epochs,
-            verbose=verbose,
-            validation_split=validation_split,
-            validation_data=val_data,
-            callbacks=callbacks,
-            shuffle=True,
-            batch_size=batch_size,
-        )
-
-        # Initialize model info, update output/input information
-        self._update_info(
-            target_level=target_level,
-            model_outputs=target_contributions.columns.values.tolist(),
-            model_inputs=tuple(
-                [(ss.classified_by, ss.prediction_probas.shape[1]) for ss in list_of_ss]
-            ),
-            normalization=tuple(
-                [(ss.classified_by, ss.spectra_state) for ss in list_of_ss]
-            ),
-        )
-
-        return history
-
-    def predict(self, list_of_ss: List[SampleSet], verbose=False) -> pd.DataFrame:
-        """Classify the spectra in the provided `SampleSet`(s) based on each one's results.
-
-        Args:
-            list_of_ss: list of `SampleSet`s which had predictions made by single-event models
-
-        Returns:
-            `DataFrame` of predicted results for the `Sampleset`(s)
-        """
-        X = [ss.prediction_probas for ss in list_of_ss]
-        results = self.model.predict(X, verbose=verbose)
-
-        col_level_idx = SampleSet.SOURCES_MULTI_INDEX_NAMES.index(self.target_level)
-        col_level_subset = SampleSet.SOURCES_MULTI_INDEX_NAMES[:col_level_idx+1]
-        results_df = pd.DataFrame(
-            data=results,
-            columns=pd.MultiIndex.from_tuples(
-               self.get_model_outputs_as_label_tuples(),
-               names=col_level_subset
-            )
-        )
-        return results_df
 
 
 class LabelProportionEstimator(PyRIIDModel):
@@ -450,19 +232,19 @@ class LabelProportionEstimator(PyRIIDModel):
             sparsemax,
         ),
         "categorical_crossentropy": (
-            tf.keras.losses.CategoricalCrossentropy,
+            CategoricalCrossentropy,
             {
                 "from_logits": True,
                 "reduction": tf.keras.losses.Reduction.NONE,
             },
-            tf.keras.activations.softmax,
+            softmax,
         ),
         "mse": (
-            tf.keras.losses.MeanSquaredError,
+            MeanSquaredError,
             {
                 "reduction": tf.keras.losses.Reduction.NONE,
             },
-            tf.keras.activations.sigmoid,
+            sigmoid,
         )
     }
     INFO_KEYS = (
@@ -495,7 +277,7 @@ class LabelProportionEstimator(PyRIIDModel):
     )
 
     def __init__(self, hidden_layers: tuple = (256,), sup_loss="sparsemax", unsup_loss="sse",
-                 metrics=("mae", "categorical_crossentropy",), beta=0.9, source_dict=None,
+                 metrics: list = ["mae", "categorical_crossentropy"], beta=0.9, source_dict=None,
                  optimizer="adam", optimizer_kwargs=None, learning_rate: float = 1e-3,
                  hidden_layer_activation: str = "mish",
                  kernel_l1_regularization: float = 0.0, kernel_l2_regularization: float = 0.0,
@@ -551,7 +333,7 @@ class LabelProportionEstimator(PyRIIDModel):
 
         self.optimizer = optimizer
         if isinstance(optimizer, str):
-            self.optimizer = tf.keras.optimizers.get(optimizer)
+            self.optimizer = keras.optimizers.get(optimizer)
         if optimizer_kwargs is not None:
             for key, value in optimizer_kwargs.items():
                 setattr(self.optimizer, key, value)
@@ -603,11 +385,11 @@ class LabelProportionEstimator(PyRIIDModel):
         return self.UNSUPERVISED_LOSS_FUNCS[loss_func_str]
 
     def _initialize_model(self, input_size, output_size):
-        spectra_input = tf.keras.layers.Input(input_size, name="input_spectrum")
+        spectra_input = Input(input_size, name="input_spectrum")
         spectra_norm = L1NormLayer(name="normalized_input_spectrum")(spectra_input)
         x = spectra_norm
         for layer, nodes in enumerate(self.hidden_layers):
-            x = tf.keras.layers.Dense(
+            x = Dense(
                 nodes,
                 activation=self.hidden_layer_activation,
                 kernel_regularizer=L1L2(
@@ -626,17 +408,14 @@ class LabelProportionEstimator(PyRIIDModel):
             )(x)
 
             if self.dropout > 0:
-                x = tf.keras.layers.Dropout(self.dropout)(x)
-        output = tf.keras.layers.Dense(
+                x = Dropout(self.dropout)(x)
+        output = Dense(
             output_size,
             activation="linear",
             name="output"
         )(x)
 
-        self.model = tf.keras.models.Model(
-            inputs=[spectra_input],
-            outputs=[output]
-        )
+        self.model = Model(inputs=[spectra_input], outputs=[output])
 
     def _get_info_as_dict(self):
         info_dict = {}
@@ -703,10 +482,10 @@ class LabelProportionEstimator(PyRIIDModel):
             epochs: maximum number of training iterations
             validation_split: proportion of training data to use as validation data
             callbacks: list of callbacks to be passed to TensorFlow Model.fit() method
-            patience: number of epochs to wait for tf.keras.callbacks.EarlyStopping object
-            es_monitor: quantity to be monitored for tf.keras.callbacks.EarlyStopping object
-            es_mode: mode for tf.keras.callbacks.EarlyStopping object
-            es_verbose: verbosity level for tf.keras.callbacks.EarlyStopping object
+            patience: number of epochs to wait for `EarlyStopping` object
+            es_monitor: quantity to be monitored for `EarlyStopping` object
+            es_mode: mode for `EarlyStopping` object
+            es_verbose: verbosity level for `EarlyStopping` object
             es_min_delta: minimum change to count as an improvement for early stopping
             normalize_sup_loss: whether to normalize the supervised loss term
             normalize_func: normalization function used for supervised loss term
@@ -715,7 +494,7 @@ class LabelProportionEstimator(PyRIIDModel):
             verbose: whether model training output is printed to the terminal
         """
         spectra = ss.get_samples().astype(float)
-        sources_df = ss.sources.groupby(axis=1, level=target_level, sort=False).sum()
+        sources_df = ss.sources.T.groupby(target_level, sort=False).sum().T
         sources = sources_df.values.astype(float)
         self.sources_columns = sources_df.columns
 
@@ -734,7 +513,7 @@ class LabelProportionEstimator(PyRIIDModel):
             if verbose:
                 print("Initializing model...")
             self._initialize_model(
-                ss.n_channels,
+                (ss.n_channels,),
                 sources.shape[1],
             )
         elif verbose:
@@ -771,7 +550,7 @@ class LabelProportionEstimator(PyRIIDModel):
                     )
                 else:
                     semisup_metrics.append(
-                        build_keras_semisupervised_loss_func(
+                        build_keras_semisupervised_metric_func(
                             each,
                             self.activation,
                             sources.shape[1]
@@ -813,7 +592,7 @@ class LabelProportionEstimator(PyRIIDModel):
             if verbose:
                 print("Finding OOD detection threshold function...")
 
-            train_logits = self.model.predict(spectra)
+            train_logits = self.model.predict(spectra, verbose=0)
             train_lpes = self.activation(tf.convert_to_tensor(train_logits, dtype=tf.float32))
             self.spline_recon_errors = reconstruction_error(
                 tf.convert_to_tensor(spectra, dtype=tf.float32),
@@ -878,31 +657,11 @@ class LabelProportionEstimator(PyRIIDModel):
         ss.info["recon_error"] = recon_errors
 
 
-class L1NormLayer(tf.keras.layers.Layer):
-    """Keras layer applying an L1 norm (dividing by total counts) to input data.
-    """
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def call(self, inputs):
-        """This is where the layer's logic lives.
-
-        Args:
-            inputs: input tensor, or dict/list/tuple of input tensors.
-
-        Returns:
-            A tensor or list/tuple of tensors.
-        """
-        sums = tf.reduce_sum(inputs, axis=-1)
-        l1_norm = inputs / tf.reshape(sums, (-1, 1))
-        return l1_norm
-
-
 def _get_reordered_spectra(old_spectra_df: pd.DataFrame, old_sources_df: pd.DataFrame,
                            new_sources_columns, target_level) -> pd.DataFrame:
     collapsed_sources_df = old_sources_df\
-        .groupby(axis=1, level=target_level)\
-        .sum()
+        .T.groupby(target_level)\
+        .sum().T
     reordered_spectra_df = old_spectra_df.iloc[
         collapsed_sources_df[
             new_sources_columns

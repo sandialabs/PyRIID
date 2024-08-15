@@ -11,8 +11,8 @@ from enum import Enum
 import numpy as np
 import tensorflow as tf
 import tf2onnx
-from keras.models import Model
-from keras.utils import get_custom_objects
+from keras.api.models import Model
+from keras.api.utils import get_custom_objects
 
 import riid
 from riid.data.labeling import label_to_index_element

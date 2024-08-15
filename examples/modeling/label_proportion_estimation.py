@@ -55,7 +55,6 @@ model.fit(
     batch_size=10,
     epochs=2,
     validation_split=0.2,
-    verbose=True,
     bg_cps=300
 )
 
