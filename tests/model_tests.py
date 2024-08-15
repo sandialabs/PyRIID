@@ -8,15 +8,12 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from riid.data.sampleset import SampleSet
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import StaticSynthesizer
-from riid.models import PyRIIDModel
-from riid.models.bayes import (NegativeSpectrumError, PoissonBayesClassifier,
-                               ZeroTotalCountsError)
-from riid.models.neural_nets import (LabelProportionEstimator, MLPClassifier)
-from riid.models.neural_nets.arad import ARADLatentPredictor, ARADv1, ARADv2
+from riid import SampleSet, SeedMixer, StaticSynthesizer, get_dummy_seeds
+from riid.models import (ARADLatentPredictor, ARADv1, ARADv2,
+                         LabelProportionEstimator, MLPClassifier,
+                         PoissonBayesClassifier)
+from riid.models.base import PyRIIDModel
+from riid.models.bayes import NegativeSpectrumError, ZeroTotalCountsError
 
 
 class TestModels(unittest.TestCase):

@@ -2,20 +2,20 @@
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
 """This module contains utilities for working with the GADRAS API."""
+import copy
+import itertools
 import json
 import os
 import sys
-import numpy as np
-from numpy.random import Generator
 from typing import List
-import copy
-import itertools
 
+import numpy as np
 import tqdm
 from jsonschema import validate
+from numpy.random import Generator
 
-from riid.data.sampleset import SampleSet, read_pcf
-from riid.data.synthetic import get_distribution_values
+from riid import SampleSet, read_pcf
+from riid.data.synthetic.base import get_distribution_values
 
 GADRAS_API_SEEMINGLY_AVAILABLE = False
 GADRAS_DIR_ENV_VAR_KEY = "GADRAS_DIR"

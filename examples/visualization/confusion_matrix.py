@@ -4,10 +4,8 @@
 """This example demonstrates how to obtain confusion matrices."""
 import sys
 
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import StaticSynthesizer
-from riid.models.neural_nets import MLPClassifier
+from riid import SeedMixer, StaticSynthesizer, get_dummy_seeds
+from riid.models import MLPClassifier
 from riid.visualize import confusion_matrix
 
 if len(sys.argv) == 2:

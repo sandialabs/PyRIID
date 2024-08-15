@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 from numpy.random import Generator
 
-from riid.data.sampleset import SampleSet
-from riid.data.synthetic import Synthesizer, get_distribution_values
+from riid import SampleSet
+from riid.data.synthetic.base import Synthesizer, get_distribution_values
 
 
 class PassbySynthesizer(Synthesizer):

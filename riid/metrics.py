@@ -5,7 +5,7 @@
 import numpy as np
 import sklearn
 
-from riid.data.sampleset import SampleSet
+from riid import SampleSet
 
 
 def multi_f1(y_true: np.ndarray, y_pred: np.ndarray) -> float:

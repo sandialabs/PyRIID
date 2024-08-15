@@ -5,7 +5,8 @@
 import unittest
 
 import pandas as pd
-from riid.data.synthetic import get_dummy_seeds
+
+from riid import get_dummy_seeds
 from riid.gadras.pcf import (_pack_compressed_text_buffer,
                              _unpack_compressed_text_buffer)
 

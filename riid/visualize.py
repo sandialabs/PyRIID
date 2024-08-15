@@ -15,7 +15,7 @@ from matplotlib.colors import ListedColormap
 from seaborn import heatmap
 from sklearn.metrics import confusion_matrix as confusion_matrix_sklearn
 
-from riid.data.sampleset import SampleSet
+from riid import SampleSet
 
 # DO NOT TOUCH what is set below nor override them inside a function.
 plt.style.use("default")

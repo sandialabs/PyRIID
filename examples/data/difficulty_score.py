@@ -2,9 +2,7 @@
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
 """This example demonstrates how to compute the difficulty of a given SampleSet."""
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import StaticSynthesizer
+from riid import SeedMixer, StaticSynthesizer, get_dummy_seeds
 
 fg_seeds_ss, bg_seeds_ss = get_dummy_seeds().split_fg_and_bg()
 mixed_bg_seed_ss = SeedMixer(bg_seeds_ss, mixture_size=3)\

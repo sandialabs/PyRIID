@@ -10,9 +10,8 @@ from typing import List
 
 import pandas as pd
 
-from riid import SAMPLESET_HDF_FILE_EXTENSION
+from riid import SAMPLESET_HDF_FILE_EXTENSION, SampleSet
 from riid.data.converters import _validate_and_create_output_dir
-from riid.data.sampleset import SampleSet
 
 ELEMENT_IDS_PER_FILE = [0, 1, 2, 3]
 DEFAULT_ECAL = [

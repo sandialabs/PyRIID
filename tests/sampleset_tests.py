@@ -8,13 +8,11 @@ import unittest
 import numpy as np
 import pandas as pd
 
+from riid import SeedMixer, StaticSynthesizer, get_dummy_seeds
 from riid.data.sampleset import (ChannelCountMismatchError,
                                  InvalidSampleCountError, SampleSet,
                                  SpectraState, SpectraStateMismatchError,
                                  SpectraType, _get_row_labels)
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import StaticSynthesizer
 
 
 class TestSampleSet(unittest.TestCase):

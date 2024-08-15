@@ -1,7 +1,7 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
-"""This modules contains utilities for generating synthetic gamma spectrum templates from GADRAS."""
+"""This module contains utilities for generating synthetic gamma spectrum templates from GADRAS."""
 import os
 from contextlib import contextmanager
 from copy import deepcopy
@@ -12,7 +12,8 @@ import pandas as pd
 import yaml
 from numpy.random import Generator
 
-from riid.data.sampleset import SampleSet, _get_utc_timestamp, read_pcf
+from riid import SampleSet, SpectraState, SpectraType, read_pcf
+from riid.data.sampleset import _get_utc_timestamp
 from riid.gadras.api import (DETECTOR_PARAMS, GADRAS_ASSEMBLY_PATH,
                              INJECT_PARAMS, SourceInjector, get_gadras_api,
                              get_inject_setups, validate_inject_config)
@@ -405,3 +406,86 @@ def get_choices(choices_so_far: list, options: list, options_probas: np.array,
     n_choices_remaining -= 1
     return get_choices(choices_so_far, options, options_probas, restricted_pairs,
                        n_choices_remaining, rng)
+
+
+def get_dummy_seeds(n_channels: int = 512, live_time: float = 600.0,
+                    count_rate: float = 1000.0, normalize: bool = True,
+                    rng: Generator = np.random.default_rng()) -> SampleSet:
+    """Get a random, dummy `SampleSet` of ideal seeds.
+
+    WARNING: the spectra returned by this function each contain one gaussian peak that does
+    not overlap with the peaks of other spectra.  Such data is about as *ideal* as one
+    could hope to be working with and does not represent anything real.
+    Therefore, **do not** use this data for any purpose other than testing, debugging, or
+    examples where code, not results, is being demonstrated. Any use in scientific studies
+    does not make sense.
+
+    Args:
+        n_channels: number of channels in the spectra DataFrame
+        live_time: collection time on which to base seeds
+            (higher creates a less noisy shape)
+        count_rate: count rate on which to base seeds
+            (higher creates a less noisy shape)
+        normalize: whether to apply an L1-norm to the spectra
+        rng: NumPy random number generator, useful for experiment repeatability
+
+    Returns:
+        `SampleSet` with randomly generated spectra
+    """
+    ss = SampleSet()
+    ss.measured_or_synthetic = "synthetic"
+    ss.spectra_state = SpectraState.Counts
+    ss.spectra_type = SpectraType.BackgroundForeground
+    ss.synthesis_info = {
+        "subtract_background": True,
+    }
+    sources = [
+        ("Industrial",  "Am241",    "Unshielded Am241"),
+        ("Industrial",  "Ba133",    "Unshielded Ba133"),
+        ("NORM",        "K40",      "PotassiumInSoil"),
+        ("NORM",        "K40",      "Moderately Shielded K40"),
+        ("NORM",        "Ra226",    "UraniumInSoil"),
+        ("NORM",        "Th232",    "ThoriumInSoil"),
+        ("SNM",         "U238",     "Unshielded U238"),
+        ("SNM",         "Pu239",    "Unshielded Pu239"),
+        ("SNM",         "Pu239",    "Moderately Shielded Pu239"),
+        ("SNM",         "Pu239",    "Heavily Shielded Pu239"),
+    ]
+    n_sources = len(sources)
+    n_fg_sources = n_sources
+    sources_cols = pd.MultiIndex.from_tuples(
+        sources,
+        names=SampleSet.SOURCES_MULTI_INDEX_NAMES
+    )
+    sources_data = np.identity(n_sources)
+    ss.sources = pd.DataFrame(data=sources_data, columns=sources_cols)
+
+    histograms = []
+    N_FG_COUNTS = int(count_rate * live_time)
+    fg_std = np.sqrt(n_channels / n_sources)
+    channels_per_sources = n_channels / n_fg_sources
+    for i in range(n_fg_sources):
+        mu = i * channels_per_sources + channels_per_sources / 2
+        counts = rng.normal(mu, fg_std, size=N_FG_COUNTS)
+        fg_histogram, _ = np.histogram(counts, bins=n_channels, range=(0, n_channels))
+        histograms.append(fg_histogram)
+    histograms = np.array(histograms)
+
+    ss.spectra = pd.DataFrame(data=histograms)
+
+    ss.info.total_counts = ss.spectra.sum(axis=1)
+    ss.info.live_time = live_time
+    ss.info.real_time = live_time
+    ss.info.snr = None
+    ss.info.ecal_order_0 = 0
+    ss.info.ecal_order_1 = 3000
+    ss.info.ecal_order_2 = 100
+    ss.info.ecal_order_3 = 0
+    ss.info.ecal_low_e = 0
+    ss.info.description = ""
+    ss.update_timestamp()
+
+    if normalize:
+        ss.normalize()
+
+    return ss

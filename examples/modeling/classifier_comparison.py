@@ -7,12 +7,9 @@ import sys
 import matplotlib.pyplot as plt
 from sklearn.metrics import f1_score
 
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import StaticSynthesizer
-from riid.models.bayes import PoissonBayesClassifier
+from riid import SeedMixer, StaticSynthesizer, get_dummy_seeds
 from riid.metrics import precision_recall_curve
-from riid.models.neural_nets import MLPClassifier
+from riid.models import MLPClassifier, PoissonBayesClassifier
 from riid.visualize import plot_precision_recall
 
 if len(sys.argv) == 2:

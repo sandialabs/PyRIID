@@ -5,10 +5,8 @@
 import numpy as np
 from sklearn.metrics import f1_score
 
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import StaticSynthesizer
-from riid.models.neural_nets import MLPClassifier
+from riid import SeedMixer, StaticSynthesizer, get_dummy_seeds
+from riid.models import MLPClassifier
 
 # Generate some training data
 fg_seeds_ss, bg_seeds_ss = get_dummy_seeds().split_fg_and_bg()

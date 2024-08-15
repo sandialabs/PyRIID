@@ -8,10 +8,8 @@ import numpy as np
 from keras.api.metrics import Accuracy, CategoricalCrossentropy
 from sklearn.metrics import f1_score, mean_squared_error
 
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import StaticSynthesizer
-from riid.models.neural_nets.arad import ARADLatentPredictor, ARADv2
+from riid import SeedMixer, StaticSynthesizer, get_dummy_seeds
+from riid.models import ARADLatentPredictor, ARADv2
 
 # Config
 rng = np.random.default_rng(42)

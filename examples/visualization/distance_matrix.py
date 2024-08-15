@@ -9,7 +9,7 @@ import sys
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from riid.data.synthetic import get_dummy_seeds
+from riid import get_dummy_seeds
 
 if len(sys.argv) == 2:
     import matplotlib

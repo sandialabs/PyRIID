@@ -6,10 +6,8 @@ import unittest
 
 import numpy as np
 
+from riid import PassbySynthesizer, SeedMixer, get_dummy_seeds
 from riid.anomaly import PoissonNChannelEventDetector
-from riid.data.synthetic.passby import PassbySynthesizer
-from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic import get_dummy_seeds
 
 
 class TestAnomaly(unittest.TestCase):

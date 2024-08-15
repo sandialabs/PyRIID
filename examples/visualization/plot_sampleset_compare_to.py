@@ -4,9 +4,7 @@
 """This example demonstrates how to compare sample sets."""
 import sys
 
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import StaticSynthesizer
+from riid import SeedMixer, StaticSynthesizer, get_dummy_seeds
 from riid.visualize import plot_ss_comparison
 
 if len(sys.argv) == 2:
