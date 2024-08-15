@@ -15,8 +15,7 @@ from riid.data.synthetic.static import StaticSynthesizer
 from riid.models import PyRIIDModel
 from riid.models.bayes import (NegativeSpectrumError, PoissonBayesClassifier,
                                ZeroTotalCountsError)
-from riid.models.neural_nets import (LabelProportionEstimator, MLPClassifier,
-                                     MultiEventClassifier)
+from riid.models.neural_nets import (LabelProportionEstimator, MLPClassifier)
 from riid.models.neural_nets.arad import ARADLatentPredictor, ARADv1, ARADv2
 
 
@@ -86,7 +85,7 @@ class TestModels(unittest.TestCase):
 
         # Get test samples
         gss = StaticSynthesizer(
-            samples_per_seed=1,
+            samples_per_seed=2,
             live_time_function_args=(4, 4),
             snr_function_args=(10, 10),
             rng=np.random.default_rng(42),
@@ -99,7 +98,7 @@ class TestModels(unittest.TestCase):
         # Predict
         pb_model.predict(test_gross_ss, test_bg_ss)
 
-        truth_labels = fg_seeds_ss.get_labels()
+        truth_labels = test_fg_ss.get_labels()
         predicted_labels = test_gross_ss.get_predictions()
         assert (truth_labels == predicted_labels).all()
 
@@ -109,18 +108,6 @@ class TestModels(unittest.TestCase):
     def test_mlp_fit_save_load_predict(self):
         _test_model_fit_save_load_predict(self, MLPClassifier, self.test_ss, self.train_ss,
                                           epochs=1)
-
-    def test_mec_fit_save_load_predict(self):
-        test_copy_ss = self.test_ss[:]
-        test_copy_ss.prediction_probas = test_copy_ss.sources
-        _test_model_fit_save_load_predict(
-            self,
-            MultiEventClassifier,
-            [test_copy_ss],
-            [self.train_ss],
-            self.train_ss.sources.groupby(axis=1, level="Isotope", sort=False).sum(),
-            epochs=1
-        )
 
     def test_lpe_fit_save_load_predict(self):
         _test_model_fit_save_load_predict(self, LabelProportionEstimator, self.test_ss,

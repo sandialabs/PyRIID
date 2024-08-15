@@ -19,13 +19,14 @@ class TestAnomaly(unittest.TestCase):
         pass
 
     def test_event_detector(self):
-        np.random.seed(42)
+        random_state = 42
+        rng = np.random.default_rng(random_state)
 
         SAMPLE_INTERVAL = 0.5
         BG_RATE = 300
         seeds_ss = get_dummy_seeds(100)
         fg_seeds_ss, bg_seeds_ss = seeds_ss.split_fg_and_bg()
-        mixed_bg_seeds_ss = SeedMixer(bg_seeds_ss, mixture_size=3)\
+        mixed_bg_seeds_ss = SeedMixer(bg_seeds_ss, mixture_size=3, rng=rng)\
             .generate(1)
         events = PassbySynthesizer(events_per_seed=1,
                                    sample_interval=SAMPLE_INTERVAL,
@@ -34,7 +35,7 @@ class TestAnomaly(unittest.TestCase):
                                    dwell_time_function_args=(20, 20),
                                    snr_function_args=(20, 20),
                                    return_gross=True,
-                                   rng=np.random.default_rng(42))\
+                                   rng=rng)\
             .generate(fg_seeds_ss, mixed_bg_seeds_ss, verbose=False)
 
         _, gross_events = list(zip(*events))

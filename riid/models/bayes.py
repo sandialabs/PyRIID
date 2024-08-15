@@ -5,10 +5,14 @@
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import tensorflow_probability as tfp
+from keras.api.layers import Add, Input, Multiply, Subtract
+from keras.api.models import Model
 
 from riid.data.sampleset import SampleSet
 from riid.models import PyRIIDModel
+from riid.models.layers import (ClipByValueLayer, DivideLayer, ExpandDimsLayer,
+                                PoissonLogProbabilityLayer, ReduceMaxLayer,
+                                ReduceSumLayer, SeedLayer)
 
 
 class PoissonBayesClassifier(PyRIIDModel):
@@ -28,6 +32,14 @@ class PoissonBayesClassifier(PyRIIDModel):
     """
     def __init__(self):
         super().__init__()
+
+        self._update_custom_objects("ReduceSumLayer", ReduceSumLayer)
+        self._update_custom_objects("ReduceMaxLayer", ReduceMaxLayer)
+        self._update_custom_objects("DivideLayer", DivideLayer)
+        self._update_custom_objects("ExpandDimsLayer", ExpandDimsLayer)
+        self._update_custom_objects("ClipByValueLayer", ClipByValueLayer)
+        self._update_custom_objects("PoissonLogProbabilityLayer", PoissonLogProbabilityLayer)
+        self._update_custom_objects("SeedLayer", SeedLayer)
 
     def fit(self, seeds_ss: SampleSet):
         """Construct a TF-based implementation of a poisson-bayes classifier in terms
@@ -50,74 +62,98 @@ class PoissonBayesClassifier(PyRIIDModel):
             msg = "Argument 'seeds_ss' can't contain any spectra with zero total counts."
             raise ZeroTotalCountsError(msg)
 
-        self._seeds = tf.constant(tf.convert_to_tensor(
+        self._seeds = tf.convert_to_tensor(
             seeds_ss.spectra.values,
             dtype=tf.float32
-        ))
+        )
 
         # Inputs
-        gross_spectrum_input = tf.keras.layers.Input(
-            shape=seeds_ss.n_channels,
-            name="gross_spectrum"
-        )
-        gross_live_time_input = tf.keras.layers.Input(
-            shape=(),
-            name="gross_live_time"
-        )
-        bg_spectrum_input = tf.keras.layers.Input(
-            shape=seeds_ss.n_channels,
-            name="bg_spectrum"
-        )
-        bg_live_time_input = tf.keras.layers.Input(
-            shape=(),
-            name="bg_live_time"
-        )
-
-        # Compute expected_seed_spectrums
-        gross_total_counts = tf.reduce_sum(gross_spectrum_input, axis=1)
-        bg_total_counts = tf.reduce_sum(bg_spectrum_input, axis=1)
-        bg_count_rate = tf.divide(bg_total_counts, bg_live_time_input)
-        expected_bg_counts = tf.multiply(bg_count_rate, gross_live_time_input)
-        expected_fg_counts = tf.subtract(gross_total_counts, expected_bg_counts)
-        normalized_bg_spectrum = tf.divide(
-            bg_spectrum_input,
-            tf.expand_dims(bg_total_counts, axis=1)
-        )
-        expected_bg_spectrum = tf.multiply(
-            normalized_bg_spectrum,
-            tf.expand_dims(expected_bg_counts, axis=1)
-        )
-        expected_fg_spectrum = tf.multiply(
-            self._seeds,
-            tf.expand_dims(tf.expand_dims(
-                expected_fg_counts,
-                axis=-1
-            ), axis=-1)
-        )
-        max_value = tf.math.reduce_max(expected_fg_spectrum)
-        expected_fg_spectrum = tf.clip_by_value(expected_fg_spectrum, 1e-8, max_value)
-        expected_gross_spectrum = tf.add(
-            expected_fg_spectrum,
-            tf.expand_dims(expected_bg_spectrum, axis=1)
-        )
-
-        poisson_dist = tfp.distributions.Poisson(expected_gross_spectrum)
-        all_probas = poisson_dist.log_prob(
-            tf.expand_dims(gross_spectrum_input, axis=1)
-        )
-        prediction_probas = tf.math.reduce_sum(all_probas, axis=2)
-
+        gross_spectrum_input = Input(shape=(seeds_ss.n_channels,),
+                                     name="gross_spectrum")
+        gross_live_time_input = Input(shape=(),
+                                      name="gross_live_time")
+        bg_spectrum_input = Input(shape=(seeds_ss.n_channels,),
+                                  name="bg_spectrum")
+        bg_live_time_input = Input(shape=(),
+                                   name="bg_live_time")
         model_inputs = (
             gross_spectrum_input,
             gross_live_time_input,
             bg_spectrum_input,
             bg_live_time_input,
         )
-        self.model = tf.keras.Model(model_inputs, prediction_probas)
+
+        # Input statistics
+        gross_total_counts = ReduceSumLayer(name="gross_total_counts")(gross_spectrum_input, axis=1)
+        bg_total_counts = ReduceSumLayer(name="bg_total_counts")(bg_spectrum_input, axis=1)
+        bg_count_rate = DivideLayer(name="bg_count_rate")([bg_total_counts, bg_live_time_input])
+
+        gross_spectrum_input_expanded = ExpandDimsLayer(
+            name="gross_spectrum_input_expanded"
+        )(gross_spectrum_input, axis=1)
+        bg_total_counts_expanded = ExpandDimsLayer(
+            name="bg_total_counts_expanded"
+        )(bg_total_counts, axis=1)
+
+        # Expectations
+        seed_layer = SeedLayer(self._seeds)(model_inputs)
+        seed_layer_expanded = ExpandDimsLayer()(seed_layer, axis=0)
+        expected_bg_counts = Multiply(
+            trainable=False,
+            name="expected_bg_counts"
+        )([bg_count_rate, gross_live_time_input])
+        expected_bg_counts_expanded = ExpandDimsLayer(
+            name="expected_bg_counts_expanded"
+        )(expected_bg_counts, axis=1)
+        normalized_bg_spectrum = DivideLayer(
+            name="normalized_bg_spectrum"
+        )([bg_spectrum_input, bg_total_counts_expanded])
+        expected_bg_spectrum = Multiply(
+            trainable=False,
+            name="expected_bg_spectrum"
+        )([normalized_bg_spectrum, expected_bg_counts_expanded])
+        expected_fg_counts = Subtract(
+            trainable=False,
+            name="expected_fg_counts"
+        )([gross_total_counts, expected_bg_counts])
+        expected_fg_counts_expanded = ExpandDimsLayer(
+            name="expected_fg_counts_expanded"
+        )(expected_fg_counts, axis=-1)
+        expected_fg_counts_expanded2 = ExpandDimsLayer(
+            name="expected_fg_counts_expanded2"
+        )(expected_fg_counts_expanded, axis=-1)
+        expected_fg_spectrum = Multiply(
+            trainable=False,
+            name="expected_fg_spectrum"
+        )([seed_layer_expanded, expected_fg_counts_expanded2])
+        max_fg_value = ReduceMaxLayer(
+            name="max_fg_value"
+        )(expected_fg_spectrum)
+        expected_fg_spectrum = ClipByValueLayer(
+            name="clip_expected_fg_spectrum"
+        )(expected_fg_spectrum, clip_value_min=1e-8, clip_value_max=max_fg_value)
+        expected_bg_spectrum_expanded = ExpandDimsLayer(
+            name="expected_bg_spectrum_expanded"
+        )(expected_bg_spectrum, axis=1)
+        expected_gross_spectrum = Add(
+            trainable=False,
+            name="expected_gross_spectrum"
+        )([expected_fg_spectrum, expected_bg_spectrum_expanded])
+
+        # Compute probabilities
+        log_probabilities = PoissonLogProbabilityLayer(
+            name="log_probabilities"
+        )([expected_gross_spectrum, gross_spectrum_input_expanded])
+        summed_log_probabilities = ReduceSumLayer(
+            name="summed_log_probabilities"
+        )(log_probabilities, axis=2)
+
+        # Assemble model
+        self.model = Model(model_inputs, summed_log_probabilities)
         self.model.compile()
 
         self.target_level = "Seed"
-        sources_df = seeds_ss.sources.groupby(axis=1, level=self.target_level, sort=False).sum()
+        sources_df = seeds_ss.sources.T.groupby(self.target_level, sort=False).sum().T
         self.model_outputs = sources_df.columns.values.tolist()
 
     def predict(self, gross_ss: SampleSet, bg_ss: SampleSet,

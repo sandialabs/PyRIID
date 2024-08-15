@@ -13,7 +13,7 @@ import os
 import random
 import re
 import warnings
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Callable, Iterable, Tuple, Union
 
@@ -759,8 +759,9 @@ class SampleSet():
             sort=False
         )
         self._sources = self._sources.where(pd.notnull(self._sources), 0)
+        existing_info_df = self._info if not self._info.empty else None
         self._info = pd.concat(
-            [self._info] + [ss.info for ss in ss_list],
+            [existing_info_df] + [ss.info for ss in ss_list],
             ignore_index=True,
             sort=False
         )
@@ -1015,7 +1016,8 @@ class SampleSet():
             self.spectra.values,
             **confidence_func_kwargs
         )
-        return np.array(confidences)
+        confidences = np.array(confidences)
+        return confidences
 
     def _get_spectral_distances(self, distance_func=distance.jensenshannon) -> np.array:
         n_samples = self.n_samples
@@ -1111,7 +1113,7 @@ class SampleSet():
         Returns:
             Array containing the ground truth contributions for each sample
         """
-        collapsed_sources = self.sources.groupby(axis=1, level=target_level).sum()
+        collapsed_sources = self.sources.T.groupby(target_level).sum().T
         sources_values = np.nan_to_num(collapsed_sources)
         return sources_values
 
@@ -1465,7 +1467,8 @@ def _dict_to_bulleted_list(data_dict: dict, level=0, indent=4, bullet="-") -> st
 
 
 def _get_utc_timestamp():
-    ts = datetime.utcnow().isoformat(sep=" ", timespec="seconds")
+    now_utc = datetime.now(timezone.utc)
+    ts = now_utc.isoformat(sep=" ", timespec="seconds")
     return ts
 
 
@@ -1496,10 +1499,10 @@ def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: b
     """
     if max_only:
         if level_aggregation == "sum":
-            values = df.groupby(axis=1, level=target_level).sum()
+            values = df.T.groupby(target_level).sum().T
             labels = values.idxmax(axis=1)
         elif level_aggregation == "mean":
-            values = df.groupby(axis=1, level=target_level).mean()
+            values = df.T.groupby(target_level).mean().T
             labels = values.idxmax(axis=1)
         else:
             levels_to_drop = [
@@ -1513,9 +1516,9 @@ def _get_row_labels(df: pd.DataFrame, target_level: str = "Isotope", max_only: b
             labels = [f"{x} ({y:.2f})" for x, y in zip(labels, values)]
     else:  # Much slower
         if level_aggregation == "sum":
-            values = df.groupby(axis=1, level=target_level).sum()
+            values = df.T.groupby(target_level).sum().T
         elif level_aggregation == "mean":
-            values = df.groupby(axis=1, level=target_level).mean()
+            values = df.T.groupby(target_level).mean().T
         else:
             values = df
         mask = values.ge(min_value).values
@@ -1698,7 +1701,7 @@ def _ss_to_pcf_dict(ss: SampleSet, verbose=False) -> dict:
 
     info_timestamps = ss.info.timestamp.fillna("")
     info_tags = ss.info.tag.fillna("")
-    info_zero_fill = ss.info.fillna(0).astype(float, errors="ignore")
+    info_zero_fill = ss.info.infer_objects(copy=False).astype(float, errors="ignore")
     for i in sample_range:
         title = isotopes[i] if not isotopes.empty else NO_ISOTOPE
         description = ss.info.description.fillna("").iloc[i]

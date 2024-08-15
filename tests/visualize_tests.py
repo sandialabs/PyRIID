@@ -23,7 +23,8 @@ from riid.visualize import (plot_correlation_between_all_labels,
 
 class TestVisualize(unittest.TestCase):
     """Testing plot functions in the visualize module."""
-    def setUp(self):
+    @classmethod
+    def setUpClass(self):
         """Test setup."""
         self.fg_seeds_ss, self.bg_seeds_ss = get_dummy_seeds().split_fg_and_bg()
         self.mixed_bg_seed_ss = SeedMixer(self.bg_seeds_ss, mixture_size=3).generate(10)

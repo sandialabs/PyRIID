@@ -20,14 +20,14 @@ def multi_f1(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     Returns:
         Multi F1-score value(s)
     """
-    from keras import backend as K
+    from keras.api import ops
 
     diff = y_true - y_pred
-    negs = K.clip(diff, -1.0, 0.0)
-    false_positive = -K.sum(negs, axis=-1)
+    negs = ops.clip(diff, -1.0, 0.0)
+    false_positive = -ops.sum(negs, axis=-1)
     true_positive = 1.0 - false_positive
 
-    return K.mean(true_positive)
+    return ops.mean(true_positive)
 
 
 def single_f1(y_true: np.ndarray, y_pred: np.ndarray):
@@ -43,23 +43,23 @@ def single_f1(y_true: np.ndarray, y_pred: np.ndarray):
         F1-score value(s)
     """
     import tensorflow as tf
-    from keras import backend as K
+    from keras.api import ops
 
-    a = tf.dtypes.cast(y_true == K.max(y_true, axis=1)[:, None], tf.float32)
-    b = tf.dtypes.cast(y_pred == K.max(y_pred, axis=1)[:, None], tf.float32)
+    a = tf.dtypes.cast(y_true == ops.max(y_true, axis=1)[:, None], tf.float32)
+    b = tf.dtypes.cast(y_pred == ops.max(y_pred, axis=1)[:, None], tf.float32)
 
-    TP_mat = tf.dtypes.cast(K.all(tf.stack([a, b]), axis=0), tf.float32)
-    FP_mat = tf.dtypes.cast(K.all(tf.stack([a != b, b == 1]), axis=0), tf.float32)
-    FN_mat = tf.dtypes.cast(K.all(tf.stack([a != b, a == 1]), axis=0), tf.float32)
+    TP_mat = tf.dtypes.cast(ops.all(tf.stack([a, b]), axis=0), tf.float32)
+    FP_mat = tf.dtypes.cast(ops.all(tf.stack([a != b, b == 1]), axis=0), tf.float32)
+    FN_mat = tf.dtypes.cast(ops.all(tf.stack([a != b, a == 1]), axis=0), tf.float32)
 
-    TPs = K.sum(TP_mat, axis=0)
-    FPs = K.sum(FP_mat, axis=0)
-    FNs = K.sum(FN_mat, axis=0)
+    TPs = ops.sum(TP_mat, axis=0)
+    FPs = ops.sum(FP_mat, axis=0)
+    FNs = ops.sum(FN_mat, axis=0)
 
-    F1s = 2 * TPs / (2*TPs + FNs + FPs + tf.fill(tf.shape(TPs), K.epsilon()))
+    F1s = 2 * TPs / (2*TPs + FNs + FPs + tf.fill(tf.shape(TPs), tf.keras.backend.epsilon()))
 
-    support = K.sum(a, axis=0)
-    f1 = K.sum(F1s * support) / K.sum(support)
+    support = ops.sum(a, axis=0)
+    f1 = ops.sum(F1s * support) / ops.sum(support)
     return f1
 
 
@@ -122,10 +122,10 @@ def precision_recall_curve(ss: SampleSet, smooth: bool = True, multiclass: bool 
            https://jonathan-hui.medium.com/map-mean-average-precision-for-object-detection-45c121a31173)
 
     """
-    y_true = ss.sources.groupby(axis=1, level=target_level, sort=False).sum()
+    y_true = ss.sources.T.groupby(target_level, sort=False).sum().T
     if minimum_contribution is not None:
         y_true = (y_true > minimum_contribution).astype(int)
-    y_pred = ss.prediction_probas.groupby(axis=1, level=target_level, sort=False).sum()
+    y_pred = ss.prediction_probas.T.groupby(target_level, sort=False).sum().T
 
     # switch from pandas to numpy
     labels = y_true.columns
@@ -250,6 +250,6 @@ def build_keras_semisupervised_metric_func(keras_metric_func, activation_func,
                                            n_labels):
     def metric_func(y_true, y_pred):
         return keras_metric_func(y_true[:, :n_labels], activation_func(y_pred))
-    metric_func.__name__ = keras_metric_func.__name__
+    metric_func.__name__ = keras_metric_func.__class__.__name__
 
     return metric_func

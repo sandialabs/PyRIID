@@ -5,16 +5,17 @@
 from an ARAD latent space.
 """
 import numpy as np
+from keras.api.metrics import Accuracy, CategoricalCrossentropy
 from sklearn.metrics import f1_score, mean_squared_error
 
 from riid.data.synthetic import get_dummy_seeds
 from riid.data.synthetic.seed import SeedMixer
 from riid.data.synthetic.static import StaticSynthesizer
-from riid.models.neural_nets.arad import ARADv2, ARADLatentPredictor
+from riid.models.neural_nets.arad import ARADLatentPredictor, ARADv2
 
 # Config
 rng = np.random.default_rng(42)
-VERBOSE = True
+VERBOSE = False
 # Some of the following parameters are set low because this example runs on GitHub Actions and
 #   we don't want it taking a bunch of time.
 # When running this locally, change the values per their corresponding comment, otherwise
@@ -66,7 +67,7 @@ print("Regressor MSE: {:.3f}".format(regression_score))
 print("Training Classifier")
 arad_classifier = ARADLatentPredictor(
     loss="categorical_crossentropy",
-    metrics=("accuracy", "categorical_crossentropy"),
+    metrics=[Accuracy(), CategoricalCrossentropy()],
     final_activation="softmax"
 )
 arad_classifier.fit(

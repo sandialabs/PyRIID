@@ -4,7 +4,7 @@
 """This module contains custom loss functions."""
 import numpy as np
 import tensorflow as tf
-from keras import backend as K
+from keras.api import ops
 
 
 def negative_log_f1(y_true: np.ndarray, y_pred: np.ndarray):
@@ -18,13 +18,13 @@ def negative_log_f1(y_true: np.ndarray, y_pred: np.ndarray):
         Custom loss score on a log scale
     """
     diff = y_true - y_pred
-    negs = K.clip(diff, -1.0, 0.0)
-    false_positive = -K.sum(negs, axis=-1)
+    negs = ops.clip(diff, -1.0, 0.0)
+    false_positive = -ops.sum(negs, axis=-1)
     true_positive = 1.0 - false_positive
     lower_clip = 1e-20
-    true_positive = K.clip(true_positive, lower_clip, 1.0)
+    true_positive = ops.clip(true_positive, lower_clip, 1.0)
 
-    return -K.mean(K.log(true_positive))
+    return -ops.mean(ops.log(true_positive))
 
 
 def negative_f1(y_true, y_pred):
@@ -38,13 +38,13 @@ def negative_f1(y_true, y_pred):
         Custom loss score
     """
     diff = y_true - y_pred
-    negs = K.clip(diff, -1.0, 0.0)
-    false_positive = -K.sum(negs, axis=-1)
+    negs = ops.clip(diff, -1.0, 0.0)
+    false_positive = -ops.sum(negs, axis=-1)
     true_positive = 1.0 - false_positive
     lower_clip = 1e-20
-    true_positive = K.clip(true_positive, lower_clip, 1.0)
+    true_positive = ops.clip(true_positive, lower_clip, 1.0)
 
-    return -K.mean(true_positive)
+    return -ops.mean(true_positive)
 
 
 def build_keras_semisupervised_loss_func(supervised_loss_func,
@@ -54,6 +54,7 @@ def build_keras_semisupervised_loss_func(supervised_loss_func,
                                          normalize: bool = False,
                                          normalize_scaler: float = 1.0,
                                          normalize_func=tf.math.tanh):
+    @tf.keras.utils.register_keras_serializable(package="Addons")
     def _semisupervised_loss_func(data, y_pred):
         """
         Args:

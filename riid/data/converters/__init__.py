@@ -6,7 +6,7 @@ import glob
 from pathlib import Path
 from typing import Callable
 
-import parmap as pm
+from joblib import Parallel, delayed
 
 
 def _validate_and_create_output_dir(output_dir: str):
@@ -17,8 +17,8 @@ def _validate_and_create_output_dir(output_dir: str):
 
 
 def convert_directory(input_dir_path: str, conversion_func: Callable, file_ext: str,
-                      pm_processes: int = 8, pm_chunksize: int = 1, **kwargs):
-    """Convert and save every file in a specified directory in parallel.
+                      n_jobs: int = 8, **kwargs):
+    """Convert and save every file in a specified directory.
 
     Conversion functions can be found in sub-modules:
 
@@ -32,16 +32,14 @@ def convert_directory(input_dir_path: str, conversion_func: Callable, file_ext: 
         convert_directory(...)
     ```
 
-    Consider setting `pm_processes` to `multiprocessing.cpu_count()`;
-    unfortunately, `pm_chunksize` requires some experimentation to fully optimize.
+    Tip: for max utilization, considering setting `n_jobs` to `multiprocessing.cpu_count()`.
 
     Args:
         input_dir_path: directory path containing the input files
         conversion_func: function used to convert a data file to a `SampleSet`
         file_ext: file extension to read in for conversion
-        pm_processes: parmap parameter to set the # of processes
-        pm_chunksize: parmap parameter to set the chunksize
-        kwargs: keyword args passed to underlying conversion_func operations
+        n_jobs: `joblib.Parallel` parameter to set the # of jobs
+        kwargs: additional keyword args passed to conversion_func
     """
     input_path = Path(input_dir_path)
     if not input_path.exists() or not input_path.is_dir():
@@ -50,13 +48,6 @@ def convert_directory(input_dir_path: str, conversion_func: Callable, file_ext: 
 
     input_file_paths = sorted(glob.glob(f"{input_dir_path}/*.{file_ext}"))
 
-    x = pm.map(
-        conversion_func,
-        input_file_paths,
-        **kwargs,
-        pm_processes=pm_processes,
-        pm_chunksize=pm_chunksize,
-        pm_parallel=True,
-        pm_pbar=True,
+    Parallel(n_jobs, verbose=10)(
+        delayed(conversion_func)(path, **kwargs) for path in input_file_paths
     )
-    return x

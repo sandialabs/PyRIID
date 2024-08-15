@@ -11,23 +11,22 @@ PyRIID is a Python package providing modeling and data synthesis utilities for m
 
 Requirements:
 
-- Python version: 3.8 to 3.10
+- Python version: 3.9 to 3.12
+  - Note: we recommended the highest Python version you can manage as anecdotally, we have noticed that everything just tends to get faster.
 - Operating systems: Windows, Mac, or Ubuntu
-
-A virtual environment is recommended.
 
 Tests and examples are run via Actions on many combinations of Python version and operating system.
 You can verify support for your platform by checking the workflow files.
 
 ### For Use
 
-To use the latest version on PyPI (note: changes are slower to appear here), run:
+To use the latest version on PyPI, run:
 
 ```sh
 pip install riid
 ```
 
-**For the latest features, run:**
+Note that changes are slower to appear on PyPI, so for the latest features, run:**
 
 ```sh
 pip install git+https://github.com/sandialabs/pyriid.git@main
@@ -86,7 +85,7 @@ Full copyright details can be found [here](https://github.com/sandialabs/PyRIID/
 ## Acknowledgements
 
 **Thank you** to the U.S. Department of Energy, National Nuclear Security Administration,
-Office of Defense Nuclear Nonproliferation Research and Development (DNN R&D) for funding that has led to version `2.x`.
+Office of Defense Nuclear Nonproliferation Research and Development (DNN R&D) for funding that has led to versions `2.0` and `2.1`.
 
 Additionally, **thank you** to the following individuals who have provided invaluable subject-matter expertise:
 
