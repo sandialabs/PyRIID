@@ -10,8 +10,8 @@ from typing import Tuple
 import numpy as np
 from numpy.random import Generator
 
-from riid.data.sampleset import SampleSet, SpectraState, SpectraType
-from riid.data.synthetic import Synthesizer, get_distribution_values
+from riid import SampleSet, SpectraState, SpectraType
+from riid.data.synthetic.base import Synthesizer, get_distribution_values
 
 
 class StaticSynthesizer(Synthesizer):

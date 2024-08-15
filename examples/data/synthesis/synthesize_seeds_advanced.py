@@ -5,7 +5,7 @@
 configuration expansion features."""
 import yaml
 
-from riid.data.synthetic.seed import SeedSynthesizer
+from riid import SeedSynthesizer
 
 seed_synth_config = """
 ---

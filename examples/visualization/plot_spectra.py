@@ -4,7 +4,7 @@
 """This example demonstrates how to plot gamma spectra."""
 import sys
 
-from riid.data.synthetic import get_dummy_seeds
+from riid import get_dummy_seeds
 from riid.visualize import plot_spectra
 
 if len(sys.argv) == 2:

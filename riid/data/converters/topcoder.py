@@ -13,10 +13,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from riid import SAMPLESET_HDF_FILE_EXTENSION
+from riid import SAMPLESET_HDF_FILE_EXTENSION, SampleSet
 from riid.data.converters import _validate_and_create_output_dir
 from riid.data.labeling import label_to_index_element
-from riid.data.sampleset import SampleSet
 
 SOURCE_ID_TO_LABEL = {
     0: "Background",

@@ -8,8 +8,8 @@ import tensorflow as tf
 from keras.api.layers import Add, Input, Multiply, Subtract
 from keras.api.models import Model
 
-from riid.data.sampleset import SampleSet
-from riid.models import PyRIIDModel
+from riid import SampleSet
+from riid.models.base import PyRIIDModel
 from riid.models.layers import (ClipByValueLayer, DivideLayer, ExpandDimsLayer,
                                 PoissonLogProbabilityLayer, ReduceMaxLayer,
                                 ReduceSumLayer, SeedLayer)

@@ -6,10 +6,8 @@ import unittest
 
 import numpy as np
 from scipy.spatial.distance import jensenshannon
-from riid.data.sampleset import SampleSet
 
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
+from riid import SampleSet, SeedMixer, get_dummy_seeds
 
 
 class TestSeedMixer(unittest.TestCase):

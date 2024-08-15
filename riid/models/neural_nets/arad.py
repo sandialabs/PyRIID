@@ -21,10 +21,10 @@ from keras.api.regularizers import L1L2, L2
 from scipy.spatial.distance import jensenshannon
 from scipy.stats import entropy
 
-from riid.data.sampleset import SampleSet, SpectraState
+from riid import SampleSet, SpectraState
 from riid.losses import mish
-from riid.models import PyRIIDModel
-from riid.models.bayes import ExpandDimsLayer
+from riid.models.base import PyRIIDModel
+from riid.models.layers import ExpandDimsLayer
 
 
 class ARADv1TF(Model):

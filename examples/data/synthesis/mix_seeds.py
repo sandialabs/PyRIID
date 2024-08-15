@@ -3,8 +3,8 @@
 # the U.S. Government retains certain rights in this software.
 """This example demonstrates how to generate synthetic gamma spectra from seeds."""
 import numpy as np
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
+
+from riid import SeedMixer, get_dummy_seeds
 
 fg_seeds_ss, bg_seeds_ss = get_dummy_seeds().split_fg_and_bg()
 

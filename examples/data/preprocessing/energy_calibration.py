@@ -8,9 +8,7 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import StaticSynthesizer
+from riid import SeedMixer, StaticSynthesizer, get_dummy_seeds
 
 SYNTHETIC_DATA_CONFIG = {
     "samples_per_seed": 10,

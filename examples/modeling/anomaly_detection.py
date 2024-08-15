@@ -10,10 +10,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
 
+from riid import PassbySynthesizer, SeedMixer, get_dummy_seeds
 from riid.anomaly import PoissonNChannelEventDetector
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.passby import PassbySynthesizer
-from riid.data.synthetic.seed import SeedMixer
 
 if len(sys.argv) == 2:
     import matplotlib

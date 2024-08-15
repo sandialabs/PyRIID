@@ -6,10 +6,8 @@
 import numpy as np
 import pandas as pd
 
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import StaticSynthesizer
-from riid.models.neural_nets.arad import ARADv1, ARADv2
+from riid import SeedMixer, StaticSynthesizer, get_dummy_seeds
+from riid.models import ARADv1, ARADv2
 
 # Config
 rng = np.random.default_rng(42)

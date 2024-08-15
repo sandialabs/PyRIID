@@ -12,10 +12,9 @@ but a custom file format is easily handled by implementing your own `convert_and
 import os
 from pathlib import Path
 
-from riid import SAMPLESET_HDF_FILE_EXTENSION
+from riid import SAMPLESET_HDF_FILE_EXTENSION, read_pcf
 from riid.data.converters import (_validate_and_create_output_dir,
                                   convert_directory)
-from riid.data.sampleset import read_pcf
 
 
 def convert_and_save(input_file_path: str, output_dir: str = None,

@@ -7,8 +7,14 @@
 import logging
 import os
 import sys
-
 from importlib.metadata import version
+
+from riid.data.sampleset import (SampleSet, SpectraState, SpectraType,
+                                 read_hdf, read_json, read_pcf)
+from riid.data.synthetic.passby import PassbySynthesizer
+from riid.data.synthetic.seed import (SeedMixer, SeedSynthesizer,
+                                      get_dummy_seeds)
+from riid.data.synthetic.static import StaticSynthesizer
 
 HANDLER = logging.StreamHandler(sys.stdout)
 logging.root.addHandler(HANDLER)
@@ -31,3 +37,7 @@ __pdoc__ = {
     "riid.data.synthetic.passby.PassbySynthesizer._generate_single_passby": True,
     "riid.data.sampleset.SampleSet._channels_to_energies": True,
 }
+
+__all__ = ["SampleSet", "SpectraState", "SpectraType",
+           "read_hdf", "read_json", "read_pcf", "get_dummy_seeds",
+           "PassbySynthesizer", "SeedSynthesizer", "StaticSynthesizer", "SeedMixer"]

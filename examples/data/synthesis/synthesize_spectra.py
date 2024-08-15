@@ -2,9 +2,7 @@
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
 """This example demonstrates how to generate synthetic gamma spectra from seeds."""
-from riid.data.synthetic import get_dummy_seeds
-from riid.data.synthetic.seed import SeedMixer
-from riid.data.synthetic.static import StaticSynthesizer
+from riid import SeedMixer, StaticSynthesizer, get_dummy_seeds
 
 SYNTHETIC_DATA_CONFIG = {
     "samples_per_seed": 10000,
