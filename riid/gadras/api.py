@@ -7,7 +7,6 @@ import itertools
 import json
 import os
 import sys
-from typing import List
 
 import numpy as np
 import tqdm
@@ -53,14 +52,14 @@ if sys.platform == "win32" and GADRAS_API_SEEMINGLY_AVAILABLE:
     clr.AddReference("Sandia.Gadras.Utilities")
     clr.AddReference("System.Collections")
 
-    from Sandia.Gadras.API import GadrasAPIWrapper, LocationInfo  # noqa
+    from Sandia.Gadras.API import GadrasAPIWrapper, LocationInfo  # type: ignore
     try:
-        from Sandia.Gadras.API.Inject import InjectSetup  # noqa
+        from Sandia.Gadras.API.Inject import InjectSetup  # type: ignore
         IS_GADRAS19 = True
     except ModuleNotFoundError:
-        from Sandia.Gadras.API import InjectSetup  # noqa
-    from Sandia.Gadras.Utilities import Configs  # noqa
-    from System.Collections.Generic import List  # noqa
+        from Sandia.Gadras.API import InjectSetup  # type: ignore
+    from Sandia.Gadras.Utilities import Configs  # type: ignore
+    from System.Collections.Generic import List  # type: ignore
 
 
 INJECT_PARAMS = {
@@ -236,9 +235,13 @@ class SourceInjector(BaseInjector):
             worker = self.gadras_api.GetBatchInjectWorker()
 
         injects_exist = False
-        pbar = tqdm.tqdm(config["sources"], desc="Running injects")
+        if verbose:
+            pbar = tqdm.tqdm(config["sources"], desc="Running injects")
+        else:
+            pbar = config["sources"]
         for fg in pbar:
-            pbar.set_description(f"Running inject for '{fg['isotope']}'")
+            if verbose:
+                pbar.set_description(f"Injecting '{fg['isotope']}'")
             inject_setups = self._get_inject_setups_for_sources(
                 self.gadras_api,
                 config["gamma_detector"]["parameters"],
