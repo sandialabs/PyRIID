@@ -217,20 +217,16 @@ class TestStaticSynthesis(unittest.TestCase):
             [0.3, 0.4, 0.3],
             index=["X", "Y", "Z"]
         )
-        ecal = (0, 3000, 100, 0, 0)
         lts = np.array([4.2]).astype(float)
         snrs = np.array([63.2]).astype(float)
-        distance_cm = 50
 
         fg_ss, gross_ss = synth._get_batch(
             fg_seed=fg_seed,
             fg_sources=fg_sources,
             bg_seed=bg_seed,
             bg_sources=bg_sources,
-            ecal=ecal,
             lt_targets=lts,
             snr_targets=snrs,
-            distance_cm=distance_cm
         )
 
         self.assertTrue(np.allclose(
@@ -242,7 +238,6 @@ class TestStaticSynthesis(unittest.TestCase):
             gross_ss.sources.loc[:, bg_sources.index].sum(axis=1) / synth.bg_cps,
             lts,
         ))
-
         self.assertTrue(np.allclose(
             gross_ss.sources.loc[:, fg_sources.index],
             fg_ss.sources.loc[:, fg_sources.index],

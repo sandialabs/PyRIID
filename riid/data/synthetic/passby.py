@@ -177,7 +177,7 @@ class PassbySynthesizer(Synthesizer):
         return 1 / (np.power(samples, 2) + 1)
 
     def _generate_single_passby(self, fwhm: float, snr: float, dwell_time: float,
-                                fg_seed: np.array, bg_seed: np.array, fg_ecal: np.array,
+                                fg_seed: np.array, bg_seed: np.array,
                                 fg_sources: pd.Series, bg_sources: pd.Series):
         """Generate a `SampleSet` with a sequence of spectra representative of a single pass-by.
 
@@ -212,7 +212,6 @@ class PassbySynthesizer(Synthesizer):
             fg_sources,
             bg_seed,
             bg_sources,
-            fg_ecal,
             live_times,
             snr_targets
         )
@@ -275,17 +274,55 @@ class PassbySynthesizer(Synthesizer):
             for fg_i in range(fg_seeds_ss.n_samples):
                 fg_pmf = fg_seeds_ss.spectra.iloc[fg_i]
                 fg_sources = fg_seeds_ss.sources.iloc[fg_i]
-                fg_ecal = fg_seeds_ss.ecal[fg_i]
                 for t_i in range(self.events_per_seed):
                     fwhm = fwhm_targets[t_i]
                     snr = snr_targets[t_i]
                     dwell_time = dwell_time_targets[t_i]
-                    pb_args = (fwhm, snr, dwell_time, fg_pmf, bg_pmf,
-                               fg_ecal, fg_sources, bg_sources)
+                    pb_args = (fg_i, fwhm, snr, dwell_time, fg_pmf, bg_pmf,
+                               fg_sources, bg_sources)
                     args.append(pb_args)
 
         # TODO: follow prevents periodic progress reports
-        passbys = [self._generate_single_passby(*a) for a in args]
+        passbys = []
+        for a in args:
+            f, fwhm, snr, dwell_time, fg_pmf, bg_pmf, fg_sources, bg_sources = a
+            fg_passby_ss, gross_passby_ss = self._generate_single_passby(
+                fwhm, snr, dwell_time, fg_pmf, bg_pmf, fg_sources, bg_sources
+            )
+            live_times = None
+            if fg_passby_ss is not None:
+                live_times = fg_passby_ss.info.live_time
+            elif gross_passby_ss is not None:
+                live_times = gross_passby_ss.info.live_time
+            else:
+                live_times = 1.0
+
+            fg_seed_ecal = fg_seeds_ss.ecal[f]
+            fg_seed_info = fg_seeds_ss.info.iloc[f]
+            batch_rt_targets = live_times * (1 - fg_seed_info.dead_time_prop)
+            fg_seed_distance_cm = fg_seed_info.distance_cm
+            fg_seed_dead_time_prop = fg_seed_info.dead_time_prop
+            fg_seed_ad = fg_seed_info.areal_density
+            fg_seed_an = fg_seed_info.atomic_number
+            fg_seed_neutron_counts = fg_seed_info.neutron_counts
+
+            def _set_remaining_info(ss):
+                if ss is None:
+                    return
+                ss: SampleSet = ss
+                ss.ecal = fg_seed_ecal
+                ss.info.real_time = batch_rt_targets
+                ss.info.distance_cm = fg_seed_distance_cm
+                ss.info.dead_time_prop = fg_seed_dead_time_prop
+                ss.info.areal_density = fg_seed_ad
+                ss.info.atomic_number = fg_seed_an
+                ss.info.neutron_counts = fg_seed_neutron_counts
+                ss.info.timestamp = self._synthesis_start_dt
+
+            _set_remaining_info(fg_passby_ss)
+            _set_remaining_info(gross_passby_ss)
+
+            passbys.append((fg_passby_ss, gross_passby_ss))
 
         if verbose:
             delay = time() - tstart

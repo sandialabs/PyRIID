@@ -81,8 +81,7 @@ class Synthesizer():
             "Be sure to remove any columns from your seeds' sources DataFrame that "
             "contain all zeroes.")
 
-    def _get_batch(self, fg_seed, fg_sources, bg_seed, bg_sources, ecal,
-                   lt_targets, snr_targets, rt_targets=None, distance_cm=None):
+    def _get_batch(self, fg_seed, fg_sources, bg_seed, bg_sources, lt_targets, snr_targets):
         if not (self.return_fg or self.return_gross):
             raise ValueError("Computing to return nothing.")
 
@@ -127,10 +126,8 @@ class Synthesizer():
         # Sample sets
         if self.return_fg:
             snrs = fg_counts / np.sqrt(long_bg_counts.clip(1))
-            fg_ss = get_fg_sample_set(fg_spectra, fg_sources, ecal, lt_targets,
-                                      snrs=snrs, total_counts=fg_counts,
-                                      real_times=rt_targets, distance_cm=distance_cm,
-                                      timestamps=self._synthesis_start_dt)
+            fg_ss = get_fg_sample_set(fg_spectra, fg_sources, lt_targets,
+                                      snrs=snrs, total_counts=fg_counts)
             self._n_samples_synthesized += fg_ss.n_samples
         if self.return_gross:
             tiled_fg_sources = _tile_sources_and_scale(
@@ -146,40 +143,28 @@ class Synthesizer():
             gross_sources = get_merged_sources_samplewise(tiled_fg_sources, tiled_bg_sources)
             gross_counts = gross_spectra.sum(axis=1)
             snrs = fg_counts / np.sqrt(bg_counts.clip(1))
-            gross_ss = get_gross_sample_set(gross_spectra, gross_sources, ecal,
-                                            lt_targets, snrs, gross_counts,
-                                            real_times=rt_targets, distance_cm=distance_cm,
-                                            timestamps=self._synthesis_start_dt)
+            gross_ss = get_gross_sample_set(gross_spectra, gross_sources,
+                                            lt_targets, snrs, gross_counts)
             self._n_samples_synthesized += gross_ss.n_samples
 
         return fg_ss, gross_ss
 
 
-def get_sample_set(spectra, sources, ecal, live_times, snrs, total_counts=None,
-                   real_times=None, distance_cm=None, timestamps=None,
-                   descriptions=None) -> SampleSet:
+def _get_minimal_ss(spectra, sources, live_times, snrs, total_counts=None) -> SampleSet:
     n_samples = spectra.shape[0]
+    if n_samples <= 0:
+        raise ValueError(f"Can't build SampleSet with {n_samples} samples.")
 
     ss = SampleSet()
     ss.spectra_state = SpectraState.Counts
     ss.spectra = pd.DataFrame(spectra)
     ss.sources = sources
     ss.info.description = np.full(n_samples, "")  # Ensures the length of info equal n_samples
-    if descriptions:
-        ss.info.description = descriptions
     ss.info.snr = snrs
-    ss.info.timestamp = timestamps
     ss.info.total_counts = total_counts if total_counts is not None else spectra.sum(axis=1)
-    ss.info.ecal_order_0 = ecal[0]
-    ss.info.ecal_order_1 = ecal[1]
-    ss.info.ecal_order_2 = ecal[2]
-    ss.info.ecal_order_3 = ecal[3]
-    ss.info.ecal_low_e = ecal[4]
     ss.info.live_time = live_times
-    ss.info.real_time = real_times if real_times is not None else live_times
-    ss.info.distance_cm = distance_cm
     ss.info.occupancy_flag = 0
-    ss.info.tag = " "  # TODO: test if this can be empty string
+    ss.info.tag = " "  # TODO: test if this can be an empty string
 
     return ss
 
@@ -196,44 +181,30 @@ def _tile_sources_and_scale(sources, n_samples, scalars) -> pd.DataFrame:
     return tiled_sources
 
 
-def get_fg_sample_set(spectra, sources, ecal, live_times, snrs, total_counts,
-                      real_times=None, distance_cm=None, timestamps=None,
-                      descriptions=None) -> SampleSet:
+def get_fg_sample_set(spectra, sources, live_times, snrs, total_counts) -> SampleSet:
     tiled_sources = _tile_sources_and_scale(
         sources,
         spectra.shape[0],
         spectra.sum(axis=1)
     )
-    ss = get_sample_set(
+    ss = _get_minimal_ss(
         spectra=spectra,
         sources=tiled_sources,
-        ecal=ecal,
         live_times=live_times,
         snrs=snrs,
         total_counts=total_counts,
-        real_times=real_times,
-        distance_cm=distance_cm,
-        timestamps=timestamps,
-        descriptions=descriptions
     )
     ss.spectra_type = SpectraType.Foreground
     return ss
 
 
-def get_gross_sample_set(spectra, sources, ecal, live_times, snrs, total_counts,
-                         real_times=None, distance_cm=None, timestamps=None,
-                         descriptions=None) -> SampleSet:
-    ss = get_sample_set(
+def get_gross_sample_set(spectra, sources, live_times, snrs, total_counts) -> SampleSet:
+    ss = _get_minimal_ss(
         spectra=spectra,
         sources=sources,
-        ecal=ecal,
         live_times=live_times,
         snrs=snrs,
         total_counts=total_counts,
-        real_times=real_times,
-        distance_cm=distance_cm,
-        timestamps=timestamps,
-        descriptions=descriptions
     )
     ss.spectra_type = SpectraType.Gross
     return ss
