@@ -192,7 +192,7 @@ class StaticSynthesizer(Synthesizer):
 
             fg_seed_ecal = fg_seeds_ss.ecal[f]
             fg_seed_info = fg_seeds_ss.info.iloc[f]
-            batch_rt_targets = batch_lt_targets * (1 - fg_seed_info.dead_time_prop)
+            batch_rt_targets = batch_lt_targets / (1 - fg_seed_info.dead_time_prop)
             fg_seed_distance_cm = fg_seed_info.distance_cm
             fg_seed_dead_time_prop = fg_seed_info.dead_time_prop
             fg_seed_ad = fg_seed_info.areal_density
