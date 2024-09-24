@@ -1,0 +1,33 @@
+---
+gamma_detector:
+  name: Generic\\NaI\\3x3\\Front\\MidScat
+  parameters:
+    distance_cm: 100
+    height_cm: 10
+    dead_time_per_pulse: 5
+    latitude_deg: 35.0
+    longitude_deg: 253.4
+    elevation_m: 1620
+sources:
+  - isotope: Am241
+    configurations:
+      - Am241,100uC
+  - isotope: Ba133
+    configurations:
+      - Ba133,100uC
+  - isotope: Cs137
+    configurations:
+      - Cs137,100uC
+  - isotope: Cosmic
+    configurations:
+      - Cosmic
+  - isotope: K40
+    configurations:
+      - PotassiumInSoil
+  - isotope: Ra226
+    configurations:
+      - UraniumInSoil
+  - isotope: Th232
+    configurations:
+      - ThoriumInSoil
+...

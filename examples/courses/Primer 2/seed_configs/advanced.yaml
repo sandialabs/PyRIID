@@ -1,0 +1,44 @@
+---
+gamma_detector:
+  name: tbd
+  parameters:
+    distance_cm:
+      - 10
+      - 100
+      - 1000
+    height_cm: 100
+    dead_time_per_pulse: 10
+    latitude_deg: 35.0
+    longitude_deg: 253.4
+    elevation_m: 1620
+sources:
+  - isotope: Cs137
+    configurations:
+      - Cs137,100uCi
+      - name: Cs137
+        activity:
+          - 1
+          - 0.5
+        activity_units: Ci
+        shielding_atomic_number:
+          min: 10
+          max: 40.0
+          dist: uniform
+          num_samples: 5
+        shielding_aerial_density:
+          mean: 120
+          std: 2
+          num_samples: 5
+  - isotope: Cosmic
+    configurations:
+      - Cosmic
+  - isotope: K40
+    configurations:
+      - PotassiumInSoil
+  - isotope: Ra226
+    configurations:
+      - UraniumInSoil
+  - isotope: Th232
+    configurations:
+      - ThoriumInSoil
+...
