@@ -32,6 +32,12 @@ Note that changes are slower to appear on PyPI, so for the latest features, run:
 pip install git+https://github.com/sandialabs/pyriid.git@main
 ```
 
+If you encounter Pylance issues, try:
+
+```sh
+pip install -e ".[dev]" --config-settings editable_mode=compat
+```
+
 ### For Development
 
 If you are developing PyRIID, clone this repository and run:
