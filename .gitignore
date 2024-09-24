@@ -8,6 +8,10 @@
 *.smpl
 *.h5
 *.pcf
+*.onnx
+*.tflite
+*.hdf
+examples/**/*.json
 */__pycache__
 _scripts/
 debug/
