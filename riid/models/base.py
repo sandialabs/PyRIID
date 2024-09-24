@@ -207,6 +207,8 @@ class PyRIIDModel:
     def to_tflite(self, model_path, quantize: bool = False, prune: bool = False):
         """Convert the model to a TFLite model and optionally applying quantization or pruning.
 
+        Note: requires export to SavedModel format first, then conversion to TFLite occurs.
+
         Args:
             model_path: file path at which to save the model
             quantize: whether to apply quantization
