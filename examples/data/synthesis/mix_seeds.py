@@ -1,7 +1,7 @@
 # Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS,
 # the U.S. Government retains certain rights in this software.
-"""This example demonstrates how to generate synthetic gamma spectra from seeds."""
+"""This example demonstrates how to randomly mix seeds together."""
 import numpy as np
 
 from riid import SeedMixer, get_dummy_seeds

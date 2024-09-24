@@ -10,7 +10,7 @@ from riid import SeedSynthesizer
 seed_synth_config = """
 ---
 gamma_detector:
-  name: Generic\\NaI\\2x4x16
+  name: Generic\\NaI\\3x3\\Front\\MidScat
   parameters:
     distance_cm:
       - 10
