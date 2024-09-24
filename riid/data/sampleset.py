@@ -79,12 +79,12 @@ class SampleSet():
         "occupancy_flag",
         "tag",
     )
-    DEFAULT_BG_SEED_NAMES = (
+    DEFAULT_BG_SEED_NAMES = [
         "Cosmic",
         "PotassiumInSoil",
         "UraniumInSoil",
         "ThoriumInSoil",
-    )
+    ]
     SUPPORTED_STATES_FOR_ARITHMETIC = (
         SpectraState.Counts.value,
         SpectraState.L1Normalized.value
@@ -169,7 +169,7 @@ class SampleSet():
             n_sample_str = (
                 "You can only add/subtract SampleSet objects "
                 "when the second SampleSet has only one spectrum "
-                "(the spectrum will be scaled to match each sample of the first SampleSet) or"
+                "(the spectrum will be scaled to match each sample of the first SampleSet) or "
                 "when the second SampleSet has the same number of samples as the first "
                 "(no rescaling will occur)."
             )
@@ -220,7 +220,7 @@ class SampleSet():
         """
         if bg_ss.spectra_type.value != SpectraType.Background.value:
             msg = (
-                "`bg_ss` argument must have a `spectra_type` of `Background`."
+                "`bg_ss` argument must have a `spectra_type` of `Background`. "
                 f"Its `spectra_type` is `{bg_ss.spectra_type}`."
             )
             raise ValueError(msg)
@@ -243,7 +243,7 @@ class SampleSet():
         if ss.spectra_type.value != SpectraType.Background.value and \
            ss.spectra_type.value != SpectraType.Foreground.value:
             msg = (
-                "`ss` argument must have a `spectra_type` of `Background` of `Foreground`."
+                "`ss` argument must have a `spectra_type` of `Background` of `Foreground`. "
                 f"Its `spectra_type` is `{ss.spectra_type}`."
             )
             raise ValueError(msg)
@@ -1287,9 +1287,12 @@ class SampleSet():
         fg_seeds_ss = self[~bg_mask]
         fg_seeds_ss.drop_sources_columns_with_all_zeros()
         fg_seeds_ss.spectra_type = SpectraType.Foreground
+        fg_seeds_ss.spectra_state = self.spectra_state
+
         bg_seeds_ss = self[bg_mask]
         bg_seeds_ss.drop_sources_columns_with_all_zeros()
         bg_seeds_ss.spectra_type = SpectraType.Background
+        bg_seeds_ss.spectra_state = self.spectra_state
 
         return fg_seeds_ss, bg_seeds_ss
 
@@ -1369,7 +1372,7 @@ class SampleSet():
         if verbose:
             logging.info(f"Saved SampleSet to '{path}'")
 
-    def to_pcf(self, path: str, verbose=True):
+    def to_pcf(self, path: str, verbose=False):
         """Write the `SampleSet` to disk as a PCF.
 
         Args:
@@ -1593,7 +1596,9 @@ def _read_hdf(path: str) -> SampleSet:
     ss.info = info
     ss.prediction_probas = prediction_probas
     if "spectra_state" in other_info:
-        ss.spectra_state = other_info["spectra_state"].iloc[0]
+        ss.spectra_state = SpectraState(other_info["spectra_state"].iloc[0])
+    if "spectra_type" in other_info:
+        ss.spectra_type = SpectraType(other_info["spectra_type"].iloc[0])
     if "measured_or_synthetic" in other_info:
         ss.measured_or_synthetic = other_info["measured_or_synthetic"].iloc[0]
     if "detector_info" in other_info:
@@ -1635,6 +1640,7 @@ def _write_hdf(ss: SampleSet, output_path: str, **kwargs):
 
             other_info = {
                 "spectra_state": ss.spectra_state,
+                "spectra_type": ss.spectra_type,
                 "measured_or_synthetic": ss.measured_or_synthetic,
                 "detector_info": ss.detector_info,
                 "synthesis_info": ss.synthesis_info,
