@@ -1032,6 +1032,33 @@ class SampleSet():
 
         return distance_values
 
+    def get_multiclass_jsds(self, fg_seeds_ss: SampleSet, target_level: str) -> list:
+        """For each sample, this constructs a dictionary containing seed name to JSD using
+        the sample's top prediction.
+
+        Args:
+            fg_seeds_ss: `SampleSet` from which to pull seeds for computing JSD
+            prediction_target_level: the level at which predictions were made by a model
+
+        Returns:
+            List of dictionaries where keys are seed name and values are JSD
+        """
+        test_prediction_labels = self.get_predictions(target_level)
+        fg_seed_labels = fg_seeds_ss.get_labels(target_level)
+
+        jsds = []
+        for i, pred_label in enumerate(test_prediction_labels):
+            test_spectrum = self.spectra.iloc[i]
+            seeds_for_pred = fg_seeds_ss[fg_seed_labels == pred_label]
+            seed_labels_for_pred = seeds_for_pred.get_labels("Seed")
+            jsds_for_sample = {}
+            for j, seed_label in enumerate(seed_labels_for_pred):
+                seed_spectrum = seeds_for_pred.spectra.iloc[j]
+                jsd = distance.jensenshannon(test_spectrum, seed_spectrum)
+                jsds_for_sample[seed_label] = jsd
+            jsds.append(jsds_for_sample)
+        return jsds
+
     def get_spectral_distance_matrix(self, distance_func=distance.jensenshannon,
                                      target_level="Seed") -> pd.DataFrame:
         """Compute the distance between all pairs of spectra.
