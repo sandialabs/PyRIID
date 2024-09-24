@@ -5,7 +5,7 @@
 import pandas as pd
 import tensorflow as tf
 from keras.api.callbacks import EarlyStopping
-from keras.api.layers import Dense, Input
+from keras.api.layers import Dense, Input, Dropout
 from keras.api.losses import CategoricalCrossentropy
 from keras.api.metrics import F1Score, Precision, Recall
 from keras.api.models import Model
@@ -21,7 +21,8 @@ class MLPClassifier(PyRIIDModel):
     """Multi-layer perceptron classifier."""
     def __init__(self, activation=None, loss=None, optimizer=None,
                  metrics=None, l2_alpha: float = 1e-4,
-                 activity_regularizer=None, final_activation=None):
+                 activity_regularizer=None, final_activation=None,
+                 dense_layer_size=None, dropout=None):
         """
         Args:
             activation: activate function to use for each dense layer
@@ -42,6 +43,8 @@ class MLPClassifier(PyRIIDModel):
         self.l2_alpha = l2_alpha
         self.activity_regularizer = activity_regularizer
         self.final_activation = final_activation
+        self.dense_layer_size = dense_layer_size
+        self.dropout = dropout
 
         if self.activation is None:
             self.activation = "relu"
@@ -114,14 +117,21 @@ class MLPClassifier(PyRIIDModel):
 
         if not self.model:
             inputs = Input(shape=(X.shape[1],), name="Spectrum")
-            dense_layer_size = X.shape[1] // 2
+            if self.dense_layer_size is None:
+                dense_layer_size = X.shape[1] // 2
+            else:
+                dense_layer_size = self.dense_layer_size
             dense_layer = Dense(
                 dense_layer_size,
                 activation=self.activation,
                 activity_regularizer=self.activity_regularizer,
                 kernel_regularizer=l2(self.l2_alpha),
             )(inputs)
-            outputs = Dense(Y.shape[1], activation=self.final_activation)(dense_layer)
+            if self.dropout is not None:
+                last_layer = Dropout(0.2)(dense_layer)
+            else:
+                last_layer = dense_layer
+            outputs = Dense(Y.shape[1], activation=self.final_activation)(last_layer)
             self.model = Model(inputs, outputs)
             self.model.compile(loss=self.loss, optimizer=self.optimizer,
                                metrics=self.metrics)
