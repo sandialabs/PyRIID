@@ -58,8 +58,9 @@ class MLPClassifier(PyRIIDModel):
             self.activity_regularizer = l1(0.0)
         if self.final_activation is None:
             self.final_activation = "softmax"
+
         self.model = None
-        self._predict_fn = None
+        self._set_predict_fn()
 
     def fit(self, ss: SampleSet, batch_size: int = 200, epochs: int = 20,
             validation_split: float = 0.2, callbacks=None,
@@ -164,13 +165,15 @@ class MLPClassifier(PyRIIDModel):
         )
 
         # Define the predict function with tf.function and input_signature
-        self._predict_fn = tf.function(
-            self._predict,
-            # input_signature=[tf.TensorSpec(shape=[None, X.shape[1]], dtype=tf.float32)]
-            experimental_relax_shapes=True
-        )
+        self._set_predict_fn()
 
         return history
+
+    def _set_predict_fn(self):
+        self._predict_fn = tf.function(
+            self._predict,
+            experimental_relax_shapes=True
+        )
 
     def _predict(self, input_tensor):
         return self.model(input_tensor, training=False)
