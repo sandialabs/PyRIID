@@ -119,8 +119,6 @@ class SeedSynthesizer():
                     seeds_ss.info["distance_cm"] = s["gamma_detector"]["parameters"]["distance_cm"]
                     if not normalize_sources:
                         seeds_ss.sources *= seeds_ss.spectra.sum(axis=1).values
-                    if normalize_spectra:
-                        seeds_ss.normalize()
                     source_list.append(seeds_ss)
                 except Exception as e:
                     # Try to restore .dat file to original state even when an error occurs
@@ -131,9 +129,12 @@ class SeedSynthesizer():
             self._set_detector_parameters(gadras_api, original_detector_parameters)
 
         ss = SampleSet()
+        ss.spectra_state = SpectraState.Counts
         ss.concat(source_list)
         ss.detector_info = deepcopy(config["gamma_detector"])
         ss.set_dead_time_proportions()
+        if normalize_spectra:
+            ss.normalize()
 
         return ss
 
