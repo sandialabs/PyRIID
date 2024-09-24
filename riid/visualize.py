@@ -276,7 +276,7 @@ def plot_snr_vs_score(ss: SampleSet, overlay_ss: SampleSet = None, alpha: float 
     ax.set_yscale(yscale)
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
-    ax.set_xlabel("SNR (net / background)")
+    ax.set_xlabel("SNR (net / sqrt(background))")
     ax.set_ylabel("Score")
     ax.set_title(title)
     ax.legend()
@@ -337,19 +337,11 @@ def plot_spectra(ss: SampleSet, in_energy: bool = False,
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     if in_energy:
-        if xscale == "log":
-            ax.set_xlabel("log(Energy (keV))")
-        else:
-            ax.set_xlabel("Energy (keV)")
+        ax.set_xlabel("Energy (keV)")
     else:
-        if xscale == "log":
-            ax.set_xlabel("log(Channel)")
-        else:
-            ax.set_xlabel("Channel")
+        ax.set_xlabel("Channel")
     if ylabel:
         ax.set_ylabel(ylabel)
-    elif yscale == "log":
-        ax.set_ylabel("log(Counts)")
     else:
         ax.set_ylabel("Counts")
     if title:
