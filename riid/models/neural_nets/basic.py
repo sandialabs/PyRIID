@@ -129,7 +129,7 @@ class MLPClassifier(PyRIIDModel):
                 kernel_regularizer=l2(self.l2_alpha),
             )(inputs)
             if self.dropout is not None:
-                last_layer = Dropout(0.2)(dense_layer)
+                last_layer = Dropout(self.dropout)(dense_layer)
             else:
                 last_layer = dense_layer
             outputs = Dense(Y.shape[1], activation=self.final_activation)(last_layer)
