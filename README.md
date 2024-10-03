@@ -2,8 +2,8 @@
   <img src="https://user-images.githubusercontent.com/1079118/124811147-623bd280-df1f-11eb-9f3a-a4a5e6ec5f94.png" alt="PyRIID">
 </p>
 
-[![Python](https://img.shields.io/pypi/pyversions/riid)](https://badge.fury.io/py/riid)
-[![PyPI](https://badge.fury.io/py/riid.svg)](https://badge.fury.io/py/riid)
+![Python Version from PEP 621 TOML](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fsandialabs%2FPyRIID%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)
+![PyPI](https://badge.fury.io/py/riid.svg)
 
 PyRIID is a Python package providing modeling and data synthesis utilities for machine learning-based research and development of radioisotope-related detection, identification, and quantification.
 
