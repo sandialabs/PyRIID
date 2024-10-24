@@ -301,7 +301,7 @@ def get_gadras_api(instance_num=1, initialize_transport=True):
         raise RuntimeError("Failed to load API settings.")
 
     return GadrasAPIWrapper(
-        ".",
+        GADRAS_ASSEMBLY_PATH,
         instance_num,
         initialize_transport
     )
