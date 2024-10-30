@@ -110,7 +110,7 @@ class MLPClassifier(PyRIIDModel):
         training_dataset = tf.data.Dataset.from_tensor_slices((spectra_tensor, labels_tensor))
         training_dataset, validation_dataset = split_dataset(
             training_dataset,
-            left_size=validation_split,
+            right_size=validation_split,
             shuffle=True
         )
         training_dataset = training_dataset.batch(batch_size=batch_size)
