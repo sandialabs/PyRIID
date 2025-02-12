@@ -289,7 +289,7 @@ def plot_spectra(ss: SampleSet, in_energy: bool = False,
                  figsize: tuple = (12.8, 7.2), xscale: str = "linear", yscale: str = "log",
                  xlim: tuple = (None, None), ylim: tuple = (None, None),
                  ylabel: str = None, title: str = None, legend_loc: str = None,
-                 target_level="Isotope") -> tuple:
+                 target_level="Isotope", labels=None) -> tuple:
     """Plot spectra in a `SampleSet`.
 
     Args:
@@ -304,6 +304,7 @@ def plot_spectra(ss: SampleSet, in_energy: bool = False,
         title: plot title
         legend_loc: location in which to place the legend
         target_level: `SampleSet.sources` column level to use in legend
+        labels: custom list of labels
 
     Returns:
         Tuple (Figure, Axes) of matplotlib objects
@@ -314,10 +315,11 @@ def plot_spectra(ss: SampleSet, in_energy: bool = False,
         - `ValueError` when `limit` is not None and less than 1
     """
     fig, ax = plt.subplots(figsize=figsize)
-    if ss.sources.empty:
-        labels = list(range(ss.n_samples))
-    else:
-        labels = ss.get_labels(target_level=target_level)
+    if not labels:
+        if ss.sources.empty:
+            labels = list(range(ss.n_samples))
+        else:
+            labels = ss.get_labels(target_level=target_level)
 
     for i in range(ss.n_samples):
         label = labels[i]
