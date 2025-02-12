@@ -42,7 +42,7 @@ GADRAS_API_SCHEMA_PATH = os.path.join(
 with open(GADRAS_API_SCHEMA_PATH, "r") as fin:
     GADRAS_API_SCHEMA = json.load(fin)
 
-GADRAS_API_SEEMINGLY_AVAILABLE = os.path.exists(GADRAS_API_CONFIG_FILE_PATH)
+GADRAS_API_SEEMINGLY_AVAILABLE = os.path.exists(GADRAS_ASSEMBLY_PATH)
 IS_GADRAS19 = False
 
 if sys.platform == "win32" and GADRAS_API_SEEMINGLY_AVAILABLE:
@@ -293,11 +293,11 @@ def get_gadras_api(instance_num=1, initialize_transport=True):
             GADRAS_API_CONFIG_FILE_PATH,
             GADRAS_INSTALL_PATH
         )
-    api_Settings_loaded = Configs.loadApiSettings(
+    api_settings_loaded = Configs.loadApiSettings(
         GADRAS_API_CONFIG_FILE_PATH,
         createNonExistantDirectories=True
     )
-    if not api_Settings_loaded:
+    if not api_settings_loaded:
         raise RuntimeError("Failed to load API settings.")
 
     return GadrasAPIWrapper(
@@ -340,7 +340,8 @@ def get_inject_setup(gadras_api, output_path, title, record_num, source,
     loc_info.Longitude = detector_longitude_deg
     loc_info.Overburden = detector_overburden
 
-    if IS_GADRAS19:
+    update_background_location_op = getattr(setup, "UpdateBackgroundLocation", None)
+    if callable(update_background_location_op):
         setup.UpdateBackgroundLocation(loc_info)
     else:
         setup.LocationInfo = loc_info
