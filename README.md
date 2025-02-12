@@ -11,7 +11,7 @@ PyRIID is a Python package providing modeling and data synthesis utilities for m
 
 Requirements:
 
-- Python version: 3.9 to 3.12
+- Python version: 3.10 to 3.12
   - Note: we recommended the highest Python version you can manage as anecdotally, we have noticed that everything just tends to get faster.
 - Operating systems: Windows, Mac, or Ubuntu
 
