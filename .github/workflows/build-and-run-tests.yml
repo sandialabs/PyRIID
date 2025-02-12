@@ -1,5 +1,10 @@
 name: Run unit tests
-on: [push]
+on:
+  push:
+    branches:
+      - '**'
+  schedule:
+    - cron: '0 0 * * 1'  # Trigger every Monday at midnight (UTC)
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -36,3 +41,4 @@ jobs:
       - name: Run unit tests
         run: |
           sh run_tests.sh
+    if: github.event_name == 'push' || (github.event_name == 'schedule' && github.ref == 'refs/heads/main')
