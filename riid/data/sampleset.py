@@ -340,7 +340,7 @@ class SampleSet():
     @property
     def ecal(self):
         """Get or set the ecal terms."""
-        ecal_terms = self.info[list(self.ECAL_INFO_COLUMNS)].values
+        ecal_terms = self.info[list(self.ECAL_INFO_COLUMNS)].to_numpy(dtype=float)
         return ecal_terms
 
     @ecal.setter
@@ -543,6 +543,9 @@ class SampleSet():
             new_cubic: new cubic value, i.e. the 3-th e-cal term
             new_low_energy: new low energy term
 
+        Returns:
+            A new `SamleSet` with `spectra` and `info` DataFrames
+
         Raises:
             `ValueError` when no argument values are provided
         """
@@ -587,6 +590,48 @@ class SampleSet():
         new_ss.spectra = pd.DataFrame(new_spectra)
         new_ss.info.total_counts = new_ss.spectra.sum(axis=1)
         new_ss.info[ecal_cols] = new_ecal
+        return new_ss
+
+    def as_regions(self, rois: list) -> SampleSet:
+        """Obtains a new `SampleSet` where the spectra are limited to specific
+        regions of interest (ROIs).
+
+        Notes:
+            - If your samples have disparate energy calibration terms, call `as_ecal()` first
+              to align channel space, then you may call this function. Otherwise, it is possible
+              to end up with a ragged array of spectra, which we do not support.
+            - After this call, `spectra` will have columns filled in with energy values for
+              convenience. As such, in the context of the returned `SampleSet`, the energy
+              calibration terms in `info` will no longer have any meaning, and any subsequent
+              calls to methods like `as_ecal()` would not make sense.  This method is intended
+              as a last step to be performed right before analysis of whatever kind.
+
+        Args:
+            rois: a list of 2-tuples where tuple represents (low energy, high energy)
+
+        Returns:
+            A new `SamleSet` with only ROIs remaining in the `spectra` DataFrame
+
+        Raises:
+            `ValueError` when no argument values are provided
+        """
+        if not rois:
+            raise ValueError("At least one ROI must be provided.")
+        all_ecals = self.ecal
+        all_ecals_are_same = np.isclose(all_ecals, all_ecals[0]).all()
+        if not all_ecals_are_same:
+            msg = "Spectra have different energy calibrations; consider `as_ecal()` first."
+            raise ValueError(msg)
+
+        energies = self.get_channel_energies(0)
+        mask = _get_energy_roi_masks(rois, energies)
+        new_spectra = self.spectra.to_numpy(dtype=float)[:, mask]
+        new_spectra = new_spectra.reshape((self.n_samples, -1))
+        mask_energies = energies[mask]
+
+        new_ss = self[:]
+        new_ss.spectra = pd.DataFrame(new_spectra, columns=mask_energies)
+        new_ss.info.total_counts = new_ss.spectra.sum(axis=1)
         return new_ss
 
     def check_seed_health(self, dead_time_threshold=1.0):
@@ -1903,6 +1948,14 @@ def _get_distance_df_from_values(distance_values: np.ndarray,
         distance_df.at[r, c] = value
 
     return distance_df
+
+
+def _get_energy_roi_masks(rois: list, energies: np.ndarray) -> np.ndarray:
+    masks = np.zeros(energies.shape, dtype=bool)
+    for (elow, ehigh) in rois:
+        roi_mask = (elow <= energies) & (energies < ehigh)
+        masks |= roi_mask
+    return masks
 
 
 class InvalidSampleSetFileError(Exception):

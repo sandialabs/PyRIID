@@ -894,7 +894,7 @@ class TestSampleSet(unittest.TestCase):
             return_gross=True,
             rng=rng
         )
-        _, synthetic_gross_ss = synth.generate(fg_seeds_ss, bg_seeds_ss[0])
+        _, synthetic_gross_ss = synth.generate(fg_seeds_ss, bg_seeds_ss[0], verbose=False)
         synthetic_gross_ss.drop_sources(bg_seeds_ss.sources.columns.levels[2])
         synthetic_gross_ss.sources = synthetic_gross_ss.sources[fg_seeds_ss.sources.columns]
         synthetic_gross_ss.prediction_probas = pd.DataFrame(
@@ -907,7 +907,8 @@ class TestSampleSet(unittest.TestCase):
             bg_cps=synth.bg_cps
         )
 
-        _, synthetic_mixed_gross_ss = synth.generate(mixed_fg_seeds_ss, bg_seeds_ss[0])
+        _, synthetic_mixed_gross_ss = synth.generate(mixed_fg_seeds_ss, bg_seeds_ss[0],
+                                                     verbose=False)
         synthetic_mixed_gross_ss.drop_sources(bg_seeds_ss.sources.columns.levels[2])
         synthetic_mixed_gross_ss.sources = synthetic_mixed_gross_ss.sources[
             fg_seeds_ss.sources.columns
@@ -974,6 +975,60 @@ class TestSampleSet(unittest.TestCase):
                 bg_seed_ss=bg_seeds_ss[0],
                 bg_cps=None
             )
+
+    def test_get_energy_roi_masks(self):
+        from riid.data.sampleset import _get_energy_roi_masks
+        ROIS1 = [
+            (0, 2),
+            (4, 8),
+        ]
+        ROIS2 = [
+            (0, 0.75),
+            (2.0, 2.5),
+            (3.0, 5.0),
+        ]
+        ENERGIES = np.array([
+            [0, 1, 2, 3, 4, 5, 6],
+            [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+        ])
+        EXPECTED_MASKS1 = np.array([
+            [True, True, False, False, True, True, True],
+            [True, True, True, True, False, False, False],
+        ])
+        EXPECTED_MASKS2 = np.array([
+            [True, False, True, True, True, False, False],
+            [True, True, False, False, True, False, True],
+        ])
+        masks1 = _get_energy_roi_masks(ROIS1, ENERGIES)
+        masks2 = _get_energy_roi_masks(ROIS2, ENERGIES)
+
+        self.assertTrue(np.array_equal(masks1, EXPECTED_MASKS1))
+        self.assertTrue(np.array_equal(masks2, EXPECTED_MASKS2))
+
+    def test_as_regions(self):
+        from riid.data.sampleset import _get_energy_roi_masks
+        ROIS = [
+            (0, 100),
+            (500, 550),
+            (2400, 2600),
+        ]
+        ss1 = get_dummy_seeds(n_channels=1000)
+        ss2 = get_dummy_seeds(n_channels=1000).as_ecal(0, 2500, 0, 0, 0)
+        ss3 = get_dummy_seeds(n_channels=500).as_ecal(20, 2000, 0, 0, 0)
+
+        with self.assertRaises(ValueError):
+            ss1.as_regions([])
+
+        ss_mixed_ecal = SampleSet()
+        ss_mixed_ecal.concat([ss1, ss2])
+        with self.assertRaises(ValueError):
+            ss_mixed_ecal.as_regions(ROIS)
+
+        for ss in [ss1, ss2, ss3]:
+            channel_energies = ss.get_channel_energies(0)
+            ss_channels_expected = _get_energy_roi_masks(ROIS, channel_energies).sum()
+            rois = ss.as_regions(ROIS)
+            self.assertEqual(rois.n_channels, ss_channels_expected)
 
     def _assert_row_labels(self, level, actual, expected):
         for i, (a, e) in enumerate(zip(actual, expected)):
