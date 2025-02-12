@@ -43,14 +43,13 @@ classifiers = [
     'Topic :: Software Development :: Libraries :: Python Modules',
     'Programming Language :: Python',
     'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3.10',
     'Programming Language :: Python :: 3.11',
     'Programming Language :: Python :: 3.12',
 ]
 keywords = ["pyriid", "riid", "machine learning", "radioisotope identification", "gamma spectrum"]
 
-requires-python = ">=3.9,<3.13"
+requires-python = ">=3.10,<3.13"
 dependencies = [
     "jsonschema                     ==4.23.*",  # 3.8 - 3.13
     "matplotlib                     ==3.9.*",   # 3.9 - 3.12
@@ -58,7 +57,7 @@ dependencies = [
     "pandas                         ==2.2.*",   # >= 3.9
     "pythonnet                      ==3.0.3; platform_system == 'Windows'",  # 3.7 - 3.12
     "pyyaml                         ==6.0.*",   # >= 3.6
-    "tables                         ==3.9.*",   # >= 3.9
+    "tables                         ==3.10.*",   # >= 3.9
     "scikit-learn                   ==1.5.*",   # 3.9 - 3.12
     "scipy                          ==1.13.*",  # >= 3.10
     "seaborn                        ==0.13.*",  # >= 3.8
