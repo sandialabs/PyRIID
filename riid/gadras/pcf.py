@@ -4,6 +4,7 @@
 """This module contains utilities for working with GADRAS PCF files."""
 import struct
 from collections import defaultdict
+from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
@@ -184,7 +185,7 @@ def _read_spectra(data: list, n_rec_per_spec: int, spec_rec_start_indx: int) -> 
     return spectra
 
 
-def _pcf_to_dict(pcf_file_path: str, verbose: bool = False) -> dict:
+def _pcf_to_dict(pcf_file_path: Path, verbose: bool = False) -> dict:
     """Convert a PCF into a dictionary representation.
 
     Args:
@@ -255,7 +256,7 @@ def _spectrum_byte_offset(spectrum_index: int, n_records_per_spectrum: int,
     return 256 * (spec_rec_start_index + n_records_per_spectrum * (spectrum_index - 1) - 1)
 
 
-def _dict_to_pcf(pcf_dict: dict, save_path: str, verbose=False):
+def _dict_to_pcf(pcf_dict: dict, save_path: Path, verbose=False):
     """Convert PCF dictionary representation to PCF binary.
 
     Args:

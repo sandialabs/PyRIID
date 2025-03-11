@@ -9,12 +9,12 @@ import copy
 import json
 import logging
 import operator
-import os
 import random
 import re
 import warnings
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Callable, Iterable, Tuple, Union
 
 import numpy as np
@@ -1406,7 +1406,7 @@ class SampleSet():
 
         return flat_ss
 
-    def to_hdf(self, path: str, verbose=False, **kwargs):
+    def to_hdf(self, path: str | Path, verbose=False, **kwargs):
         """Write the `SampleSet` to disk as a HDF file.
 
         Args:
@@ -1417,14 +1417,15 @@ class SampleSet():
         Raises:
             `ValueError` when provided path extension is invalid
         """
-        if not path.lower().endswith(riid.SAMPLESET_HDF_FILE_EXTENSION):
+        path = Path(path)
+        if path.suffix != riid.SAMPLESET_HDF_FILE_EXTENSION:
             logging.warning(f"Path does not end in {riid.SAMPLESET_HDF_FILE_EXTENSION}")
 
         _write_hdf(self, path, **kwargs)
         if verbose:
             logging.info(f"Saved SampleSet to '{path}'")
 
-    def to_json(self, path: str, verbose=False):
+    def to_json(self, path: str | Path, verbose=False):
         """Write the `SampleSet` to disk as a JSON file.
 
         Warning: it is not recommended that you use this on large `SampleSet` objects.
@@ -1437,14 +1438,15 @@ class SampleSet():
         Raises:
             `ValueError` when provided path extension is invalid
         """
-        if not path.lower().endswith(riid.SAMPLESET_JSON_FILE_EXTENSION):
+        path = Path(path)
+        if path.suffix != riid.SAMPLESET_JSON_FILE_EXTENSION:
             logging.warning(f"Path does not end in {riid.SAMPLESET_JSON_FILE_EXTENSION}")
 
         _write_json(self, path)
         if verbose:
             logging.info(f"Saved SampleSet to '{path}'")
 
-    def to_pcf(self, path: str, verbose=False):
+    def to_pcf(self, path: str | Path, verbose=False):
         """Write the `SampleSet` to disk as a PCF.
 
         Args:
@@ -1454,7 +1456,8 @@ class SampleSet():
         Raises:
             `ValueError` when provided path extension is invalid
         """
-        if not path.lower().endswith(riid.PCF_FILE_EXTENSION):
+        path = Path(path)
+        if path.suffix != riid.PCF_FILE_EXTENSION:
             logging.warning(f"Path does not end in {riid.PCF_FILE_EXTENSION}")
 
         _dict_to_pcf(_ss_to_pcf_dict(self, verbose), path, verbose)
@@ -1490,7 +1493,7 @@ class SampleSet():
                 transformation.T))
 
 
-def read_hdf(path: str) -> SampleSet:
+def read_hdf(path: str | Path) -> SampleSet:
     """Read an HDF file in as a `SampleSet` object.
 
     Args:
@@ -1499,8 +1502,8 @@ def read_hdf(path: str) -> SampleSet:
     Returns:
         `SampleSet` object
     """
-    expanded_path = os.path.expanduser(path)
-    if not os.path.isfile(expanded_path):
+    expanded_path = Path(path).expanduser()
+    if not expanded_path.is_file():
         raise FileNotFoundError(f"No file found at location '{expanded_path}'.")
 
     ss = _read_hdf(expanded_path)
@@ -1511,7 +1514,7 @@ def read_hdf(path: str) -> SampleSet:
     return ss
 
 
-def read_pcf(path: str, verbose: bool = False) -> SampleSet:
+def read_pcf(path: str | Path, verbose: bool = False) -> SampleSet:
     """Read a PCF file in as a `SampleSet` object.
 
     Args:
@@ -1521,7 +1524,7 @@ def read_pcf(path: str, verbose: bool = False) -> SampleSet:
     Returns:
         `Sampleset` object
     """
-    expanded_path = os.path.expanduser(path)
+    expanded_path = Path(path).expanduser()
     return _pcf_dict_to_ss(_pcf_to_dict(expanded_path, verbose), verbose)
 
 
@@ -1640,7 +1643,7 @@ def _validate_hdf_store_keys(keys: list):
                 raise InvalidSampleSetFileError()
 
 
-def _read_hdf(path: str) -> SampleSet:
+def _read_hdf(path: Path) -> SampleSet:
     """Read `SampleSet` from an HDF file.
 
     Args:
@@ -1683,7 +1686,7 @@ def _read_hdf(path: str) -> SampleSet:
     return ss
 
 
-def _write_hdf(ss: SampleSet, output_path: str, **kwargs):
+def _write_hdf(ss: SampleSet, output_path: Path, **kwargs):
     """Write a `SampleSet` to an HDF file.
 
     Args:
@@ -1910,15 +1913,15 @@ def _pcf_dict_to_ss(pcf_dict: dict, verbose=True):
     return ss
 
 
-def _write_json(ss: SampleSet, output_path: str):
+def _write_json(ss: SampleSet, output_path: Path):
     ss_dict = _ss_to_pcf_dict(ss)
     ss_dict["detector_info"] = ss.detector_info
     with open(output_path, "w") as fout:
         json.dump(ss_dict, fout, indent=4)
 
 
-def read_json(path: str) -> SampleSet:
-    expanded_path = os.path.expanduser(path)
+def read_json(path: str | Path) -> SampleSet:
+    expanded_path = Path(path).expanduser()
     with open(expanded_path, "r") as fin:
         ss_dict = json.load(fin)
     ss = _pcf_dict_to_ss(ss_dict)
