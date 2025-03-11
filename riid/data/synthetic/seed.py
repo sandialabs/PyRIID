@@ -116,7 +116,13 @@ class SeedSynthesizer():
                     pcf_abs_path = source_injector.generate(s, rel_output_path, verbose=verbose)
                     seeds_ss = read_pcf(pcf_abs_path)
                     # Manually set distance_cm so it works with expanded configs
-                    seeds_ss.info["distance_cm"] = s["gamma_detector"]["parameters"]["distance_cm"]
+                    seeds_ss.info["distance_cm"] = new_detector_parameters["distance_cm"]
+                    seeds_ss.info["height_cm"] = new_detector_parameters["height_cm"]
+                    for k, v in new_detector_parameters.items():
+                        if k not in DETECTOR_PARAMS or k.startswith("ECAL"):
+                            # e-cal info will come from the PCF
+                            continue
+                        seeds_ss.info[k.lower()] = v
                     if not normalize_sources:
                         seeds_ss.sources *= seeds_ss.spectra.sum(axis=1).values
                     source_list.append(seeds_ss)
