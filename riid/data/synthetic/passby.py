@@ -12,7 +12,8 @@ import pandas as pd
 from numpy.random import Generator
 
 from riid import SampleSet
-from riid.data.synthetic.base import Synthesizer, get_distribution_values
+from riid.data.synthetic.base import (Synthesizer, get_distribution_values,
+                                      set_ss_info_from_seed_info)
 
 
 class PassbySynthesizer(Synthesizer):
@@ -282,45 +283,16 @@ class PassbySynthesizer(Synthesizer):
                                fg_sources, bg_sources)
                     args.append(pb_args)
 
-        # TODO: follow prevents periodic progress reports
+        # TODO: the following prevents periodic progress reports
         passbys = []
         for a in args:
             f, fwhm, snr, dwell_time, fg_pmf, bg_pmf, fg_sources, bg_sources = a
             fg_passby_ss, gross_passby_ss = self._generate_single_passby(
                 fwhm, snr, dwell_time, fg_pmf, bg_pmf, fg_sources, bg_sources
             )
-            live_times = None
-            if fg_passby_ss is not None:
-                live_times = fg_passby_ss.info.live_time
-            elif gross_passby_ss is not None:
-                live_times = gross_passby_ss.info.live_time
-            else:
-                live_times = 1.0
-
-            fg_seed_ecal = fg_seeds_ss.ecal[f]
             fg_seed_info = fg_seeds_ss.info.iloc[f]
-            batch_rt_targets = live_times * (1 - fg_seed_info.dead_time_prop)
-            fg_seed_distance_cm = fg_seed_info.distance_cm
-            fg_seed_dead_time_prop = fg_seed_info.dead_time_prop
-            fg_seed_ad = fg_seed_info.areal_density
-            fg_seed_an = fg_seed_info.atomic_number
-            fg_seed_neutron_counts = fg_seed_info.neutron_counts
-
-            def _set_remaining_info(ss):
-                if ss is None:
-                    return
-                ss: SampleSet = ss
-                ss.ecal = fg_seed_ecal
-                ss.info.real_time = batch_rt_targets
-                ss.info.distance_cm = fg_seed_distance_cm
-                ss.info.dead_time_prop = fg_seed_dead_time_prop
-                ss.info.areal_density = fg_seed_ad
-                ss.info.atomic_number = fg_seed_an
-                ss.info.neutron_counts = fg_seed_neutron_counts
-                ss.info.timestamp = self._synthesis_start_dt
-
-            _set_remaining_info(fg_passby_ss)
-            _set_remaining_info(gross_passby_ss)
+            set_ss_info_from_seed_info(fg_passby_ss, fg_seed_info, self._synthesis_start_dt)
+            set_ss_info_from_seed_info(gross_passby_ss, fg_seed_info, self._synthesis_start_dt)
 
             passbys.append((fg_passby_ss, gross_passby_ss))
 

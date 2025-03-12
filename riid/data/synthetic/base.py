@@ -14,6 +14,9 @@ from riid.data.sampleset import (SampleSet, SpectraState, SpectraType,
                                  _get_utc_timestamp)
 
 
+IGNORED_INFO_COLS = ["snr", "live_time", "real_time", "total_counts", "timestamp"]
+
+
 class Synthesizer():
     """Base class for synthesizers."""
 
@@ -159,12 +162,9 @@ def _get_minimal_ss(spectra, sources, live_times, snrs, total_counts=None) -> Sa
     ss.spectra_state = SpectraState.Counts
     ss.spectra = pd.DataFrame(spectra)
     ss.sources = sources
-    ss.info.description = np.full(n_samples, "")  # Ensures the length of info equal n_samples
     ss.info.snr = snrs
     ss.info.total_counts = total_counts if total_counts is not None else spectra.sum(axis=1)
     ss.info.live_time = live_times
-    ss.info.occupancy_flag = 0
-    ss.info.tag = " "  # TODO: test if this can be an empty string
 
     return ss
 
@@ -259,3 +259,17 @@ def get_samples_per_seed(columns: pd.MultiIndex, min_samples_per_seed: int, bala
     total_samples_expected = sum([x * y for x, y in zip(occurences, samples_per_level_value)])
 
     return lv_to_samples_per_seed, total_samples_expected
+
+
+def set_ss_info_from_seed_info(ss: SampleSet, info: pd.Series, timestamp: str,
+                               ignored_cols=IGNORED_INFO_COLS):
+    if ss is None:
+        return
+
+    info_indices_to_set = info.index.difference(ignored_cols)
+    info_to_set = info[info_indices_to_set]
+    for c, v in info_to_set.items():
+        ss.info[c] = v
+
+    ss.info.real_time = ss.info.live_time / (1 - info.dead_time_prop)
+    ss.info.timestamp = timestamp
